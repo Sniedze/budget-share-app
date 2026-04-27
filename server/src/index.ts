@@ -4,6 +4,7 @@ import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express5';
 import { typeDefs } from './graphql/schema.js';
 import { resolvers } from './graphql/resolvers.js';
+import { checkDbConnection, ensureSchema } from './db/mysql.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -22,6 +23,11 @@ const start = async () => {
     res.status(200).json({ ok: true, service: 'server' });
   });
   app.use('/graphql', expressMiddleware(apollo));
+  await checkDbConnection();
+  console.log('MySQL connection established');
+
+  await ensureSchema();
+  console.log('Database schema ensured');
 
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

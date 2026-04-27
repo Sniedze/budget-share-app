@@ -4,10 +4,10 @@ import type { CreateExpenseInput } from '../modules/expenses/types.js';
 export const resolvers = {
   Query: {
     hello: () => 'Hello from GraphQL!',
-    expenses: () => listExpenses(),
+    expenses: async () => listExpenses(),
   },
   Mutation: {
-    addExpense: (_parent: unknown, args: { input: CreateExpenseInput }) => {
+    addExpense: async (_parent: unknown, args: { input: CreateExpenseInput }) => {
       return createExpense(args.input);
     },
   },
