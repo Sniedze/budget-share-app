@@ -1,5 +1,14 @@
-import { createExpense, listExpenses, deleteExpense } from '../modules/expenses/service.js';
-import type { CreateExpenseInput, DeleteExpenseInput } from '../modules/expenses/types.js';
+import {
+  createExpense,
+  listExpenses,
+  deleteExpense,
+  updateExpense,
+} from '../modules/expenses/service.js';
+import type {
+  CreateExpenseInput,
+  DeleteExpenseInput,
+  UpdateExpenseInput,
+} from '../modules/expenses/types.js';
 
 export const resolvers = {
   Query: {
@@ -12,6 +21,9 @@ export const resolvers = {
     },
     deleteExpense: async (_parent: unknown, args: { input: DeleteExpenseInput }) => {
       return deleteExpense(args.input.id);
+    },
+    updateExpense: async (_parent: unknown, args: { input: UpdateExpenseInput }) => {
+      return updateExpense(args.input);
     },
   },
 };

@@ -13,3 +13,9 @@ export type CreateExpenseInput = {
 export type DeleteExpenseInput = {
   id: string;
 };
+
+export type UpdateExpenseInput = {
+  id: string;
+  title: string;
+  amount: number;
+};

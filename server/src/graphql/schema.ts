@@ -15,6 +15,12 @@ export const typeDefs = `#graphql
     id: ID!
   }
 
+    input UpdateExpenseInput {
+    id: ID!
+    title: String!
+    amount: Float!
+  }
+
   type Query {
     hello: String!
     expenses: [Expense!]!
@@ -23,5 +29,6 @@ export const typeDefs = `#graphql
   type Mutation {
     addExpense(input: AddExpenseInput!): Expense!
     deleteExpense(input: DeleteExpenseInput!): Boolean!
+    updateExpense(input: UpdateExpenseInput!): Expense
   }
 `;
