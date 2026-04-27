@@ -2,8 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express5';
-import { typeDefs } from './graphql/schema';
-import { resolvers } from './graphql/resolvers';
+import { typeDefs } from './graphql/schema.js';
+import { resolvers } from './graphql/resolvers.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
