@@ -4,7 +4,7 @@ import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express5';
 import { typeDefs } from './graphql/schema.js';
 import { resolvers } from './graphql/resolvers.js';
-import { checkDbConnection, ensureSchema } from './db/mysql.js';
+import { checkDbConnection, ensureSchema, migrateSchema } from './db/mysql.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -28,6 +28,9 @@ const start = async () => {
 
   await ensureSchema();
   console.log('Database schema ensured');
+
+  await migrateSchema();
+  console.log('Database schema migrated');
 
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

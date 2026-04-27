@@ -3,6 +3,7 @@ export const typeDefs = `#graphql
     id: ID!
     title: String!
     amount: Float!
+    createdAt: String!
   }
 
   input AddExpenseInput {
