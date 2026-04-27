@@ -35,3 +35,9 @@ export const createExpense = async (input: CreateExpenseInput): Promise<Expense>
     createdAt: new Date().toISOString(),
   };
 };
+
+export const deleteExpense = async (id: string): Promise<boolean> => {
+  const [result] = await db.execute<ResultSetHeader>('DELETE FROM expenses WHERE id = ?', [id]);
+
+  return result.affectedRows > 0;
+};
