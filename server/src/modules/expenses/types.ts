@@ -1,3 +1,11 @@
+export type SplitAllocation = {
+  participant: string;
+  ratio: number;
+  amount: number;
+};
+
+export type SplitType = 'Personal' | 'Shared' | 'Custom';
+
 export type Expense = {
   id: string;
   title: string;
@@ -5,7 +13,8 @@ export type Expense = {
   createdAt: string;
   transactionDate: string;
   category: string;
-  split: string;
+  split: SplitType;
+  splitDetails: SplitAllocation[];
 };
 
 export type CreateExpenseInput = {
@@ -13,7 +22,11 @@ export type CreateExpenseInput = {
   amount: number;
   transactionDate: string;
   category: string;
-  split: string;
+  split: SplitType;
+  splitDetails?: Array<{
+    participant: string;
+    ratio: number;
+  }>;
 };
 
 export type DeleteExpenseInput = {
@@ -26,5 +39,9 @@ export type UpdateExpenseInput = {
   amount: number;
   transactionDate: string;
   category: string;
-  split: string;
+  split: SplitType;
+  splitDetails?: Array<{
+    participant: string;
+    ratio: number;
+  }>;
 };

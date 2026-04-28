@@ -27,7 +27,8 @@ export const ensureSchema = async (): Promise<void> => {
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     transaction_date DATE NOT NULL,
     category VARCHAR(64) NOT NULL DEFAULT 'General',
-    split_type VARCHAR(16) NOT NULL DEFAULT 'Personal'
+    split_type VARCHAR(16) NOT NULL DEFAULT 'Personal',
+    split_details JSON NULL
   )
     `);
 };
@@ -43,7 +44,7 @@ export const migrateSchema = async (): Promise<void> => {
         FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
           AND TABLE_NAME = 'expenses'
-          AND COLUMN_NAME IN ('created_at', 'transaction_date', 'category', 'split_type')
+          AND COLUMN_NAME IN ('created_at', 'transaction_date', 'category', 'split_type', 'split_details')
       `,
   );
 
@@ -101,6 +102,13 @@ export const migrateSchema = async (): Promise<void> => {
     await db.execute(`
         ALTER TABLE expenses
         MODIFY COLUMN split_type VARCHAR(16) NOT NULL
+      `);
+  }
+
+  if (!existingColumns.has('split_details')) {
+    await db.execute(`
+        ALTER TABLE expenses
+        ADD COLUMN split_details JSON NULL
       `);
   }
 };
