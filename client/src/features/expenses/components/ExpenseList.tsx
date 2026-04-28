@@ -1,9 +1,7 @@
 import type { Expense } from '../types';
 import styled from 'styled-components';
-
-const Placeholder = styled.p`
-  color: #6b7280;
-`;
+import { Button } from '../../../components/ui/Button';
+import { MutedText } from '../../../components/ui/Text';
 
 const List = styled.ul`
   list-style: none;
@@ -43,21 +41,6 @@ const Actions = styled.div`
   gap: 8px;
 `;
 
-const Button = styled.button<{ $variant: 'primary' | 'danger' }>`
-  font: inherit;
-  padding: 10px 12px;
-  border: none;
-  border-radius: 8px;
-  color: #ffffff;
-  cursor: pointer;
-  background: ${({ $variant }) => ($variant === 'primary' ? '#2563eb' : '#ef4444')};
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-`;
-
 type ExpenseListProps = {
   expenses: Expense[];
   isMutating: boolean;
@@ -76,7 +59,7 @@ export const ExpenseList = ({
   onDelete,
 }: ExpenseListProps): JSX.Element => {
   if (!expenses.length) {
-    return <Placeholder>No expenses yet.</Placeholder>;
+    return <MutedText>No expenses yet.</MutedText>;
   }
 
   return (

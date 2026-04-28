@@ -2,6 +2,8 @@ import { useQuery } from '@apollo/client/react';
 import { FormEvent, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Sidebar } from '../components/Sidebar';
+import { Button } from '../components/ui/Button';
+import { MutedText, SectionSubtitle, SectionTitle } from '../components/ui/Text';
 import { ExpenseForm } from '../features/expenses/components/ExpenseForm';
 import { ExpenseList } from '../features/expenses/components/ExpenseList';
 import { GET_EXPENSES } from '../features/expenses/graphql';
@@ -40,42 +42,12 @@ const HeaderText = styled.div`
   flex-direction: column;
 `;
 
-const PageTitle = styled.h1`
-  margin: 0;
-  font-size: 34px;
-  line-height: 1.1;
-`;
-
-const PageSubtitle = styled.p`
-  margin: 6px 0 0;
-  color: #6b7280;
-  font-size: 14px;
-`;
-
-const AddExpenseButton = styled.button`
-  border: 0;
+const AddExpenseButton = styled(Button)`
   border-radius: 10px;
   padding: 10px 16px;
-  font: inherit;
   font-size: 14px;
   font-weight: 600;
-  color: #ffffff;
-  background: #4f46e5;
-  cursor: pointer;
   box-shadow: 0 10px 18px rgba(79, 70, 229, 0.2);
-
-  &:hover {
-    background: #4338ca;
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-`;
-
-const Placeholder = styled.p`
-  color: #6b7280;
 `;
 
 export const HomePage = (): JSX.Element => {
@@ -141,10 +113,12 @@ export const HomePage = (): JSX.Element => {
       <Page>
         <HeaderRow>
           <HeaderText>
-            <PageTitle>Dashboard</PageTitle>
-            <PageSubtitle>Overview of your expenses and spending patterns</PageSubtitle>
+            <SectionTitle>Dashboard</SectionTitle>
+            <SectionSubtitle>Overview of your expenses and spending patterns</SectionSubtitle>
           </HeaderText>
-          <AddExpenseButton type="button">+ Add Expense</AddExpenseButton>
+          <AddExpenseButton type="button" $variant="accent">
+            + Add Expense
+          </AddExpenseButton>
         </HeaderRow>
 
         <ExpenseForm
@@ -160,8 +134,8 @@ export const HomePage = (): JSX.Element => {
           onCancel={resetForm}
         />
 
-        {loading ? <Placeholder>Loading expenses...</Placeholder> : null}
-        {error ? <Placeholder>Error: {error.message}</Placeholder> : null}
+        {loading ? <MutedText>Loading expenses...</MutedText> : null}
+        {error ? <MutedText>Error: {error.message}</MutedText> : null}
         {!loading && !error ? (
           <ExpenseList
             expenses={expenses}

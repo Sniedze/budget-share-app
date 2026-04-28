@@ -1,5 +1,6 @@
 import type { FormEvent } from 'react';
 import styled from 'styled-components';
+import { Button } from '../../../components/ui/Button';
 
 const Form = styled.form`
   display: flex;
@@ -15,21 +16,6 @@ const Input = styled.input`
   border-radius: 8px;
   border: 1px solid #d1d5db;
   min-width: 140px;
-`;
-
-const Button = styled.button<{ $variant: 'primary' | 'secondary' }>`
-  font: inherit;
-  padding: 10px 12px;
-  border: none;
-  border-radius: 8px;
-  color: #ffffff;
-  cursor: pointer;
-  background: ${({ $variant }) => ($variant === 'primary' ? '#2563eb' : '#6b7280')};
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
 `;
 
 type ExpenseFormProps = {
