@@ -1,33 +1,11 @@
 import { Plus, Users } from 'lucide-react';
-import { FormEvent, useMemo, useState } from 'react';
+import { useMutation, useQuery } from '@apollo/client/react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Sidebar } from '../components/sections';
 import { AppLayout, Badge, Button, Card, ErrorText, HeaderRow, HeaderText, Input, MutedText, PageSurface, SectionSubtitle, SectionTitle, Table, TableWrapper, Tbody, Td, Th, Thead, Tr } from '../components/ui';
+import { CREATE_GROUP, GET_GROUPS, type GroupMember, type GroupSummary } from '../features/groups';
 import { colors, spacing } from '../styles/tokens';
-
-type GroupMember = {
-  name: string;
-  email: string;
-  ratio: number;
-};
-
-type GroupExpense = {
-  date: string;
-  description: string;
-  paidBy: string;
-  total: number;
-  yourShare: number;
-};
-
-type GroupSummary = {
-  id: string;
-  name: string;
-  description?: string;
-  members: GroupMember[];
-  totalSpent: number;
-  yourShare: number;
-  expenses: GroupExpense[];
-};
 
 const DEFAULT_MEMBERS: GroupMember[] = [
   { name: 'You', email: 'you@example.com', ratio: 50 },
@@ -138,41 +116,22 @@ const RequiredMark = styled.span`
   color: ${colors.danger};
 `;
 
-const initialGroups: GroupSummary[] = [
-  {
-    id: 'g-1',
-    name: 'Household',
-    description: 'Main household costs',
-    members: [
-      { name: 'You', email: 'you@example.com', ratio: 50 },
-      { name: 'Sarah', email: 'sarah@example.com', ratio: 30 },
-      { name: 'Mike', email: 'mike@example.com', ratio: 20 },
-    ],
-    totalSpent: 2340.5,
-    yourShare: 780.17,
-    expenses: [
-      { date: '2026-04-01', description: 'Rent Payment', paidBy: 'Sarah', total: 1500, yourShare: 500 },
-      { date: '2026-04-15', description: 'Internet Bill', paidBy: 'You', total: 89.99, yourShare: 45 },
-      { date: '2026-04-22', description: 'Water Bill', paidBy: 'Sarah', total: 67.51, yourShare: 33.76 },
-    ],
-  },
-  {
-    id: 'g-2',
-    name: 'Utilities',
-    description: 'Shared utility bills',
-    members: [
-      { name: 'You', email: 'you@example.com', ratio: 50 },
-      { name: 'Sarah', email: 'sarah@example.com', ratio: 50 },
-    ],
-    totalSpent: 450,
-    yourShare: 225,
-    expenses: [{ date: '2026-04-09', description: 'Electricity', paidBy: 'You', total: 130.7, yourShare: 65.35 }],
-  },
-];
+type GroupsQueryData = {
+  groups: GroupSummary[];
+};
+
+type CreateGroupMutationData = {
+  createGroup: GroupSummary;
+};
 
 export const GroupsPage = (): JSX.Element => {
-  const [groups, setGroups] = useState<GroupSummary[]>(initialGroups);
-  const [activeGroupId, setActiveGroupId] = useState(initialGroups[0]?.id ?? '');
+  const { data, loading, error } = useQuery<GroupsQueryData>(GET_GROUPS);
+  const [createGroupMutation, { loading: creatingGroup }] = useMutation<CreateGroupMutationData>(CREATE_GROUP, {
+    refetchQueries: [{ query: GET_GROUPS }],
+    awaitRefetchQueries: true,
+  });
+  const groups = data?.groups ?? [];
+  const [activeGroupId, setActiveGroupId] = useState('');
   const [isModalOpen, setModalOpen] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [description, setDescription] = useState('');
@@ -183,6 +142,18 @@ export const GroupsPage = (): JSX.Element => {
     () => groups.find((group) => group.id === activeGroupId) ?? groups[0],
     [activeGroupId, groups],
   );
+
+  useEffect(() => {
+    if (!groups.length) {
+      setActiveGroupId('');
+      return;
+    }
+
+    const hasActiveGroup = groups.some((group) => group.id === activeGroupId);
+    if (!hasActiveGroup) {
+      setActiveGroupId(groups[0].id);
+    }
+  }, [activeGroupId, groups]);
 
   const resetCreateGroupForm = () => {
     setGroupName('');
@@ -221,7 +192,7 @@ export const GroupsPage = (): JSX.Element => {
     );
   };
 
-  const onCreateGroup = (event: FormEvent<HTMLFormElement>) => {
+  const onCreateGroup = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
 
@@ -272,18 +243,29 @@ export const GroupsPage = (): JSX.Element => {
       return;
     }
 
-    const newGroup: GroupSummary = {
-      id: `g-${Date.now()}`,
-      name: groupName.trim(),
-      description: description.trim() || undefined,
-      members: validMembers,
-      totalSpent: 0,
-      yourShare: 0,
-      expenses: [],
-    };
-    setGroups((prev) => [newGroup, ...prev]);
-    setActiveGroupId(newGroup.id);
-    closeCreateModal();
+    try {
+      const result = await createGroupMutation({
+        variables: {
+          input: {
+            name: groupName.trim(),
+            description: description.trim() || undefined,
+            members: validMembers,
+          },
+        },
+      });
+
+      if (result.data?.createGroup.id) {
+        setActiveGroupId(result.data.createGroup.id);
+      }
+
+      closeCreateModal();
+    } catch (mutationError) {
+      setFormError(
+        mutationError instanceof Error
+          ? mutationError.message
+          : 'Unable to create group right now. Please try again.',
+      );
+    }
   };
 
   return (
@@ -302,6 +284,9 @@ export const GroupsPage = (): JSX.Element => {
 
         <GroupsGrid>
           <GroupList>
+            {loading ? <MutedText>Loading groups...</MutedText> : null}
+            {error ? <ErrorText>{error.message}</ErrorText> : null}
+            {!loading && !error && groups.length === 0 ? <MutedText>No groups yet. Create your first one.</MutedText> : null}
             {groups.map((group) => (
               <GroupCard key={group.id} $active={group.id === activeGroup?.id} onClick={() => setActiveGroupId(group.id)}>
                 <Row>
@@ -362,6 +347,11 @@ export const GroupsPage = (): JSX.Element => {
                         <Td>${expense.yourShare.toFixed(2)}</Td>
                       </Tr>
                     ))}
+                    {activeGroup.expenses.length === 0 ? (
+                      <Tr key="no-expenses">
+                        <Td colSpan={5}>No group expenses yet.</Td>
+                      </Tr>
+                    ) : null}
                   </Tbody>
                 </Table>
               </TableWrapper>
@@ -429,8 +419,8 @@ export const GroupsPage = (): JSX.Element => {
 
                 <Row>
                   <MutedText>Total ratio: {members.reduce((sum, member) => sum + member.ratio, 0)}%</MutedText>
-                  <Button type="submit" $variant="accent" $weight="semibold">
-                    Create Group
+                  <Button type="submit" $variant="accent" $weight="semibold" disabled={creatingGroup}>
+                    {creatingGroup ? 'Creating...' : 'Create Group'}
                   </Button>
                 </Row>
                 {formError ? <ErrorText>{formError}</ErrorText> : null}
