@@ -6,9 +6,13 @@ type ExpenseRow = {
   id: number;
   title: string;
   amount: string;
-  created_at: Date;
-  transaction_date: Date;
+  created_at: Date | string;
+  transaction_date: Date | string;
 } & RowDataPacket;
+
+const toIsoString = (value: Date | string): string => {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+};
 
 export const listExpenses = async (): Promise<Expense[]> => {
   const [rows] = await db.query<ExpenseRow[]>(
@@ -19,8 +23,8 @@ export const listExpenses = async (): Promise<Expense[]> => {
     id: String(row.id),
     title: row.title,
     amount: Number(row.amount),
-    createdAt: row.created_at.toISOString(),
-    transactionDate: row.transaction_date.toISOString(),
+    createdAt: toIsoString(row.created_at),
+    transactionDate: toIsoString(row.transaction_date),
   }));
 };
 
@@ -37,13 +41,22 @@ export const createExpense = async (input: CreateExpenseInput): Promise<Expense>
 
   const row = rows[0];
 
+  if (!row) {
+    return {
+      id: String(result.insertId),
+      title: input.title,
+      amount: input.amount,
+      createdAt: new Date().toISOString(),
+      transactionDate: new Date(input.transactionDate).toISOString(),
+    };
+  }
+
   return {
-    id: String(result.insertId),
-    title: row?.title ?? input.title,
-    amount: Number(row?.amount ?? input.amount),
-    createdAt: row?.created_at?.toISOString() ?? new Date().toISOString(),
-    transactionDate:
-      row?.transaction_date?.toISOString() ?? new Date(input.transactionDate).toISOString(),
+    id: String(row.id),
+    title: row.title,
+    amount: Number(row.amount),
+    createdAt: toIsoString(row.created_at),
+    transactionDate: toIsoString(row.transaction_date),
   };
 };
 
@@ -78,7 +91,7 @@ export const updateExpense = async (input: UpdateExpenseInput): Promise<Expense 
     id: String(row.id),
     title: row.title,
     amount: Number(row.amount),
-    createdAt: row.created_at.toISOString(),
-    transactionDate: row.transaction_date.toISOString(),
+    createdAt: toIsoString(row.created_at),
+    transactionDate: toIsoString(row.transaction_date),
   };
 };
