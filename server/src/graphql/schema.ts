@@ -22,9 +22,45 @@ export const typeDefs = `#graphql
     amount: Float!
   }
 
+  type GroupMember {
+    name: String!
+    email: String!
+    ratio: Float!
+  }
+
+  type GroupExpense {
+    date: String!
+    description: String!
+    paidBy: String!
+    total: Float!
+    yourShare: Float!
+  }
+
+  type Group {
+    id: ID!
+    name: String!
+    description: String
+    members: [GroupMember!]!
+    totalSpent: Float!
+    yourShare: Float!
+    expenses: [GroupExpense!]!
+  }
+
   input SplitAllocationInput {
     participant: String!
     ratio: Float!
+  }
+
+  input GroupMemberInput {
+    name: String!
+    email: String!
+    ratio: Float!
+  }
+
+  input CreateGroupInput {
+    name: String!
+    description: String
+    members: [GroupMemberInput!]!
   }
 
   input AddExpenseInput {
@@ -53,11 +89,13 @@ export const typeDefs = `#graphql
   type Query {
     hello: String!
     expenses: [Expense!]!
+    groups: [Group!]!
   }
 
   type Mutation {
     addExpense(input: AddExpenseInput!): Expense!
     deleteExpense(input: DeleteExpenseInput!): Boolean!
     updateExpense(input: UpdateExpenseInput!): Expense
+    createGroup(input: CreateGroupInput!): Group!
   }
 `;

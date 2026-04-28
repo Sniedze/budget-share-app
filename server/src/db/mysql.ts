@@ -31,6 +31,30 @@ export const ensureSchema = async (): Promise<void> => {
     split_details JSON NULL
   )
     `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS groups (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+    `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS group_members (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_id INT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    ratio DECIMAL(6, 2) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_group_member_email (group_id, email),
+    CONSTRAINT fk_group_members_group
+      FOREIGN KEY (group_id) REFERENCES groups(id)
+      ON DELETE CASCADE
+  )
+    `);
 };
 
 type ColumnCheckRow = {
