@@ -27,24 +27,24 @@ type GetExpensesResponse = {
 };
 
 const Page = styled.main`
-  max-width: 720px;
+  max-width: 760px;
   margin: 40px auto;
   padding: 24px;
-  background: #ffffff;
+  background: #fff;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 `;
 
 const Title = styled.h1`
-  margin-top: 0;
-  margin-bottom: 20px;
+  margin: 0 0 20px;
 `;
 
 const Form = styled.form`
-  display: grid;
-  grid-template-columns: 1fr 140px auto;
+  display: flex;
   gap: 10px;
   margin-bottom: 20px;
+  align-items: center;
+  flex-wrap: wrap;
 `;
 
 const Input = styled.input`
@@ -52,15 +52,17 @@ const Input = styled.input`
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid #d1d5db;
+  flex: 1;
+  min-width: 140px;
 `;
 
 const Button = styled.button`
   font: inherit;
   padding: 10px 12px;
-  border-radius: 8px;
   border: none;
+  border-radius: 8px;
   background: #2563eb;
-  color: white;
+  color: #fff;
   cursor: pointer;
 
   &:disabled {
@@ -73,11 +75,16 @@ const DeleteButton = styled(Button)`
   background: #ef4444;
 `;
 
+const SecondaryButton = styled(Button)`
+  background: #6b7280;
+`;
+
 const List = styled.ul`
   list-style: none;
-  padding: 0;
   margin: 0;
-  display: grid;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 `;
 
