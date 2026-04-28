@@ -24,30 +24,49 @@ export const ensureSchema = async (): Promise<void> => {
     id INT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    transaction_date DATE NOT NULL
   )
     `);
 };
 
 type ColumnCheckRow = {
-  count: number;
+  columnName: string;
 } & RowDataPacket;
 
 export const migrateSchema = async (): Promise<void> => {
   const [rows] = await db.query<ColumnCheckRow[]>(
     `
-        SELECT COUNT(*) AS count
+        SELECT COLUMN_NAME AS columnName
         FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
           AND TABLE_NAME = 'expenses'
-          AND COLUMN_NAME = 'created_at'
+          AND COLUMN_NAME IN ('created_at', 'transaction_date')
       `,
   );
 
-  if (Number(rows[0]?.count ?? 0) === 0) {
+  const existingColumns = new Set(rows.map((row) => row.columnName));
+
+  if (!existingColumns.has('created_at')) {
     await db.execute(`
         ALTER TABLE expenses
         ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      `);
+  }
+
+  if (!existingColumns.has('transaction_date')) {
+    await db.execute(`
+        ALTER TABLE expenses
+        ADD COLUMN transaction_date DATE NULL
+      `);
+    await db.execute(`
+        UPDATE expenses
+        SET transaction_date = DATE(created_at)
+        WHERE transaction_date IS NULL
+      `);
+    await db.execute(`
+        ALTER TABLE expenses
+        MODIFY COLUMN transaction_date DATE NOT NULL
       `);
   }
 };

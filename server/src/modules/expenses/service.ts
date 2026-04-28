@@ -7,11 +7,12 @@ type ExpenseRow = {
   title: string;
   amount: string;
   created_at: Date;
+  transaction_date: Date;
 } & RowDataPacket;
 
 export const listExpenses = async (): Promise<Expense[]> => {
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at FROM expenses ORDER BY created_at DESC, id DESC',
+    'SELECT id, title, amount, created_at, transaction_date FROM expenses ORDER BY transaction_date DESC, id DESC',
   );
 
   return rows.map((row) => ({
@@ -19,20 +20,30 @@ export const listExpenses = async (): Promise<Expense[]> => {
     title: row.title,
     amount: Number(row.amount),
     createdAt: row.created_at.toISOString(),
+    transactionDate: row.transaction_date.toISOString(),
   }));
 };
 
 export const createExpense = async (input: CreateExpenseInput): Promise<Expense> => {
   const [result] = await db.execute<ResultSetHeader>(
-    'INSERT INTO expenses (title, amount) VALUES (?, ?)',
-    [input.title, input.amount],
+    'INSERT INTO expenses (title, amount, transaction_date) VALUES (?, ?, ?)',
+    [input.title, input.amount, input.transactionDate],
   );
+
+  const [rows] = await db.query<ExpenseRow[]>(
+    'SELECT id, title, amount, created_at, transaction_date FROM expenses WHERE id = ? LIMIT 1',
+    [result.insertId],
+  );
+
+  const row = rows[0];
 
   return {
     id: String(result.insertId),
-    title: input.title,
-    amount: input.amount,
-    createdAt: new Date().toISOString(),
+    title: row?.title ?? input.title,
+    amount: Number(row?.amount ?? input.amount),
+    createdAt: row?.created_at?.toISOString() ?? new Date().toISOString(),
+    transactionDate:
+      row?.transaction_date?.toISOString() ?? new Date(input.transactionDate).toISOString(),
   };
 };
 
@@ -44,8 +55,8 @@ export const deleteExpense = async (id: string): Promise<boolean> => {
 
 export const updateExpense = async (input: UpdateExpenseInput): Promise<Expense | null> => {
   const [updateResult] = await db.execute<ResultSetHeader>(
-    'UPDATE expenses SET title = ?, amount = ? WHERE id = ?',
-    [input.title, input.amount, input.id],
+    'UPDATE expenses SET title = ?, amount = ?, transaction_date = ? WHERE id = ?',
+    [input.title, input.amount, input.transactionDate, input.id],
   );
 
   if (updateResult.affectedRows === 0) {
@@ -53,7 +64,7 @@ export const updateExpense = async (input: UpdateExpenseInput): Promise<Expense 
   }
 
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, created_at, transaction_date FROM expenses WHERE id = ? LIMIT 1',
     [input.id],
   );
 
@@ -68,5 +79,6 @@ export const updateExpense = async (input: UpdateExpenseInput): Promise<Expense 
     title: row.title,
     amount: Number(row.amount),
     createdAt: row.created_at.toISOString(),
+    transactionDate: row.transaction_date.toISOString(),
   };
 };

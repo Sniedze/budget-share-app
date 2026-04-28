@@ -3,11 +3,13 @@ export type Expense = {
   title: string;
   amount: number;
   createdAt: string;
+  transactionDate: string;
 };
 
 export type CreateExpenseInput = {
   title: string;
   amount: number;
+  transactionDate: string;
 };
 
 export type DeleteExpenseInput = {
@@ -18,4 +20,5 @@ export type UpdateExpenseInput = {
   id: string;
   title: string;
   amount: number;
+  transactionDate: string;
 };

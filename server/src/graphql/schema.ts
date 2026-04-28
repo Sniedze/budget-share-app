@@ -4,11 +4,13 @@ export const typeDefs = `#graphql
     title: String!
     amount: Float!
     createdAt: String!
+    transactionDate: String!
   }
 
   input AddExpenseInput {
     title: String!
     amount: Float!
+    transactionDate: String!
   }
 
   input DeleteExpenseInput {
@@ -19,6 +21,7 @@ export const typeDefs = `#graphql
     id: ID!
     title: String!
     amount: Float!
+    transactionDate: String!
   }
 
   type Query {
