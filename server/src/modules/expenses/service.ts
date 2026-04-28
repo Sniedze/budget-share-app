@@ -17,6 +17,9 @@ type ExpenseRow = {
   category: string;
   split_type: string;
   split_details: string | SplitAllocation[] | null;
+  group_id: number | null;
+  created_by_user_id: number | null;
+  paid_by_user_id: number | null;
 } & RowDataPacket;
 
 const DEFAULT_CATEGORY = 'General';
@@ -138,24 +141,62 @@ const parseSplitDetails = (rawValue: string | SplitAllocation[] | null): SplitAl
   }
 };
 
-export const listExpenses = async (): Promise<Expense[]> => {
-  const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, split_type, split_details FROM expenses ORDER BY transaction_date DESC, id DESC',
+const isGroupMember = async (groupId: number, userEmail: string): Promise<boolean> => {
+  const [rows] = await db.query<RowDataPacket[]>(
+    `
+      SELECT id
+      FROM group_members
+      WHERE group_id = ?
+        AND (email = ?)
+      LIMIT 1
+    `,
+    [groupId, userEmail],
   );
-
-  return rows.map((row) => ({
-    id: String(row.id),
-    title: row.title,
-    amount: Number(row.amount),
-    createdAt: toIsoString(row.created_at),
-    transactionDate: toIsoString(row.transaction_date),
-    category: row.category,
-    split: normalizeSplit(row.split_type),
-    splitDetails: parseSplitDetails(row.split_details),
-  }));
+  return rows.length > 0;
 };
 
-export const createExpense = async (input: CreateExpenseInput): Promise<Expense> => {
+const canAccessExpense = async (row: ExpenseRow, userId: string, userEmail: string): Promise<boolean> => {
+  if (row.group_id === null) {
+    return row.created_by_user_id !== null && String(row.created_by_user_id) === userId;
+  }
+  return isGroupMember(row.group_id, userEmail);
+};
+
+export const listExpenses = async (userId: string, userEmail: string): Promise<Expense[]> => {
+  const [rows] = await db.query<ExpenseRow[]>(
+    'SELECT id, title, amount, created_at, transaction_date, category, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses ORDER BY transaction_date DESC, id DESC',
+  );
+
+  const visible: Expense[] = [];
+  for (const row of rows) {
+    // Hide legacy rows until ownership/group assignment exists.
+    if (row.created_by_user_id === null && row.group_id === null) {
+      continue;
+    }
+    if (!(await canAccessExpense(row, userId, userEmail))) {
+      continue;
+    }
+    visible.push({
+      id: String(row.id),
+      title: row.title,
+      amount: Number(row.amount),
+      createdAt: toIsoString(row.created_at),
+      transactionDate: toIsoString(row.transaction_date),
+      category: row.category,
+      split: normalizeSplit(row.split_type),
+      splitDetails: parseSplitDetails(row.split_details),
+      groupId: row.group_id === null ? undefined : String(row.group_id),
+      createdByUserId: row.created_by_user_id === null ? undefined : String(row.created_by_user_id),
+      paidByUserId: row.paid_by_user_id === null ? undefined : String(row.paid_by_user_id),
+    });
+  }
+  return visible;
+};
+
+export const createExpense = async (
+  input: CreateExpenseInput,
+  actor: { userId: string; email: string },
+): Promise<Expense> => {
   validateAmount(input.amount);
   const category = normalizeCategory(input.category);
   const split = normalizeSplit(input.split);
@@ -163,13 +204,19 @@ export const createExpense = async (input: CreateExpenseInput): Promise<Expense>
   validateSplitConsistency(split, splitDetails, true);
   const splitDetailsJson = splitDetails.length > 0 ? JSON.stringify(splitDetails) : null;
 
+  const groupId = input.groupId ? Number(input.groupId) : null;
+  if (groupId !== null && !(await isGroupMember(groupId, actor.email))) {
+    throw new Error('You are not a member of this group.');
+  }
+  const paidByUserId = input.paidByUserId ? Number(input.paidByUserId) : Number(actor.userId);
+
   const [result] = await db.execute<ResultSetHeader>(
-    'INSERT INTO expenses (title, amount, transaction_date, category, split_type, split_details) VALUES (?, ?, ?, ?, ?, ?)',
-    [input.title, input.amount, input.transactionDate, category, split, splitDetailsJson],
+    'INSERT INTO expenses (title, amount, transaction_date, category, split_type, split_details, group_id, created_by_user_id, paid_by_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [input.title, input.amount, input.transactionDate, category, split, splitDetailsJson, groupId, Number(actor.userId), paidByUserId],
   );
 
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, split_type, split_details FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, created_at, transaction_date, category, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses WHERE id = ? LIMIT 1',
     [result.insertId],
   );
 
@@ -185,6 +232,9 @@ export const createExpense = async (input: CreateExpenseInput): Promise<Expense>
       category,
       split,
       splitDetails,
+      groupId: groupId === null ? undefined : String(groupId),
+      createdByUserId: actor.userId,
+      paidByUserId: String(paidByUserId),
     };
   }
 
@@ -197,16 +247,39 @@ export const createExpense = async (input: CreateExpenseInput): Promise<Expense>
     category: row.category,
     split: normalizeSplit(row.split_type),
     splitDetails: parseSplitDetails(row.split_details),
+    groupId: row.group_id === null ? undefined : String(row.group_id),
+    createdByUserId: row.created_by_user_id === null ? undefined : String(row.created_by_user_id),
+    paidByUserId: row.paid_by_user_id === null ? undefined : String(row.paid_by_user_id),
   };
 };
 
-export const deleteExpense = async (id: string): Promise<boolean> => {
+export const deleteExpense = async (id: string, actor: { userId: string; email: string }): Promise<boolean> => {
+  const [rows] = await db.query<ExpenseRow[]>(
+    'SELECT id, group_id, created_by_user_id, paid_by_user_id, title, amount, created_at, transaction_date, category, split_type, split_details FROM expenses WHERE id = ? LIMIT 1',
+    [id],
+  );
+  const row = rows[0];
+  if (!row) {
+    return false;
+  }
+
+  const canDelete =
+    row.group_id === null
+      ? row.created_by_user_id !== null && String(row.created_by_user_id) === actor.userId
+      : await isGroupMember(row.group_id, actor.email);
+  if (!canDelete) {
+    throw new Error('Not authorized to delete this expense.');
+  }
+
   const [result] = await db.execute<ResultSetHeader>('DELETE FROM expenses WHERE id = ?', [id]);
 
   return result.affectedRows > 0;
 };
 
-export const updateExpense = async (input: UpdateExpenseInput): Promise<Expense | null> => {
+export const updateExpense = async (
+  input: UpdateExpenseInput,
+  actor: { userId: string; email: string },
+): Promise<Expense | null> => {
   validateAmount(input.amount);
   const category = normalizeCategory(input.category);
   const split = normalizeSplit(input.split);
@@ -215,9 +288,33 @@ export const updateExpense = async (input: UpdateExpenseInput): Promise<Expense 
   validateSplitConsistency(split, splitDetails, false);
   const splitDetailsJson = splitDetails === null ? null : JSON.stringify(splitDetails);
 
+  const [existingRows] = await db.query<ExpenseRow[]>(
+    'SELECT id, title, amount, created_at, transaction_date, category, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses WHERE id = ? LIMIT 1',
+    [input.id],
+  );
+  const existing = existingRows[0];
+  if (!existing) {
+    return null;
+  }
+
+  const existingGroupId = existing.group_id;
+  const canEdit =
+    existingGroupId === null
+      ? existing.created_by_user_id !== null && String(existing.created_by_user_id) === actor.userId
+      : await isGroupMember(existingGroupId, actor.email);
+  if (!canEdit) {
+    throw new Error('Not authorized to update this expense.');
+  }
+
+  const nextGroupId = input.groupId ? Number(input.groupId) : existingGroupId;
+  if (nextGroupId !== null && !(await isGroupMember(nextGroupId, actor.email))) {
+    throw new Error('You are not a member of this group.');
+  }
+  const nextPaidByUserId = input.paidByUserId ? Number(input.paidByUserId) : existing.paid_by_user_id;
+
   const [updateResult] = await db.execute<ResultSetHeader>(
-    'UPDATE expenses SET title = ?, amount = ?, transaction_date = ?, category = ?, split_type = ?, split_details = COALESCE(?, split_details) WHERE id = ?',
-    [input.title, input.amount, input.transactionDate, category, split, splitDetailsJson, input.id],
+    'UPDATE expenses SET title = ?, amount = ?, transaction_date = ?, category = ?, split_type = ?, split_details = COALESCE(?, split_details), group_id = ?, paid_by_user_id = ? WHERE id = ?',
+    [input.title, input.amount, input.transactionDate, category, split, splitDetailsJson, nextGroupId, nextPaidByUserId, input.id],
   );
 
   if (updateResult.affectedRows === 0) {
@@ -225,7 +322,7 @@ export const updateExpense = async (input: UpdateExpenseInput): Promise<Expense 
   }
 
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, split_type, split_details FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, created_at, transaction_date, category, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses WHERE id = ? LIMIT 1',
     [input.id],
   );
 
@@ -244,5 +341,8 @@ export const updateExpense = async (input: UpdateExpenseInput): Promise<Expense 
     category: row.category,
     split: normalizeSplit(row.split_type),
     splitDetails: parseSplitDetails(row.split_details),
+    groupId: row.group_id === null ? undefined : String(row.group_id),
+    createdByUserId: row.created_by_user_id === null ? undefined : String(row.created_by_user_id),
+    paidByUserId: row.paid_by_user_id === null ? undefined : String(row.paid_by_user_id),
   };
 };

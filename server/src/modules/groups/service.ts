@@ -28,12 +28,21 @@ const normalizeMembers = (members: GroupMember[]): GroupMember[] => {
   }));
 };
 
-export const listGroups = async (): Promise<Group[]> => {
-  const [groupRows] = await db.query<GroupRow[]>(`
+export const listGroups = async (userEmail: string): Promise<Group[]> => {
+  const normalizedEmail = userEmail.trim().toLowerCase();
+  const [groupRows] = await db.query<GroupRow[]>(
+    `
       SELECT id, name, description
-      FROM groups
+      FROM \`groups\`
+      WHERE id IN (
+        SELECT group_id
+        FROM group_members
+        WHERE email = ?
+      )
       ORDER BY created_at DESC, id DESC
-    `);
+    `,
+    [normalizedEmail],
+  );
 
   if (groupRows.length === 0) {
     return [];
@@ -71,7 +80,7 @@ export const listGroups = async (): Promise<Group[]> => {
   }));
 };
 
-export const createGroup = async (input: CreateGroupInput): Promise<Group> => {
+export const createGroup = async (input: CreateGroupInput, actorEmail: string): Promise<Group> => {
   const name = input.name.trim();
   if (!name) {
     throw new Error('Group name is required.');
@@ -98,6 +107,12 @@ export const createGroup = async (input: CreateGroupInput): Promise<Group> => {
     duplicateEmails.add(member.email);
   }
 
+  const normalizedActorEmail = actorEmail.trim().toLowerCase();
+  const actorInMembers = members.some((member) => member.email === normalizedActorEmail);
+  if (!actorInMembers) {
+    throw new Error('Group creator must be included in members.');
+  }
+
   const connection = await db.getConnection();
   let groupId = 0;
   try {
@@ -105,7 +120,7 @@ export const createGroup = async (input: CreateGroupInput): Promise<Group> => {
 
     const [insertResult] = await connection.execute<ResultSetHeader>(
       `
-        INSERT INTO groups (name, description)
+        INSERT INTO \`groups\` (name, description)
         VALUES (?, ?)
       `,
       [name, input.description?.trim() || null],

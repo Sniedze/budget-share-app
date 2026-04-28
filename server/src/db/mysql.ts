@@ -28,15 +28,28 @@ export const ensureSchema = async (): Promise<void> => {
     transaction_date DATE NOT NULL,
     category VARCHAR(64) NOT NULL DEFAULT 'General',
     split_type VARCHAR(16) NOT NULL DEFAULT 'Personal',
-    split_details JSON NULL
+    split_details JSON NULL,
+    group_id INT NULL,
+    created_by_user_id INT NULL,
+    paid_by_user_id INT NULL
   )
     `);
 
   await db.execute(`
-    CREATE TABLE IF NOT EXISTS groups (
+    CREATE TABLE IF NOT EXISTS \`groups\` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+    `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    full_name VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
   )
     `);
@@ -51,7 +64,7 @@ export const ensureSchema = async (): Promise<void> => {
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uniq_group_member_email (group_id, email),
     CONSTRAINT fk_group_members_group
-      FOREIGN KEY (group_id) REFERENCES groups(id)
+      FOREIGN KEY (group_id) REFERENCES \`groups\`(id)
       ON DELETE CASCADE
   )
     `);
@@ -68,7 +81,7 @@ export const migrateSchema = async (): Promise<void> => {
         FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
           AND TABLE_NAME = 'expenses'
-          AND COLUMN_NAME IN ('created_at', 'transaction_date', 'category', 'split_type', 'split_details')
+          AND COLUMN_NAME IN ('created_at', 'transaction_date', 'category', 'split_type', 'split_details', 'group_id', 'created_by_user_id', 'paid_by_user_id')
       `,
   );
 
@@ -133,6 +146,27 @@ export const migrateSchema = async (): Promise<void> => {
     await db.execute(`
         ALTER TABLE expenses
         ADD COLUMN split_details JSON NULL
+      `);
+  }
+
+  if (!existingColumns.has('group_id')) {
+    await db.execute(`
+        ALTER TABLE expenses
+        ADD COLUMN group_id INT NULL
+      `);
+  }
+
+  if (!existingColumns.has('created_by_user_id')) {
+    await db.execute(`
+        ALTER TABLE expenses
+        ADD COLUMN created_by_user_id INT NULL
+      `);
+  }
+
+  if (!existingColumns.has('paid_by_user_id')) {
+    await db.execute(`
+        ALTER TABLE expenses
+        ADD COLUMN paid_by_user_id INT NULL
       `);
   }
 };

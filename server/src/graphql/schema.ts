@@ -14,6 +14,9 @@ export const typeDefs = `#graphql
     category: String!
     split: SplitType!
     splitDetails: [SplitAllocation!]!
+    groupId: ID
+    createdByUserId: ID
+    paidByUserId: ID
   }
 
   type SplitAllocation {
@@ -46,6 +49,19 @@ export const typeDefs = `#graphql
     expenses: [GroupExpense!]!
   }
 
+  type User {
+    id: ID!
+    email: String!
+    fullName: String!
+    createdAt: String!
+  }
+
+  type AuthPayload {
+    accessToken: String!
+    refreshToken: String!
+    user: User!
+  }
+
   input SplitAllocationInput {
     participant: String!
     ratio: Float!
@@ -63,6 +79,21 @@ export const typeDefs = `#graphql
     members: [GroupMemberInput!]!
   }
 
+  input RegisterInput {
+    email: String!
+    password: String!
+    fullName: String!
+  }
+
+  input LoginInput {
+    email: String!
+    password: String!
+  }
+
+  input RefreshSessionInput {
+    refreshToken: String!
+  }
+
   input AddExpenseInput {
     title: String!
     amount: Float!
@@ -70,6 +101,8 @@ export const typeDefs = `#graphql
     category: String!
     split: SplitType!
     splitDetails: [SplitAllocationInput!]
+    groupId: ID
+    paidByUserId: ID
   }
 
   input DeleteExpenseInput {
@@ -84,10 +117,13 @@ export const typeDefs = `#graphql
     category: String!
     split: SplitType!
     splitDetails: [SplitAllocationInput!]
+    groupId: ID
+    paidByUserId: ID
   }
 
   type Query {
     hello: String!
+    me: User
     expenses: [Expense!]!
     groups: [Group!]!
   }
@@ -97,5 +133,8 @@ export const typeDefs = `#graphql
     deleteExpense(input: DeleteExpenseInput!): Boolean!
     updateExpense(input: UpdateExpenseInput!): Expense
     createGroup(input: CreateGroupInput!): Group!
+    register(input: RegisterInput!): AuthPayload!
+    login(input: LoginInput!): AuthPayload!
+    refreshSession(input: RefreshSessionInput!): AuthPayload!
   }
 `;

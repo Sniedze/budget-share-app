@@ -15,6 +15,9 @@ export type Expense = {
   category: string;
   split: SplitType;
   splitDetails: SplitAllocation[];
+  groupId?: string;
+  createdByUserId?: string;
+  paidByUserId?: string;
 };
 
 export type CreateExpenseInput = {
@@ -27,6 +30,8 @@ export type CreateExpenseInput = {
     participant: string;
     ratio: number;
   }>;
+  groupId?: string;
+  paidByUserId?: string;
 };
 
 export type DeleteExpenseInput = {
@@ -44,4 +49,6 @@ export type UpdateExpenseInput = {
     participant: string;
     ratio: number;
   }>;
+  groupId?: string;
+  paidByUserId?: string;
 };
