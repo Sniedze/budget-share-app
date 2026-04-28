@@ -1,56 +1,7 @@
-import { gql } from '@apollo/client';
 import { useMutation } from '@apollo/client/react';
 import type { DocumentNode } from 'graphql';
-
-const ADD_EXPENSE = gql`
-  mutation AddExpense($input: AddExpenseInput!) {
-    addExpense(input: $input) {
-      id
-      title
-      amount
-      createdAt
-      transactionDate
-      category
-      split
-    }
-  }
-`;
-
-const UPDATE_EXPENSE = gql`
-  mutation UpdateExpense($input: UpdateExpenseInput!) {
-    updateExpense(input: $input) {
-      id
-      title
-      amount
-      createdAt
-      transactionDate
-      category
-      split
-    }
-  }
-`;
-
-const DELETE_EXPENSE = gql`
-  mutation DeleteExpense($input: DeleteExpenseInput!) {
-    deleteExpense(input: $input)
-  }
-`;
-
-type AddInput = {
-  title: string;
-  amount: number;
-  transactionDate: string;
-  category: string;
-  split: string;
-};
-type UpdateInput = {
-  id: string;
-  title: string;
-  amount: number;
-  transactionDate: string;
-  category: string;
-  split: string;
-};
+import { ADD_EXPENSE, DELETE_EXPENSE, UPDATE_EXPENSE } from '../features/expenses/graphql';
+import type { AddExpenseInput, UpdateExpenseInput } from '../features/expenses/types';
 
 export const useExpenseActions = (refetchQuery: DocumentNode) => {
   const [add, { loading: adding }] = useMutation(ADD_EXPENSE, {
@@ -65,11 +16,11 @@ export const useExpenseActions = (refetchQuery: DocumentNode) => {
     refetchQueries: [{ query: refetchQuery }],
   });
 
-  const addExpense = async (input: AddInput) => {
+  const addExpense = async (input: AddExpenseInput) => {
     await add({ variables: { input } });
   };
 
-  const updateExpense = async (input: UpdateInput) => {
+  const updateExpense = async (input: UpdateExpenseInput) => {
     await update({ variables: { input } });
   };
 
