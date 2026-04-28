@@ -1,4 +1,36 @@
 import type { FormEvent } from 'react';
+import styled from 'styled-components';
+
+const Form = styled.form`
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+`;
+
+const Input = styled.input`
+  font: inherit;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  min-width: 140px;
+`;
+
+const Button = styled.button<{ $variant: 'primary' | 'secondary' }>`
+  font: inherit;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  background: ${({ $variant }) => ($variant === 'primary' ? '#2563eb' : '#6b7280')};
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
 
 type ExpenseFormProps = {
   title: string;
@@ -26,35 +58,32 @@ export const ExpenseForm = ({
   onCancel,
 }: ExpenseFormProps): JSX.Element => {
   return (
-    <form className="expense-form" onSubmit={onSubmit}>
-      <input
-        className="input"
+    <Form onSubmit={onSubmit}>
+      <Input
         value={title}
         onChange={(event) => onTitleChange(event.target.value)}
         placeholder="Expense title"
       />
-      <input
-        className="input"
+      <Input
         value={amount}
         onChange={(event) => onAmountChange(event.target.value)}
         placeholder="Amount"
         type="number"
         step="0.01"
       />
-      <input
-        className="input"
+      <Input
         value={transactionDate}
         onChange={(event) => onTransactionDateChange(event.target.value)}
         type="date"
       />
-      <button className="button button-primary" type="submit" disabled={isMutating}>
+      <Button $variant="primary" type="submit" disabled={isMutating}>
         {editingId ? 'Save' : 'Add expense'}
-      </button>
+      </Button>
       {editingId ? (
-        <button className="button button-secondary" type="button" onClick={onCancel} disabled={isMutating}>
+        <Button $variant="secondary" type="button" onClick={onCancel} disabled={isMutating}>
           Cancel
-        </button>
+        </Button>
       ) : null}
-    </form>
+    </Form>
   );
 };

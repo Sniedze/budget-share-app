@@ -1,5 +1,6 @@
 import { useQuery } from '@apollo/client/react';
 import { FormEvent, useMemo, useState } from 'react';
+import styled from 'styled-components';
 import { GET_EXPENSES } from './features/expenses/graphql';
 import { ExpenseForm } from './features/expenses/components/ExpenseForm';
 import { ExpenseList } from './features/expenses/components/ExpenseList';
@@ -7,6 +8,33 @@ import type { Expense, GetExpensesResponse } from './features/expenses/types';
 import { useExpenseActions } from './hooks/useExpenseActions';
 import { Sidebar } from './components/Sidebar';
 import './App.css';
+
+const AppLayout = styled.main`
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  background: #f3f4f6;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const Page = styled.section`
+  margin: 24px;
+  padding: 24px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+`;
+
+const PageTitle = styled.h1`
+  margin: 0 0 20px;
+`;
+
+const Placeholder = styled.p`
+  color: #6b7280;
+`;
 
 const App = (): JSX.Element => {
   const [title, setTitle] = useState('');
@@ -68,11 +96,11 @@ const App = (): JSX.Element => {
   };
 
   return (
-    <main className="app-layout">
+    <AppLayout>
       <Sidebar />
 
-      <section className="page">
-        <h1 className="page-title">Household Budget</h1>
+      <Page>
+        <PageTitle>Household Budget</PageTitle>
 
         <ExpenseForm
           title={title}
@@ -87,8 +115,8 @@ const App = (): JSX.Element => {
           onCancel={resetForm}
         />
 
-        {loading ? <p className="placeholder">Loading expenses...</p> : null}
-        {error ? <p className="placeholder">Error: {error.message}</p> : null}
+        {loading ? <Placeholder>Loading expenses...</Placeholder> : null}
+        {error ? <Placeholder>Error: {error.message}</Placeholder> : null}
         {!loading && !error ? (
           <ExpenseList
             expenses={expenses}
@@ -97,8 +125,8 @@ const App = (): JSX.Element => {
             onDelete={handleDelete}
           />
         ) : null}
-      </section>
-    </main>
+      </Page>
+    </AppLayout>
   );
 };
 
