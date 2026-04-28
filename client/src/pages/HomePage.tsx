@@ -15,6 +15,15 @@ import {
 import type { Expense, GetExpensesResponse } from '../features/expenses';
 import { colors, radii, spacing } from '../styles/tokens';
 
+const DEFAULT_CATEGORY = 'General';
+const DEFAULT_SPLIT = 'Personal';
+
+const getTodayDateInput = (): string => {
+  const now = new Date();
+  const timezoneOffsetMs = now.getTimezoneOffset() * 60 * 1000;
+  return new Date(now.getTime() - timezoneOffsetMs).toISOString().slice(0, 10);
+};
+
 const AppLayout = styled.main`
   min-height: 100vh;
   display: grid;
@@ -50,7 +59,9 @@ const HeaderText = styled.div`
 export const HomePage = (): JSX.Element => {
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
-  const [transactionDate, setTransactionDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [transactionDate, setTransactionDate] = useState(() => getTodayDateInput());
+  const [category, setCategory] = useState(DEFAULT_CATEGORY);
+  const [split, setSplit] = useState(DEFAULT_SPLIT);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const { data, loading, error } = useQuery<GetExpensesResponse>(GET_EXPENSES);
@@ -59,7 +70,9 @@ export const HomePage = (): JSX.Element => {
   const resetForm = () => {
     setTitle('');
     setAmount('');
-    setTransactionDate(new Date().toISOString().slice(0, 10));
+    setTransactionDate(getTodayDateInput());
+    setCategory(DEFAULT_CATEGORY);
+    setSplit(DEFAULT_SPLIT);
     setEditingId(null);
   };
 
@@ -73,7 +86,7 @@ export const HomePage = (): JSX.Element => {
     event.preventDefault();
 
     const parsedAmount = Number(amount);
-    if (!title.trim() || Number.isNaN(parsedAmount) || !transactionDate) return;
+    if (!title.trim() || Number.isNaN(parsedAmount) || !transactionDate || !category || !split) return;
 
     if (editingId) {
       await updateExpense({
@@ -81,12 +94,16 @@ export const HomePage = (): JSX.Element => {
         title: title.trim(),
         amount: parsedAmount,
         transactionDate,
+        category,
+        split,
       });
     } else {
       await addExpense({
         title: title.trim(),
         amount: parsedAmount,
         transactionDate,
+        category,
+        split,
       });
     }
 
@@ -98,6 +115,8 @@ export const HomePage = (): JSX.Element => {
     setTitle(expense.title);
     setAmount(String(expense.amount));
     setTransactionDate(expense.transactionDate.slice(0, 10));
+    setCategory(expense.category);
+    setSplit(expense.split);
   };
 
   const handleDelete = async (id: string) => {
@@ -137,11 +156,15 @@ export const HomePage = (): JSX.Element => {
           title={title}
           amount={amount}
           transactionDate={transactionDate}
+          category={category}
+          split={split}
           editingId={editingId}
           isMutating={isMutating}
           onTitleChange={setTitle}
           onAmountChange={setAmount}
           onTransactionDateChange={setTransactionDate}
+          onCategoryChange={setCategory}
+          onSplitChange={setSplit}
           onSubmit={handleSubmit}
           onCancel={resetForm}
         />

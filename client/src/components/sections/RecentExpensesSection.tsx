@@ -25,14 +25,6 @@ const Actions = styled.div`
   gap: ${spacing.sm};
 `;
 
-const getCategory = (title: string): string => {
-  const value = title.toLowerCase();
-  if (value.includes('food') || value.includes('grocery')) return 'Groceries';
-  if (value.includes('uber') || value.includes('taxi') || value.includes('bus')) return 'Transportation';
-  if (value.includes('doctor') || value.includes('pharmacy')) return 'Healthcare';
-  return 'General';
-};
-
 const formatDate = (value: string): string => new Date(value).toISOString().slice(0, 10);
 
 export const RecentExpensesSection = ({
@@ -70,15 +62,15 @@ export const RecentExpensesSection = ({
             </tr>
           </Thead>
           <tbody>
-            {recent.map((expense, index) => (
+            {recent.map((expense) => (
               <Tr key={expense.id}>
                 <Td>{formatDate(expense.transactionDate)}</Td>
                 <Td>{expense.title}</Td>
                 <Td>
-                  <Badge $variant="accent">{getCategory(expense.title)}</Badge>
+                  <Badge $variant="accent">{expense.category}</Badge>
                 </Td>
                 <Td>${expense.amount.toFixed(2)}</Td>
-                <Td>{index % 2 === 0 ? 'Personal' : 'Shared'}</Td>
+                <Td>{expense.split}</Td>
                 <Td>
                   <Actions>
                     <Button

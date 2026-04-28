@@ -4,6 +4,8 @@ export type Expense = {
   amount: number;
   createdAt: string;
   transactionDate: string;
+  category: string;
+  split: string;
 };
 
 export type GetExpensesResponse = {
@@ -14,6 +16,8 @@ export type AddExpenseInput = {
   title: string;
   amount: number;
   transactionDate: string;
+  category: string;
+  split: string;
 };
 
 export type UpdateExpenseInput = {
@@ -21,4 +25,6 @@ export type UpdateExpenseInput = {
   title: string;
   amount: number;
   transactionDate: string;
+  category: string;
+  split: string;
 };

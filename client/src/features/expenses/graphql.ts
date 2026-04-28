@@ -8,6 +8,8 @@ export const GET_EXPENSES = gql`
       amount
       createdAt
       transactionDate
+      category
+      split
     }
   }
 `;
@@ -20,6 +22,8 @@ export const ADD_EXPENSE = gql`
       amount
       createdAt
       transactionDate
+      category
+      split
     }
   }
 `;
@@ -32,6 +36,8 @@ export const UPDATE_EXPENSE = gql`
       amount
       createdAt
       transactionDate
+      category
+      split
     }
   }
 `;
