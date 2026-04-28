@@ -7,8 +7,8 @@ export {
 } from './Layout';
 export { StatsCard } from './StatsCard';
 export {
- MutedText, SectionSubtitle, SectionTitle 
+ MutedText, ErrorText, SectionSubtitle, SectionTitle 
 } from './Text';
 export {
- Table, TableWrapper, Td, Th, Thead, Tr 
+  Table, TableWrapper, Tbody, Td, Th, Thead, Tr 
 } from './Table';
