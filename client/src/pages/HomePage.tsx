@@ -1,7 +1,7 @@
 import { useQuery } from '@apollo/client/react';
 import { FormEvent, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { ChartsSection, Sidebar, StatsSection } from '../components/sections';
+import { ChartsSection, RecentExpensesSection, Sidebar, StatsSection } from '../components/sections';
 import { Button, MutedText, SectionSubtitle, SectionTitle } from '../components/ui';
 import {
   GET_EXPENSES,
@@ -10,7 +10,6 @@ import {
   getTotalAmount,
   getTrendData,
   ExpenseForm,
-  ExpenseList,
   useExpenseActions,
 } from '../features/expenses';
 import type { Expense, GetExpensesResponse } from '../features/expenses';
@@ -150,7 +149,7 @@ export const HomePage = (): JSX.Element => {
         {loading ? <MutedText>Loading expenses...</MutedText> : null}
         {error ? <MutedText>Error: {error.message}</MutedText> : null}
         {!loading && !error ? (
-          <ExpenseList
+          <RecentExpensesSection
             expenses={expenses}
             isMutating={isMutating}
             onEdit={handleEdit}
