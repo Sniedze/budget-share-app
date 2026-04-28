@@ -1,4 +1,5 @@
 import { LayoutDashboard, Users, Upload, type LucideIcon } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
 import styled from 'styled-components';
 import { colors, radii, spacing } from '../../styles/tokens';
 
@@ -68,7 +69,7 @@ const NavList = styled.ul`
   gap: ${spacing.xs};
 `;
 
-const NavButton = styled.button<{ $active: boolean }>`
+const NavItemLink = styled(NavLink)`
   display: flex;
   align-items: center;
   gap: 10px;
@@ -81,11 +82,17 @@ const NavButton = styled.button<{ $active: boolean }>`
   font-size: 14px;
   font-weight: 500;
   transition: background-color 120ms ease, color 120ms ease;
-  background: ${({ $active }) => ($active ? colors.sidebarActiveBg : 'transparent')};
-  color: ${({ $active }) => ($active ? colors.sidebarActiveText : '#374151')};
+  text-decoration: none;
+  background: transparent;
+  color: #374151;
 
-  &:hover {
-    background: ${({ $active }) => ($active ? colors.sidebarActiveBg : colors.background)};
+  &.active {
+    background: ${colors.sidebarActiveBg};
+    color: ${colors.sidebarActiveText};
+  }
+
+  &:hover:not(.active) {
+    background: ${colors.background};
   }
 `;
 
@@ -108,12 +115,13 @@ const NavIcon = styled.span`
 type NavItem = {
   label: string;
   Icon: LucideIcon;
+  to: string;
 };
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard', Icon: LayoutDashboard },
-  { label: 'Groups', Icon: Users },
-  { label: 'Import Statement', Icon: Upload },
+  { label: 'Dashboard', Icon: LayoutDashboard, to: '/' },
+  { label: 'Groups', Icon: Users, to: '/groups' },
+  { label: 'Import Statement', Icon: Upload, to: '/import' },
 ];
 
 export const Sidebar = (): JSX.Element => {
@@ -129,14 +137,14 @@ export const Sidebar = (): JSX.Element => {
 
       <Nav>
         <NavList>
-          {navItems.map((item, index) => (
+          {navItems.map((item) => (
             <li key={item.label}>
-              <NavButton type="button" aria-current={index === 0 ? 'page' : undefined} $active={index === 0}>
+              <NavItemLink to={item.to} end={item.to === '/'}>
                 <NavIcon aria-hidden>
                   <item.Icon size={12} strokeWidth={2} />
                 </NavIcon>
                 <span>{item.label}</span>
-              </NavButton>
+              </NavItemLink>
             </li>
           ))}
         </NavList>
