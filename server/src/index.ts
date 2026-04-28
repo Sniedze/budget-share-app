@@ -4,6 +4,7 @@ import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express5';
 import { typeDefs } from './graphql/schema.js';
 import { resolvers } from './graphql/resolvers.js';
+import { createGraphqlContext, type GraphqlContext } from './graphql/context.js';
 import { checkDbConnection, ensureSchema, migrateSchema } from './db/mysql.js';
 
 const app = express();
@@ -22,7 +23,12 @@ const start = async () => {
   app.get('/health', (_req, res) => {
     res.status(200).json({ ok: true, service: 'server' });
   });
-  app.use('/graphql', expressMiddleware(apollo));
+  app.use(
+    '/graphql',
+    expressMiddleware(apollo, {
+      context: async ({ req }): Promise<GraphqlContext> => createGraphqlContext(req),
+    }),
+  );
   await checkDbConnection();
   console.log('MySQL connection established');
 
