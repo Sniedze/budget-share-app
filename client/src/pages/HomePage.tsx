@@ -1,20 +1,26 @@
 import { useQuery } from '@apollo/client/react';
 import { FormEvent, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Sidebar } from '../components/Sidebar';
-import { Button } from '../components/ui/Button';
-import { MutedText, SectionSubtitle, SectionTitle } from '../components/ui/Text';
-import { ExpenseForm } from '../features/expenses/components/ExpenseForm';
-import { ExpenseList } from '../features/expenses/components/ExpenseList';
-import { GET_EXPENSES } from '../features/expenses/graphql';
-import type { Expense, GetExpensesResponse } from '../features/expenses/types';
-import { useExpenseActions } from '../hooks/useExpenseActions';
+import { ChartsSection, Sidebar, StatsSection } from '../components/sections';
+import { Button, MutedText, SectionSubtitle, SectionTitle } from '../components/ui';
+import {
+  GET_EXPENSES,
+  getBreakdownData,
+  getDashboardStats,
+  getTotalAmount,
+  getTrendData,
+  ExpenseForm,
+  ExpenseList,
+  useExpenseActions,
+} from '../features/expenses';
+import type { Expense, GetExpensesResponse } from '../features/expenses';
+import { colors, radii, spacing } from '../styles/tokens';
 
 const AppLayout = styled.main`
   min-height: 100vh;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
-  background: #f3f4f6;
+  background: ${colors.background};
 
   @media (max-width: 900px) {
     grid-template-columns: 1fr;
@@ -22,10 +28,10 @@ const AppLayout = styled.main`
 `;
 
 const Page = styled.section`
-  margin: 24px;
-  padding: 24px;
-  background: #ffffff;
-  border-radius: 12px;
+  margin: ${spacing.xxl};
+  padding: ${spacing.xxl};
+  background: ${colors.surface};
+  border-radius: ${radii.lg};
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 `;
 
@@ -33,21 +39,13 @@ const HeaderRow = styled.header`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: ${spacing.lg};
+  margin-bottom: ${spacing.xl};
 `;
 
 const HeaderText = styled.div`
   display: flex;
   flex-direction: column;
-`;
-
-const AddExpenseButton = styled(Button)`
-  border-radius: 10px;
-  padding: 10px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  box-shadow: 0 10px 18px rgba(79, 70, 229, 0.2);
 `;
 
 export const HomePage = (): JSX.Element => {
@@ -67,6 +65,10 @@ export const HomePage = (): JSX.Element => {
   };
 
   const expenses = useMemo(() => data?.expenses ?? [], [data]);
+  const totalAmount = useMemo(() => getTotalAmount(expenses), [expenses]);
+  const stats = useMemo(() => getDashboardStats(totalAmount), [totalAmount]);
+  const trendData = useMemo(() => getTrendData(expenses), [expenses]);
+  const breakdownData = useMemo(() => getBreakdownData(expenses), [expenses]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -116,10 +118,21 @@ export const HomePage = (): JSX.Element => {
             <SectionTitle>Dashboard</SectionTitle>
             <SectionSubtitle>Overview of your expenses and spending patterns</SectionSubtitle>
           </HeaderText>
-          <AddExpenseButton type="button" $variant="accent">
+          <Button
+            type="button"
+            $variant="accent"
+            $size="lg"
+            $radius="md"
+            $weight="semibold"
+            $elevation="accent"
+          >
             + Add Expense
-          </AddExpenseButton>
+          </Button>
         </HeaderRow>
+
+        <StatsSection stats={stats} />
+
+        <ChartsSection trendData={trendData} breakdownData={breakdownData} />
 
         <ExpenseForm
           title={title}

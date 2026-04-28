@@ -1,7 +1,7 @@
 import { useMutation } from '@apollo/client/react';
 import type { DocumentNode } from 'graphql';
-import { ADD_EXPENSE, DELETE_EXPENSE, UPDATE_EXPENSE } from '../features/expenses/graphql';
-import type { AddExpenseInput, UpdateExpenseInput } from '../features/expenses/types';
+import { ADD_EXPENSE, DELETE_EXPENSE, UPDATE_EXPENSE } from '../graphql';
+import type { AddExpenseInput, UpdateExpenseInput } from '../types';
 
 export const useExpenseActions = (refetchQuery: DocumentNode) => {
   const [add, { loading: adding }] = useMutation(ADD_EXPENSE, {

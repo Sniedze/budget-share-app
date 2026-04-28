@@ -1,14 +1,15 @@
 import { LayoutDashboard, Users, Upload, type LucideIcon } from 'lucide-react';
 import styled from 'styled-components';
+import { colors, radii, spacing } from '../../styles/tokens';
 
 const Aside = styled.aside`
-  padding: 20px 14px;
-  border-right: 1px solid #e5e7eb;
-  background: #fcfcfd;
+  padding: ${spacing.xl} 14px;
+  border-right: 1px solid ${colors.border};
+  background: ${colors.sidebarBg};
 
   @media (max-width: 900px) {
     border-right: 0;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid ${colors.border};
   }
 `;
 
@@ -21,13 +22,13 @@ const Brand = styled.div`
 const BrandIcon = styled.div`
   width: 28px;
   height: 28px;
-  border-radius: 999px;
+  border-radius: ${radii.full};
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
   font-weight: 700;
-  color: #ffffff;
+  color: ${colors.surface};
   background: linear-gradient(135deg, #5b4ef4, #4131d4);
   box-shadow: 0 6px 12px rgba(67, 56, 202, 0.25);
 `;
@@ -37,12 +38,12 @@ const BrandText = styled.div`
     margin: 0;
     font-size: 26px;
     line-height: 1;
-    color: #111827;
+    color: ${colors.textPrimary};
   }
 
   p {
     margin: 2px 0 0;
-    color: #9ca3af;
+    color: ${colors.textSubtle};
     font-size: 11px;
     text-transform: lowercase;
   }
@@ -55,7 +56,7 @@ const BrandText = styled.div`
 `;
 
 const Nav = styled.nav`
-  margin-top: 24px;
+  margin-top: ${spacing.xxl};
 `;
 
 const NavList = styled.ul`
@@ -64,7 +65,7 @@ const NavList = styled.ul`
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: ${spacing.xs};
 `;
 
 const NavButton = styled.button<{ $active: boolean }>`
@@ -74,17 +75,17 @@ const NavButton = styled.button<{ $active: boolean }>`
   width: 100%;
   text-align: left;
   border: 0;
-  border-radius: 8px;
+  border-radius: ${radii.sm};
   padding: 9px 10px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
   transition: background-color 120ms ease, color 120ms ease;
-  background: ${({ $active }) => ($active ? '#eef2ff' : 'transparent')};
-  color: ${({ $active }) => ($active ? '#4338ca' : '#374151')};
+  background: ${({ $active }) => ($active ? colors.sidebarActiveBg : 'transparent')};
+  color: ${({ $active }) => ($active ? colors.sidebarActiveText : '#374151')};
 
   &:hover {
-    background: ${({ $active }) => ($active ? '#eef2ff' : '#f3f4f6')};
+    background: ${({ $active }) => ($active ? colors.sidebarActiveBg : colors.background)};
   }
 `;
 
@@ -119,9 +120,7 @@ export const Sidebar = (): JSX.Element => {
   return (
     <Aside>
       <Brand>
-        <BrandIcon aria-hidden>
-          B
-        </BrandIcon>
+        <BrandIcon aria-hidden>B</BrandIcon>
         <BrandText>
           <h2>BudgetShare</h2>
           <p>Household budgeting</p>
