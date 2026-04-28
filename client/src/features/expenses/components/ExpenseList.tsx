@@ -1,7 +1,6 @@
 import type { Expense } from '../types';
 import styled from 'styled-components';
-import { Button } from '../../../components/ui/Button';
-import { MutedText } from '../../../components/ui/Text';
+import { Button, MutedText } from '../../../components/ui';
 
 const List = styled.ul`
   list-style: none;

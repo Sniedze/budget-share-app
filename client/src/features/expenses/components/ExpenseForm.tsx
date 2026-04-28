@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react';
 import styled from 'styled-components';
-import { Button } from '../../../components/ui/Button';
+import { Button, Input } from '../../../components/ui';
 
 const Form = styled.form`
   display: flex;
@@ -8,14 +8,6 @@ const Form = styled.form`
   margin-bottom: 20px;
   align-items: center;
   flex-wrap: wrap;
-`;
-
-const Input = styled.input`
-  font: inherit;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  min-width: 140px;
 `;
 
 type ExpenseFormProps = {

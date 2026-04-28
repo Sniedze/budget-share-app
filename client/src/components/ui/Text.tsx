@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { colors } from '../../styles/tokens';
 
 export const SectionTitle = styled.h1`
   margin: 0;
@@ -8,10 +9,10 @@ export const SectionTitle = styled.h1`
 
 export const SectionSubtitle = styled.p`
   margin: 6px 0 0;
-  color: #6b7280;
+  color: ${colors.textMuted};
   font-size: 14px;
 `;
 
 export const MutedText = styled.p`
-  color: #6b7280;
+  color: ${colors.textMuted};
 `;
