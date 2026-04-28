@@ -1,22 +1,16 @@
 import { useQuery } from '@apollo/client/react';
-import { FormEvent, useMemo, useState } from 'react';
-import styled from 'styled-components';
+import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
 import { ChartsSection, RecentExpensesSection, Sidebar, StatsSection } from '../components/sections';
-import { Button, MutedText, SectionSubtitle, SectionTitle } from '../components/ui';
-import {
-  GET_EXPENSES,
-  getBreakdownData,
-  getDashboardStats,
-  getTotalAmount,
-  getTrendData,
-  ExpenseForm,
-  useExpenseActions,
-} from '../features/expenses';
-import type { Expense, GetExpensesResponse } from '../features/expenses';
-import { colors, radii, spacing } from '../styles/tokens';
+import { AppLayout, Button, HeaderRow, HeaderText, MutedText, PageSurface, SectionSubtitle, SectionTitle } from '../components/ui';
+import { GET_EXPENSES, getBreakdownData, getDashboardStats, getTotalAmount, getTrendData, ExpenseForm, useExpenseActions } from '../features/expenses';
+import type { Expense, GetExpensesResponse, SplitAllocationInput, SplitType } from '../features/expenses';
 
 const DEFAULT_CATEGORY = 'General';
-const DEFAULT_SPLIT = 'Personal';
+const DEFAULT_SPLIT: SplitType = 'Personal';
+const DEFAULT_CUSTOM_SPLIT_DETAILS: SplitAllocationInput[] = [
+  { participant: 'You', ratio: 50 },
+  { participant: 'Partner', ratio: 50 },
+];
 
 const getTodayDateInput = (): string => {
   const now = new Date();
@@ -24,55 +18,48 @@ const getTodayDateInput = (): string => {
   return new Date(now.getTime() - timezoneOffsetMs).toISOString().slice(0, 10);
 };
 
-const AppLayout = styled.main`
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  background: ${colors.background};
+type ExpenseFormValues = {
+  title: string;
+  amount: string;
+  transactionDate: string;
+  category: string;
+  split: SplitType;
+  splitDetails: SplitAllocationInput[];
+};
 
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-  }
-`;
+const getInitialFormValues = (): ExpenseFormValues => ({
+  title: '',
+  amount: '',
+  transactionDate: getTodayDateInput(),
+  category: DEFAULT_CATEGORY,
+  split: DEFAULT_SPLIT,
+  splitDetails: DEFAULT_CUSTOM_SPLIT_DETAILS,
+});
 
-const Page = styled.section`
-  margin: ${spacing.xxl};
-  padding: ${spacing.xxl};
-  background: ${colors.surface};
-  border-radius: ${radii.lg};
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-`;
-
-const HeaderRow = styled.header`
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: ${spacing.lg};
-  margin-bottom: ${spacing.xl};
-`;
-
-const HeaderText = styled.div`
-  display: flex;
-  flex-direction: column;
-`;
+const toFormValuesFromExpense = (expense: Expense): ExpenseFormValues => ({
+  title: expense.title,
+  amount: String(expense.amount),
+  transactionDate: expense.transactionDate.slice(0, 10),
+  category: expense.category,
+  split: expense.split,
+  splitDetails:
+    expense.splitDetails.length > 0
+      ? expense.splitDetails.map((detail) => ({
+          participant: detail.participant,
+          ratio: detail.ratio,
+        }))
+      : DEFAULT_CUSTOM_SPLIT_DETAILS,
+});
 
 export const HomePage = (): JSX.Element => {
-  const [title, setTitle] = useState('');
-  const [amount, setAmount] = useState('');
-  const [transactionDate, setTransactionDate] = useState(() => getTodayDateInput());
-  const [category, setCategory] = useState(DEFAULT_CATEGORY);
-  const [split, setSplit] = useState(DEFAULT_SPLIT);
+  const [formValues, setFormValues] = useState<ExpenseFormValues>(() => getInitialFormValues());
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const { data, loading, error } = useQuery<GetExpensesResponse>(GET_EXPENSES);
   const { addExpense, updateExpense, deleteExpense, isMutating } = useExpenseActions(GET_EXPENSES);
 
   const resetForm = () => {
-    setTitle('');
-    setAmount('');
-    setTransactionDate(getTodayDateInput());
-    setCategory(DEFAULT_CATEGORY);
-    setSplit(DEFAULT_SPLIT);
+    setFormValues(getInitialFormValues());
     setEditingId(null);
   };
 
@@ -85,25 +72,44 @@ export const HomePage = (): JSX.Element => {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const parsedAmount = Number(amount);
-    if (!title.trim() || Number.isNaN(parsedAmount) || !transactionDate || !category || !split) return;
+    const parsedAmount = Number(formValues.amount);
+    if (
+      !formValues.title.trim() ||
+      Number.isNaN(parsedAmount) ||
+      !formValues.transactionDate ||
+      !formValues.category ||
+      !formValues.split
+    ) {
+      return;
+    }
+
+    const normalizedSplitDetails = formValues.splitDetails
+      .map((detail) => ({
+        participant: detail.participant.trim(),
+        ratio: Number(detail.ratio),
+      }))
+      .filter((detail) => detail.participant.length > 0 && Number.isFinite(detail.ratio) && detail.ratio > 0);
+
+    const payloadSplitDetails = formValues.split === 'Custom' ? normalizedSplitDetails : undefined;
 
     if (editingId) {
       await updateExpense({
         id: editingId,
-        title: title.trim(),
+        title: formValues.title.trim(),
         amount: parsedAmount,
-        transactionDate,
-        category,
-        split,
+        transactionDate: formValues.transactionDate,
+        category: formValues.category,
+        split: formValues.split,
+        splitDetails: payloadSplitDetails,
       });
     } else {
       await addExpense({
-        title: title.trim(),
+        title: formValues.title.trim(),
         amount: parsedAmount,
-        transactionDate,
-        category,
-        split,
+        transactionDate: formValues.transactionDate,
+        category: formValues.category,
+        split: formValues.split,
+        splitDetails: payloadSplitDetails,
       });
     }
 
@@ -112,11 +118,61 @@ export const HomePage = (): JSX.Element => {
 
   const handleEdit = (expense: Expense) => {
     setEditingId(expense.id);
-    setTitle(expense.title);
-    setAmount(String(expense.amount));
-    setTransactionDate(expense.transactionDate.slice(0, 10));
-    setCategory(expense.category);
-    setSplit(expense.split);
+    setFormValues(toFormValuesFromExpense(expense));
+  };
+
+  const onInputChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = event.target;
+    setFormValues({
+      ...formValues,
+      [name]:
+        name === 'split' ? (value as SplitType) : (value as ExpenseFormValues[keyof ExpenseFormValues]),
+      ...(name === 'split' && value === 'Custom' && formValues.splitDetails.length === 0
+        ? { splitDetails: DEFAULT_CUSTOM_SPLIT_DETAILS }
+        : {}),
+    });
+  };
+
+  const handleSplitDetailsAction = (action: 'add' | 'remove', index?: number) => {
+    if (action === 'add') {
+      setFormValues((previous) => ({
+        ...previous,
+        splitDetails: [...previous.splitDetails, { participant: '', ratio: 0 }],
+      }));
+      return;
+    }
+
+    if (typeof index === 'number') {
+      setFormValues((previous) => ({
+        ...previous,
+        splitDetails: previous.splitDetails.filter((_, entryIndex) => entryIndex !== index),
+      }));
+    }
+  };
+
+  const handleSplitDetailChange = (index: number, field: 'participant' | 'ratio', value: string) => {
+    setFormValues((previous) => ({
+      ...previous,
+      splitDetails: previous.splitDetails.map((entry, entryIndex) => {
+        if (entryIndex !== index) {
+          return entry;
+        }
+
+        if (field === 'participant') {
+          return { ...entry, participant: value };
+        }
+
+        return { ...entry, ratio: Number(value) };
+      }),
+    }));
+  };
+
+  const handleAddSplitDetail = () => {
+    handleSplitDetailsAction('add');
+  };
+
+  const handleRemoveSplitDetail = (index: number) => {
+    handleSplitDetailsAction('remove', index);
   };
 
   const handleDelete = async (id: string) => {
@@ -130,7 +186,7 @@ export const HomePage = (): JSX.Element => {
     <AppLayout>
       <Sidebar />
 
-      <Page>
+      <PageSurface>
         <HeaderRow>
           <HeaderText>
             <SectionTitle>Dashboard</SectionTitle>
@@ -153,18 +209,13 @@ export const HomePage = (): JSX.Element => {
         <ChartsSection trendData={trendData} breakdownData={breakdownData} />
 
         <ExpenseForm
-          title={title}
-          amount={amount}
-          transactionDate={transactionDate}
-          category={category}
-          split={split}
+          {...formValues}
           editingId={editingId}
           isMutating={isMutating}
-          onTitleChange={setTitle}
-          onAmountChange={setAmount}
-          onTransactionDateChange={setTransactionDate}
-          onCategoryChange={setCategory}
-          onSplitChange={setSplit}
+          onInputChange={onInputChange}
+          onSplitDetailChange={handleSplitDetailChange}
+          onAddSplitDetail={handleAddSplitDetail}
+          onRemoveSplitDetail={handleRemoveSplitDetail}
           onSubmit={handleSubmit}
           onCancel={resetForm}
         />
@@ -179,7 +230,7 @@ export const HomePage = (): JSX.Element => {
             onDelete={handleDelete}
           />
         ) : null}
-      </Page>
+      </PageSurface>
     </AppLayout>
   );
 };
