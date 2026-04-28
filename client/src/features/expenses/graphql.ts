@@ -10,6 +10,11 @@ export const GET_EXPENSES = gql`
       transactionDate
       category
       split
+      splitDetails {
+        participant
+        ratio
+        amount
+      }
     }
   }
 `;
@@ -24,6 +29,11 @@ export const ADD_EXPENSE = gql`
       transactionDate
       category
       split
+      splitDetails {
+        participant
+        ratio
+        amount
+      }
     }
   }
 `;
@@ -38,6 +48,11 @@ export const UPDATE_EXPENSE = gql`
       transactionDate
       category
       split
+      splitDetails {
+        participant
+        ratio
+        amount
+      }
     }
   }
 `;

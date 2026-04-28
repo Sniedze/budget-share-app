@@ -17,5 +17,8 @@ export type {
   AddExpenseInput,
   Expense,
   GetExpensesResponse,
+  SplitAllocation,
+  SplitAllocationInput,
+  SplitType,
   UpdateExpenseInput,
 } from './types';

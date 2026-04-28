@@ -1,7 +1,11 @@
 import styled from 'styled-components';
 import type { Expense } from '../../features/expenses';
-import { colors, spacing } from '../../styles/tokens';
-import { Badge, Button, Card, MutedText, Table, TableWrapper, Td, Th, Thead, Tr } from '../ui';
+import {
+ colors, spacing 
+} from '../../styles/tokens';
+import {
+ Badge, Button, Card, MutedText, Table, TableWrapper, Td, Th, Thead, Tr 
+} from '../ui';
 
 type RecentExpensesSectionProps = {
   expenses: Expense[];
@@ -26,6 +30,18 @@ const Actions = styled.div`
 `;
 
 const formatDate = (value: string): string => new Date(value).toISOString().slice(0, 10);
+
+const formatSplitLabel = (expense: Expense): string => {
+  if (expense.split !== 'Custom' || expense.splitDetails.length === 0) {
+    return expense.split;
+  }
+
+  const preview = expense.splitDetails
+    .slice(0, 2)
+    .map((detail) => `${detail.participant}: ${detail.ratio}%`)
+    .join(', ');
+  return expense.splitDetails.length > 2 ? `${preview}, ...` : preview;
+};
 
 export const RecentExpensesSection = ({
   expenses,
@@ -70,7 +86,7 @@ export const RecentExpensesSection = ({
                   <Badge $variant="accent">{expense.category}</Badge>
                 </Td>
                 <Td>${expense.amount.toFixed(2)}</Td>
-                <Td>{expense.split}</Td>
+                <Td>{formatSplitLabel(expense)}</Td>
                 <Td>
                   <Actions>
                     <Button
