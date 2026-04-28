@@ -1,7 +1,8 @@
 import { gql } from '@apollo/client';
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useQuery } from '@apollo/client/react';
 import { FormEvent, useState } from 'react';
 import styled from 'styled-components';
+import { useExpenseActions } from './hooks/useExpenseActions';
 
 const GET_EXPENSES = gql`
   query GetExpenses {
@@ -14,22 +15,6 @@ const GET_EXPENSES = gql`
   }
 `;
 
-const ADD_EXPENSE = gql`
-  mutation AddExpense($input: AddExpenseInput!) {
-    addExpense(input: $input) {
-      id
-      title
-      amount
-      createdAt
-    }
-  }
-`;
-const DELETE_EXPENSE = gql`
-  mutation DeleteExpense($input: DeleteExpenseInput!) {
-    deleteExpense(input: $input)
-  }
-`;
-
 type Expense = {
   id: string;
   title: string;
@@ -39,27 +24,6 @@ type Expense = {
 
 type GetExpensesResponse = {
   expenses: Expense[];
-};
-
-type AddExpenseResponse = {
-  addExpense: Expense;
-};
-
-type AddExpenseVariables = {
-  input: {
-    title: string;
-    amount: number;
-  };
-};
-
-type DeleteExpenseResponse = {
-  deleteExpense: boolean;
-};
-
-type DeleteExpenseVariables = {
-  input: {
-    id: string;
-  };
 };
 
 const Page = styled.main`
@@ -121,60 +85,68 @@ const ListItem = styled.li`
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   padding: 12px;
 `;
 
-function App() {
+const Actions = styled.div`
+  display: flex;
+  gap: 8px;
+`;
+
+const App = (): JSX.Element => {
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const { data, loading, error } = useQuery<GetExpensesResponse>(GET_EXPENSES);
 
-  const [addExpense, { loading: adding }] = useMutation<AddExpenseResponse, AddExpenseVariables>(
-    ADD_EXPENSE,
-    {
-      refetchQueries: [{ query: GET_EXPENSES }],
-    },
-  );
+  const { addExpense, updateExpense, deleteExpense, isMutating } = useExpenseActions(GET_EXPENSES);
 
-  const [removeExpense, { loading: deleting }] = useMutation<
-    DeleteExpenseResponse,
-    DeleteExpenseVariables
-  >(DELETE_EXPENSE, {
-    refetchQueries: [{ query: GET_EXPENSES }],
-  });
+  const resetForm = () => {
+    setTitle('');
+    setAmount('');
+    setEditingId(null);
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const parsedAmount = Number(amount);
 
-    if (!title.trim() || Number.isNaN(parsedAmount)) {
-      return;
+    if (!title.trim() || Number.isNaN(parsedAmount)) return;
+
+    if (editingId) {
+      await updateExpense({
+        id: editingId,
+        title: title.trim(),
+        amount: parsedAmount,
+      });
+    } else {
+      await addExpense({
+        title: title.trim(),
+        amount: parsedAmount,
+      });
     }
 
-    await addExpense({
-      variables: {
-        input: {
-          title: title.trim(),
-          amount: parsedAmount,
-        },
-      },
-    });
+    resetForm();
+  };
 
-    setTitle('');
-    setAmount('');
+  const handleEdit = (expense: Expense) => {
+    setEditingId(expense.id);
+    setTitle(expense.title);
+    setAmount(String(expense.amount));
   };
 
   const handleDelete = async (id: string) => {
-    await removeExpense({
-      variables: {
-        input: { id },
-      },
-    });
+    await deleteExpense(id);
+
+    if (editingId === id) {
+      resetForm();
+    }
   };
 
   if (loading) return <p>Loading expenses...</p>;
@@ -197,23 +169,35 @@ function App() {
           type="number"
           step="0.01"
         />
-        <Button type="submit" disabled={adding}>
-          {adding ? 'Adding...' : 'Add expense'}
+        <Button type="submit" disabled={isMutating}>
+          {editingId ? 'Save' : 'Add expense'}
         </Button>
+        {editingId ? (
+          <SecondaryButton type="button" onClick={resetForm} disabled={isMutating}>
+            Cancel
+          </SecondaryButton>
+        ) : null}
       </Form>
 
       {data?.expenses.length ? (
         <List>
           {data.expenses.map((expense) => (
             <ListItem key={expense.id}>
-              <strong>{expense.title}</strong> - {expense.amount.toFixed(2)} DKK
-              <DeleteButton
-                type="button"
-                onClick={() => handleDelete(expense.id)}
-                disabled={deleting}
-              >
-                Delete
-              </DeleteButton>
+              <span>
+                <strong>{expense.title}</strong> - ${expense.amount.toFixed(2)}
+              </span>
+              <Actions>
+                <Button type="button" onClick={() => handleEdit(expense)} disabled={isMutating}>
+                  Edit
+                </Button>
+                <DeleteButton
+                  type="button"
+                  onClick={() => handleDelete(expense.id)}
+                  disabled={isMutating}
+                >
+                  Delete
+                </DeleteButton>
+              </Actions>
             </ListItem>
           ))}
         </List>
@@ -222,6 +206,6 @@ function App() {
       )}
     </Page>
   );
-}
+};
 
 export default App;
