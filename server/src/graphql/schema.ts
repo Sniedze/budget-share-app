@@ -1,4 +1,10 @@
 export const typeDefs = `#graphql
+  enum SplitType {
+    Personal
+    Shared
+    Custom
+  }
+
   type Expense {
     id: ID!
     title: String!
@@ -6,7 +12,19 @@ export const typeDefs = `#graphql
     createdAt: String!
     transactionDate: String!
     category: String!
-    split: String!
+    split: SplitType!
+    splitDetails: [SplitAllocation!]!
+  }
+
+  type SplitAllocation {
+    participant: String!
+    ratio: Float!
+    amount: Float!
+  }
+
+  input SplitAllocationInput {
+    participant: String!
+    ratio: Float!
   }
 
   input AddExpenseInput {
@@ -14,7 +32,8 @@ export const typeDefs = `#graphql
     amount: Float!
     transactionDate: String!
     category: String!
-    split: String!
+    split: SplitType!
+    splitDetails: [SplitAllocationInput!]
   }
 
   input DeleteExpenseInput {
@@ -27,7 +46,8 @@ export const typeDefs = `#graphql
     amount: Float!
     transactionDate: String!
     category: String!
-    split: String!
+    split: SplitType!
+    splitDetails: [SplitAllocationInput!]
   }
 
   type Query {
