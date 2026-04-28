@@ -1,5 +1,6 @@
 import { gql } from '@apollo/client';
 import { useMutation } from '@apollo/client/react';
+import type { DocumentNode } from 'graphql';
 
 const ADD_EXPENSE = gql`
   mutation AddExpense($input: AddExpenseInput!) {
@@ -8,6 +9,9 @@ const ADD_EXPENSE = gql`
       title
       amount
       createdAt
+      transactionDate
+      category
+      split
     }
   }
 `;
@@ -19,6 +23,9 @@ const UPDATE_EXPENSE = gql`
       title
       amount
       createdAt
+      transactionDate
+      category
+      split
     }
   }
 `;
@@ -29,10 +36,23 @@ const DELETE_EXPENSE = gql`
   }
 `;
 
-type AddInput = { title: string; amount: number };
-type UpdateInput = { id: string; title: string; amount: number };
+type AddInput = {
+  title: string;
+  amount: number;
+  transactionDate: string;
+  category: string;
+  split: string;
+};
+type UpdateInput = {
+  id: string;
+  title: string;
+  amount: number;
+  transactionDate: string;
+  category: string;
+  split: string;
+};
 
-export const useExpenseActions = (refetchQuery: unknown) => {
+export const useExpenseActions = (refetchQuery: DocumentNode) => {
   const [add, { loading: adding }] = useMutation(ADD_EXPENSE, {
     refetchQueries: [{ query: refetchQuery }],
   });

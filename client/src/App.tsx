@@ -11,6 +11,9 @@ const GET_EXPENSES = gql`
       title
       amount
       createdAt
+      transactionDate
+      category
+      split
     }
   }
 `;
@@ -20,10 +23,22 @@ type Expense = {
   title: string;
   amount: number;
   createdAt: string;
+  transactionDate: string;
+  category: string;
+  split: string;
 };
 
 type GetExpensesResponse = {
   expenses: Expense[];
+};
+
+const DEFAULT_CATEGORY = 'General';
+const DEFAULT_SPLIT = 'Personal';
+
+const getTodayDateInput = (): string => {
+  const now = new Date();
+  const timezoneOffsetMs = now.getTimezoneOffset() * 60 * 1000;
+  return new Date(now.getTime() - timezoneOffsetMs).toISOString().slice(0, 10);
 };
 
 const Page = styled.main`
@@ -107,6 +122,9 @@ const Actions = styled.div`
 const App = (): JSX.Element => {
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
+  const [transactionDate, setTransactionDate] = useState(() => getTodayDateInput());
+  const [category, setCategory] = useState(DEFAULT_CATEGORY);
+  const [split, setSplit] = useState(DEFAULT_SPLIT);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const { data, loading, error } = useQuery<GetExpensesResponse>(GET_EXPENSES);
@@ -116,6 +134,9 @@ const App = (): JSX.Element => {
   const resetForm = () => {
     setTitle('');
     setAmount('');
+    setTransactionDate(getTodayDateInput());
+    setCategory(DEFAULT_CATEGORY);
+    setSplit(DEFAULT_SPLIT);
     setEditingId(null);
   };
 
@@ -124,18 +145,24 @@ const App = (): JSX.Element => {
 
     const parsedAmount = Number(amount);
 
-    if (!title.trim() || Number.isNaN(parsedAmount)) return;
+    if (!title.trim() || Number.isNaN(parsedAmount) || !transactionDate || !category || !split) return;
 
     if (editingId) {
       await updateExpense({
         id: editingId,
         title: title.trim(),
         amount: parsedAmount,
+        transactionDate,
+        category,
+        split,
       });
     } else {
       await addExpense({
         title: title.trim(),
         amount: parsedAmount,
+        transactionDate,
+        category,
+        split,
       });
     }
 
@@ -146,6 +173,9 @@ const App = (): JSX.Element => {
     setEditingId(expense.id);
     setTitle(expense.title);
     setAmount(String(expense.amount));
+    setTransactionDate(expense.transactionDate.slice(0, 10));
+    setCategory(expense.category);
+    setSplit(expense.split);
   };
 
   const handleDelete = async (id: string) => {
@@ -176,6 +206,24 @@ const App = (): JSX.Element => {
           type="number"
           step="0.01"
         />
+        <Input
+          value={transactionDate}
+          onChange={(e) => setTransactionDate(e.target.value)}
+          type="date"
+        />
+        <Input
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          placeholder="Category"
+        />
+        <Input
+          as="select"
+          value={split}
+          onChange={(e) => setSplit(e.target.value)}
+        >
+          <option value="Personal">Personal</option>
+          <option value="Shared">Shared</option>
+        </Input>
         <Button type="submit" disabled={isMutating}>
           {editingId ? 'Save' : 'Add expense'}
         </Button>
@@ -191,7 +239,8 @@ const App = (): JSX.Element => {
           {data.expenses.map((expense) => (
             <ListItem key={expense.id}>
               <span>
-                <strong>{expense.title}</strong> - ${expense.amount.toFixed(2)}
+                <strong>{expense.title}</strong> ({expense.category}, {expense.split}) - $
+                {expense.amount.toFixed(2)}
               </span>
               <Actions>
                 <Button type="button" onClick={() => handleEdit(expense)} disabled={isMutating}>
