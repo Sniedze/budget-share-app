@@ -13,6 +13,7 @@ export type Expense = {
   createdAt: string;
   transactionDate: string;
   category: string;
+  expenseGroup?: string;
   split: SplitType;
   splitDetails: SplitAllocation[];
   groupId?: string;
@@ -25,6 +26,7 @@ export type CreateExpenseInput = {
   amount: number;
   transactionDate: string;
   category: string;
+  expenseGroup?: string;
   split: SplitType;
   splitDetails?: Array<{
     participant: string;
@@ -44,6 +46,7 @@ export type UpdateExpenseInput = {
   amount: number;
   transactionDate: string;
   category: string;
+  expenseGroup?: string;
   split: SplitType;
   splitDetails?: Array<{
     participant: string;

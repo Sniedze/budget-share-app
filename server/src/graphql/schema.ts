@@ -12,6 +12,7 @@ export const typeDefs = `#graphql
     createdAt: String!
     transactionDate: String!
     category: String!
+    expenseGroup: String
     split: SplitType!
     splitDetails: [SplitAllocation!]!
     groupId: ID
@@ -33,6 +34,8 @@ export const typeDefs = `#graphql
 
   type GroupExpense {
     date: String!
+    expenseGroup: String
+    category: String!
     description: String!
     paidBy: String!
     total: Float!
@@ -47,6 +50,29 @@ export const typeDefs = `#graphql
     totalSpent: Float!
     yourShare: Float!
     expenses: [GroupExpense!]!
+  }
+
+  enum GroupInvitationStatus {
+    Pending
+    Accepted
+  }
+
+  type GroupInvitation {
+    id: ID!
+    groupId: ID!
+    groupName: String!
+    email: String!
+    status: GroupInvitationStatus!
+    invitedAt: String!
+    acceptedAt: String
+  }
+
+  type SplitTemplate {
+    id: ID!
+    groupId: ID!
+    category: String!
+    templateName: String!
+    splitDetails: [SplitAllocation!]!
   }
 
   type User {
@@ -79,6 +105,13 @@ export const typeDefs = `#graphql
     members: [GroupMemberInput!]!
   }
 
+  input UpdateGroupInput {
+    id: ID!
+    name: String!
+    description: String
+    members: [GroupMemberInput!]!
+  }
+
   input RegisterInput {
     email: String!
     password: String!
@@ -94,11 +127,19 @@ export const typeDefs = `#graphql
     refreshToken: String!
   }
 
+  input UpsertSplitTemplateInput {
+    groupId: ID!
+    category: String!
+    templateName: String!
+    splitDetails: [SplitAllocationInput!]!
+  }
+
   input AddExpenseInput {
     title: String!
     amount: Float!
     transactionDate: String!
     category: String!
+    expenseGroup: String
     split: SplitType!
     splitDetails: [SplitAllocationInput!]
     groupId: ID
@@ -115,6 +156,7 @@ export const typeDefs = `#graphql
     amount: Float!
     transactionDate: String!
     category: String!
+    expenseGroup: String
     split: SplitType!
     splitDetails: [SplitAllocationInput!]
     groupId: ID
@@ -126,6 +168,8 @@ export const typeDefs = `#graphql
     me: User
     expenses: [Expense!]!
     groups: [Group!]!
+    myInvitations: [GroupInvitation!]!
+    groupSplitTemplates(groupId: ID!): [SplitTemplate!]!
   }
 
   type Mutation {
@@ -133,8 +177,10 @@ export const typeDefs = `#graphql
     deleteExpense(input: DeleteExpenseInput!): Boolean!
     updateExpense(input: UpdateExpenseInput!): Expense
     createGroup(input: CreateGroupInput!): Group!
+    updateGroup(input: UpdateGroupInput!): Group!
     register(input: RegisterInput!): AuthPayload!
     login(input: LoginInput!): AuthPayload!
     refreshSession(input: RefreshSessionInput!): AuthPayload!
+    upsertGroupSplitTemplate(input: UpsertSplitTemplateInput!): SplitTemplate!
   }
 `;

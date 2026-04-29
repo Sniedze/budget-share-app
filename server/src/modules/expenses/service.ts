@@ -15,11 +15,16 @@ type ExpenseRow = {
   created_at: Date | string;
   transaction_date: Date | string;
   category: string;
+  expense_group: string | null;
   split_type: string;
   split_details: string | SplitAllocation[] | null;
   group_id: number | null;
   created_by_user_id: number | null;
   paid_by_user_id: number | null;
+} & RowDataPacket;
+
+type TemplateRow = {
+  split_details: string;
 } & RowDataPacket;
 
 const DEFAULT_CATEGORY = 'General';
@@ -33,6 +38,14 @@ const toIsoString = (value: Date | string): string => {
 const normalizeCategory = (category: string): string => {
   const trimmed = category.trim();
   return trimmed.length > 0 ? trimmed : DEFAULT_CATEGORY;
+};
+
+const normalizeExpenseGroup = (expenseGroup?: string): string | null => {
+  if (typeof expenseGroup !== 'string') {
+    return null;
+  }
+  const trimmed = expenseGroup.trim();
+  return trimmed.length > 0 ? trimmed : null;
 };
 
 const normalizeSplit = (split: string): SplitType => {
@@ -164,7 +177,7 @@ const canAccessExpense = async (row: ExpenseRow, userId: string, userEmail: stri
 
 export const listExpenses = async (userId: string, userEmail: string): Promise<Expense[]> => {
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses ORDER BY transaction_date DESC, id DESC',
+    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses ORDER BY transaction_date DESC, id DESC',
   );
 
   const visible: Expense[] = [];
@@ -183,6 +196,7 @@ export const listExpenses = async (userId: string, userEmail: string): Promise<E
       createdAt: toIsoString(row.created_at),
       transactionDate: toIsoString(row.transaction_date),
       category: row.category,
+      expenseGroup: row.expense_group ?? undefined,
       split: normalizeSplit(row.split_type),
       splitDetails: parseSplitDetails(row.split_details),
       groupId: row.group_id === null ? undefined : String(row.group_id),
@@ -199,24 +213,53 @@ export const createExpense = async (
 ): Promise<Expense> => {
   validateAmount(input.amount);
   const category = normalizeCategory(input.category);
-  const split = normalizeSplit(input.split);
-  const splitDetails = toStoredSplitDetails(input.amount, input.splitDetails);
+  const expenseGroup = normalizeExpenseGroup(input.expenseGroup);
+  let split = normalizeSplit(input.split);
+  const groupId = input.groupId ? Number(input.groupId) : null;
+  let sourceSplitDetails = input.splitDetails;
+  if (groupId !== null && !expenseGroup) {
+    throw new Error('Expense group is required for household expenses.');
+  }
+
+  if (groupId !== null && sourceSplitDetails === undefined) {
+    const [templateRows] = await db.query<TemplateRow[]>(
+      `
+        SELECT split_details
+        FROM group_split_templates
+        WHERE group_id = ? AND category = ?
+        LIMIT 1
+      `,
+      [groupId, expenseGroup ?? category],
+    );
+    const templateRow = templateRows[0];
+    if (templateRow?.split_details) {
+      try {
+        const parsed = JSON.parse(templateRow.split_details) as Array<{ participant: string; ratio: number }>;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          sourceSplitDetails = parsed;
+          split = 'Custom';
+        }
+      } catch {
+        // Ignore invalid template payload and continue with direct input.
+      }
+    }
+  }
+
+  const splitDetails = toStoredSplitDetails(input.amount, sourceSplitDetails);
   validateSplitConsistency(split, splitDetails, true);
   const splitDetailsJson = splitDetails.length > 0 ? JSON.stringify(splitDetails) : null;
-
-  const groupId = input.groupId ? Number(input.groupId) : null;
   if (groupId !== null && !(await isGroupMember(groupId, actor.email))) {
     throw new Error('You are not a member of this group.');
   }
   const paidByUserId = input.paidByUserId ? Number(input.paidByUserId) : Number(actor.userId);
 
   const [result] = await db.execute<ResultSetHeader>(
-    'INSERT INTO expenses (title, amount, transaction_date, category, split_type, split_details, group_id, created_by_user_id, paid_by_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [input.title, input.amount, input.transactionDate, category, split, splitDetailsJson, groupId, Number(actor.userId), paidByUserId],
+    'INSERT INTO expenses (title, amount, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [input.title, input.amount, input.transactionDate, category, expenseGroup, split, splitDetailsJson, groupId, Number(actor.userId), paidByUserId],
   );
 
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses WHERE id = ? LIMIT 1',
     [result.insertId],
   );
 
@@ -230,6 +273,7 @@ export const createExpense = async (
       createdAt: new Date().toISOString(),
       transactionDate: new Date(input.transactionDate).toISOString(),
       category,
+      expenseGroup: expenseGroup ?? undefined,
       split,
       splitDetails,
       groupId: groupId === null ? undefined : String(groupId),
@@ -245,6 +289,7 @@ export const createExpense = async (
     createdAt: toIsoString(row.created_at),
     transactionDate: toIsoString(row.transaction_date),
     category: row.category,
+    expenseGroup: row.expense_group ?? undefined,
     split: normalizeSplit(row.split_type),
     splitDetails: parseSplitDetails(row.split_details),
     groupId: row.group_id === null ? undefined : String(row.group_id),
@@ -255,7 +300,7 @@ export const createExpense = async (
 
 export const deleteExpense = async (id: string, actor: { userId: string; email: string }): Promise<boolean> => {
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, group_id, created_by_user_id, paid_by_user_id, title, amount, created_at, transaction_date, category, split_type, split_details FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, group_id, created_by_user_id, paid_by_user_id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details FROM expenses WHERE id = ? LIMIT 1',
     [id],
   );
   const row = rows[0];
@@ -282,6 +327,7 @@ export const updateExpense = async (
 ): Promise<Expense | null> => {
   validateAmount(input.amount);
   const category = normalizeCategory(input.category);
+  const expenseGroup = normalizeExpenseGroup(input.expenseGroup);
   const split = normalizeSplit(input.split);
   const splitDetails =
     input.splitDetails === undefined ? null : toStoredSplitDetails(input.amount, input.splitDetails);
@@ -289,7 +335,7 @@ export const updateExpense = async (
   const splitDetailsJson = splitDetails === null ? null : JSON.stringify(splitDetails);
 
   const [existingRows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses WHERE id = ? LIMIT 1',
     [input.id],
   );
   const existing = existingRows[0];
@@ -307,14 +353,17 @@ export const updateExpense = async (
   }
 
   const nextGroupId = input.groupId ? Number(input.groupId) : existingGroupId;
+  if (nextGroupId !== null && !expenseGroup) {
+    throw new Error('Expense group is required for household expenses.');
+  }
   if (nextGroupId !== null && !(await isGroupMember(nextGroupId, actor.email))) {
     throw new Error('You are not a member of this group.');
   }
   const nextPaidByUserId = input.paidByUserId ? Number(input.paidByUserId) : existing.paid_by_user_id;
 
   const [updateResult] = await db.execute<ResultSetHeader>(
-    'UPDATE expenses SET title = ?, amount = ?, transaction_date = ?, category = ?, split_type = ?, split_details = COALESCE(?, split_details), group_id = ?, paid_by_user_id = ? WHERE id = ?',
-    [input.title, input.amount, input.transactionDate, category, split, splitDetailsJson, nextGroupId, nextPaidByUserId, input.id],
+    'UPDATE expenses SET title = ?, amount = ?, transaction_date = ?, category = ?, expense_group = ?, split_type = ?, split_details = COALESCE(?, split_details), group_id = ?, paid_by_user_id = ? WHERE id = ?',
+    [input.title, input.amount, input.transactionDate, category, expenseGroup, split, splitDetailsJson, nextGroupId, nextPaidByUserId, input.id],
   );
 
   if (updateResult.affectedRows === 0) {
@@ -322,7 +371,7 @@ export const updateExpense = async (
   }
 
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses WHERE id = ? LIMIT 1',
     [input.id],
   );
 
@@ -339,6 +388,7 @@ export const updateExpense = async (
     createdAt: toIsoString(row.created_at),
     transactionDate: toIsoString(row.transaction_date),
     category: row.category,
+    expenseGroup: row.expense_group ?? undefined,
     split: normalizeSplit(row.split_type),
     splitDetails: parseSplitDetails(row.split_details),
     groupId: row.group_id === null ? undefined : String(row.group_id),

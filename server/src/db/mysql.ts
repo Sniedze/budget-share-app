@@ -27,6 +27,7 @@ export const ensureSchema = async (): Promise<void> => {
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     transaction_date DATE NOT NULL,
     category VARCHAR(64) NOT NULL DEFAULT 'General',
+    expense_group VARCHAR(64) NULL,
     split_type VARCHAR(16) NOT NULL DEFAULT 'Personal',
     split_details JSON NULL,
     group_id INT NULL,
@@ -68,6 +69,37 @@ export const ensureSchema = async (): Promise<void> => {
       ON DELETE CASCADE
   )
     `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS group_invitations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_id INT NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'Pending',
+    invited_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    accepted_at TIMESTAMP NULL,
+    UNIQUE KEY uniq_group_invitation_email (group_id, email),
+    CONSTRAINT fk_group_invitations_group
+      FOREIGN KEY (group_id) REFERENCES \`groups\`(id)
+      ON DELETE CASCADE
+  )
+    `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS group_split_templates (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_id INT NOT NULL,
+    category VARCHAR(64) NOT NULL,
+    template_name VARCHAR(128) NOT NULL,
+    split_details JSON NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_group_template_category (group_id, category),
+    CONSTRAINT fk_group_split_templates_group
+      FOREIGN KEY (group_id) REFERENCES \`groups\`(id)
+      ON DELETE CASCADE
+  )
+    `);
 };
 
 type ColumnCheckRow = {
@@ -81,7 +113,7 @@ export const migrateSchema = async (): Promise<void> => {
         FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
           AND TABLE_NAME = 'expenses'
-          AND COLUMN_NAME IN ('created_at', 'transaction_date', 'category', 'split_type', 'split_details', 'group_id', 'created_by_user_id', 'paid_by_user_id')
+          AND COLUMN_NAME IN ('created_at', 'transaction_date', 'category', 'expense_group', 'split_type', 'split_details', 'group_id', 'created_by_user_id', 'paid_by_user_id')
       `,
   );
 
@@ -139,6 +171,19 @@ export const migrateSchema = async (): Promise<void> => {
     await db.execute(`
         ALTER TABLE expenses
         MODIFY COLUMN split_type VARCHAR(16) NOT NULL
+      `);
+  }
+
+  if (!existingColumns.has('expense_group')) {
+    await db.execute(`
+        ALTER TABLE expenses
+        ADD COLUMN expense_group VARCHAR(64) NULL
+      `);
+    await db.execute(`
+        UPDATE expenses
+        SET expense_group = category
+        WHERE group_id IS NOT NULL
+          AND (expense_group IS NULL OR expense_group = '')
       `);
   }
 

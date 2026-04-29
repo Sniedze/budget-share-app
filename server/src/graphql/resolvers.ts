@@ -4,7 +4,14 @@ import {
   deleteExpense,
   updateExpense,
 } from '../modules/expenses/service.js';
-import { createGroup, listGroups } from '../modules/groups/service.js';
+import {
+  createGroup,
+  listGroups,
+  listInvitations,
+  listSplitTemplates,
+  updateGroup,
+  upsertSplitTemplate,
+} from '../modules/groups/service.js';
 import { login, refreshSession, register } from '../modules/auth/service.js';
 import type {
   CreateExpenseInput,
@@ -12,7 +19,7 @@ import type {
   UpdateExpenseInput,
 } from '../modules/expenses/types.js';
 import type { GraphqlContext } from './context.js';
-import type { CreateGroupInput } from '../modules/groups/types.js';
+import type { CreateGroupInput, UpdateGroupInput, UpsertSplitTemplateInput } from '../modules/groups/types.js';
 import type { LoginInput, RegisterInput } from '../modules/auth/types.js';
 
 const requireAuth = (context: GraphqlContext) => {
@@ -34,6 +41,18 @@ export const resolvers = {
       const user = requireAuth(context);
       return listGroups(user.email);
     },
+    myInvitations: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
+      const user = requireAuth(context);
+      return listInvitations(user.email);
+    },
+    groupSplitTemplates: async (
+      _parent: unknown,
+      args: { groupId: string },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      return listSplitTemplates(args.groupId, user.email);
+    },
   },
   Mutation: {
     addExpense: async (_parent: unknown, args: { input: CreateExpenseInput }, context: GraphqlContext) => {
@@ -52,6 +71,10 @@ export const resolvers = {
       const user = requireAuth(context);
       return createGroup(args.input, user.email);
     },
+    updateGroup: async (_parent: unknown, args: { input: UpdateGroupInput }, context: GraphqlContext) => {
+      const user = requireAuth(context);
+      return updateGroup(args.input, user.email);
+    },
     register: async (_parent: unknown, args: { input: RegisterInput }) => {
       return register(args.input);
     },
@@ -60,6 +83,14 @@ export const resolvers = {
     },
     refreshSession: async (_parent: unknown, args: { input: { refreshToken: string } }) => {
       return refreshSession(args.input.refreshToken);
+    },
+    upsertGroupSplitTemplate: async (
+      _parent: unknown,
+      args: { input: UpsertSplitTemplateInput },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      return upsertSplitTemplate(args.input, user.email);
     },
   },
 };

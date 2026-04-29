@@ -6,8 +6,21 @@ type TokenClaims = {
   type: 'access' | 'refresh';
 };
 
-const ACCESS_TOKEN_SECRET = process.env.JWT_ACCESS_SECRET || 'dev_access_secret_change_me';
-const REFRESH_TOKEN_SECRET = process.env.JWT_REFRESH_SECRET || 'dev_refresh_secret_change_me';
+const isDevelopment = (process.env.NODE_ENV ?? 'development') === 'development';
+
+const getRequiredSecret = (envName: 'JWT_ACCESS_SECRET' | 'JWT_REFRESH_SECRET', devFallback: string): string => {
+  const value = process.env[envName];
+  if (value && value.trim().length > 0) {
+    return value;
+  }
+  if (isDevelopment) {
+    return devFallback;
+  }
+  throw new Error(`${envName} must be set in non-development environments.`);
+};
+
+const ACCESS_TOKEN_SECRET = getRequiredSecret('JWT_ACCESS_SECRET', 'dev_access_secret_change_me');
+const REFRESH_TOKEN_SECRET = getRequiredSecret('JWT_REFRESH_SECRET', 'dev_refresh_secret_change_me');
 const parseTtlSeconds = (rawValue: string | undefined, fallbackSeconds: number): number => {
   const parsed = Number(rawValue);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackSeconds;
