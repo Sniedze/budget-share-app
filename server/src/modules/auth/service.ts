@@ -88,6 +88,15 @@ export const register = async (input: RegisterInput): Promise<AuthPayload> => {
     throw new Error('Failed to load created user.');
   }
 
+  await db.execute(
+    `
+      UPDATE group_invitations
+      SET status = 'Accepted', accepted_at = CURRENT_TIMESTAMP
+      WHERE email = ? AND status = 'Pending'
+    `,
+    [email],
+  );
+
   return toAuthPayload(userRow);
 };
 
