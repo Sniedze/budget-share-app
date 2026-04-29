@@ -49,3 +49,11 @@ Use this checklist for every new feature and PR.
 - Prefer modern, stable practices over experimental patterns.
 - Prefer arrow functions consistently.
 - Prefer small commits for each added feature.
+
+## 7) Security Baseline
+
+- Follow `SECURITY.md` for accepted risk tracking and mitigation.
+- Use Node `>=20` for local and CI environments.
+- For server dependency checks, run:
+  - `cd server && npm run audit:gate`
+- The audit gate must block any `high` or `critical` vulnerabilities before merge.

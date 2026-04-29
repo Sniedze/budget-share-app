@@ -1,0 +1,31 @@
+name: Security Audit
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Audit client production dependencies
+        working-directory: client
+        run: |
+          npm ci
+          npm audit --omit=dev
+
+      - name: Audit server production dependencies (gate high/critical)
+        working-directory: server
+        run: |
+          npm ci
+          npm run audit:gate
