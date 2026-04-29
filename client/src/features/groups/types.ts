@@ -6,6 +6,8 @@ export type GroupMember = {
 
 export type GroupExpense = {
   date: string;
+  expenseGroup?: string;
+  category: string;
   description: string;
   paidBy: string;
   total: number;
@@ -26,4 +28,15 @@ export type CreateGroupInput = {
   name: string;
   description?: string;
   members: GroupMember[];
+};
+
+export type SplitTemplate = {
+  id: string;
+  groupId: string;
+  category: string;
+  templateName: string;
+  splitDetails: Array<{
+    participant: string;
+    ratio: number;
+  }>;
 };

@@ -18,8 +18,12 @@ export type Expense = {
   createdAt: string;
   transactionDate: string;
   category: string;
+  expenseGroup?: string;
   split: SplitType;
   splitDetails: SplitAllocation[];
+  groupId?: string;
+  createdByUserId?: string;
+  paidByUserId?: string;
 };
 
 export type GetExpensesResponse = {
@@ -31,8 +35,11 @@ export type AddExpenseInput = {
   amount: number;
   transactionDate: string;
   category: string;
+  expenseGroup?: string;
   split: SplitType;
   splitDetails?: SplitAllocationInput[];
+  groupId?: string;
+  paidByUserId?: string;
 };
 
 export type UpdateExpenseInput = {
@@ -41,6 +48,9 @@ export type UpdateExpenseInput = {
   amount: number;
   transactionDate: string;
   category: string;
+  expenseGroup?: string;
   split: SplitType;
   splitDetails?: SplitAllocationInput[];
+  groupId?: string;
+  paidByUserId?: string;
 };

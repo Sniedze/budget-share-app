@@ -9,7 +9,11 @@ export const GET_EXPENSES = gql`
       createdAt
       transactionDate
       category
+      expenseGroup
       split
+      groupId
+      createdByUserId
+      paidByUserId
       splitDetails {
         participant
         ratio
@@ -28,7 +32,11 @@ export const ADD_EXPENSE = gql`
       createdAt
       transactionDate
       category
+      expenseGroup
       split
+      groupId
+      createdByUserId
+      paidByUserId
       splitDetails {
         participant
         ratio
@@ -47,7 +55,11 @@ export const UPDATE_EXPENSE = gql`
       createdAt
       transactionDate
       category
+      expenseGroup
       split
+      groupId
+      createdByUserId
+      paidByUserId
       splitDetails {
         participant
         ratio
