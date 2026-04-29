@@ -1,9 +1,9 @@
 import styled from 'styled-components';
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
-  Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -90,7 +90,7 @@ export const ChartsSection = ({ trendData, breakdownData }: ChartsSectionProps):
         <CardTitle>Monthly Spending Trend</CardTitle>
         <ChartFrame>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+            <BarChart data={trendData} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
               <CartesianGrid stroke="#eef2f7" vertical={false} />
               <XAxis dataKey="month" tick={{ fill: colors.textMuted, fontSize: 12 }} axisLine={false} tickLine={false} />
               <YAxis
@@ -101,8 +101,8 @@ export const ChartsSection = ({ trendData, breakdownData }: ChartsSectionProps):
                 width={42}
               />
               <Tooltip formatter={(value) => formatAmount(Number(value ?? 0))} />
-              <Line type="monotone" dataKey="amount" stroke={colors.accent} strokeWidth={2.5} dot={false} />
-            </LineChart>
+              <Bar dataKey="amount" fill={colors.accent} radius={[6, 6, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </ChartFrame>
       </TrendCard>

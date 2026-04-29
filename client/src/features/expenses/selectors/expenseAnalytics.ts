@@ -10,6 +10,13 @@ export type BreakdownPoint = {
   value: number;
 };
 
+export type MonthlyOverviewPoint = {
+  month: string;
+  total: number;
+  personal: number;
+  shared: number;
+};
+
 export type DashboardStat = {
   label: string;
   value: string;
@@ -89,4 +96,36 @@ export const getBreakdownData = (expenses: Expense[]): BreakdownPoint[] => {
   const otherValue = sorted.slice(5).reduce((sum, item) => sum + item.value, 0);
 
   return [...top, { name: 'Other', value: Number(otherValue.toFixed(2)) }];
+};
+
+export const getMonthlyOverview = (expenses: Expense[]): MonthlyOverviewPoint[] => {
+  const byMonth = new Map<string, { total: number; personal: number; shared: number }>();
+
+  for (const expense of expenses) {
+    const date = new Date(expense.transactionDate);
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const current = byMonth.get(monthKey) ?? { total: 0, personal: 0, shared: 0 };
+
+    current.total += expense.amount;
+    if (expense.groupId) {
+      current.shared += expense.amount;
+    } else {
+      current.personal += expense.amount;
+    }
+    byMonth.set(monthKey, current);
+  }
+
+  return Array.from(byMonth.entries())
+    .sort(([a], [b]) => b.localeCompare(a))
+    .slice(0, 6)
+    .map(([monthKey, values]) => {
+      const [year, month] = monthKey.split('-');
+      const date = new Date(Number(year), Number(month) - 1, 1);
+      return {
+        month: date.toLocaleString('en-US', { month: 'short', year: 'numeric' }),
+        total: Number(values.total.toFixed(2)),
+        personal: Number(values.personal.toFixed(2)),
+        shared: Number(values.shared.toFixed(2)),
+      };
+    });
 };

@@ -119,8 +119,8 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard', Icon: LayoutDashboard, to: '/' },
-  { label: 'Groups', Icon: Users, to: '/groups' },
+  { label: 'Personal Finances', Icon: LayoutDashboard, to: '/' },
+  { label: 'Household', Icon: Users, to: '/groups' },
   { label: 'Import Statement', Icon: Upload, to: '/import' },
 ];
 

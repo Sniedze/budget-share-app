@@ -1,12 +1,16 @@
 import { useQuery } from '@apollo/client/react';
 import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
-import { ChartsSection, RecentExpensesSection, Sidebar, StatsSection } from '../components/sections';
-import { AppLayout, Button, HeaderRow, HeaderText, MutedText, PageSurface, SectionSubtitle, SectionTitle } from '../components/ui';
-import { GET_EXPENSES, getBreakdownData, getDashboardStats, getTotalAmount, getTrendData, ExpenseForm, useExpenseActions } from '../features/expenses';
+import { ChartsSection, MonthlyOverviewSection, RecentExpensesSection, Sidebar, StatsSection } from '../components/sections';
+import { AppLayout, HeaderRow, HeaderText, MutedText, PageSurface, SectionSubtitle, SectionTitle, UserMenu } from '../components/ui';
+import { GET_EXPENSES, buildMerchantSuggestions, getBreakdownData, getDashboardStats, getTotalAmount, getTrendData, ExpenseForm, useExpenseActions } from '../features/expenses';
+import { getMonthlyOverview } from '../features/expenses/selectors/expenseAnalytics';
 import type { Expense, GetExpensesResponse, SplitAllocationInput, SplitType } from '../features/expenses';
+import { GET_GROUPS, GET_GROUP_SPLIT_TEMPLATES } from '../features/groups';
+import type { GroupSummary, SplitTemplate } from '../features/groups';
 
 const DEFAULT_CATEGORY = 'General';
 const DEFAULT_SPLIT: SplitType = 'Personal';
+const DEFAULT_CATEGORY_OPTIONS = ['General', 'Groceries', 'Utilities', 'Rent', 'Transport', 'Entertainment', 'Health', 'Other'];
 const DEFAULT_CUSTOM_SPLIT_DETAILS: SplitAllocationInput[] = [
   { participant: 'You', ratio: 50 },
   { participant: 'Partner', ratio: 50 },
@@ -23,6 +27,8 @@ type ExpenseFormValues = {
   amount: string;
   transactionDate: string;
   category: string;
+  groupId: string;
+  expenseGroup: string;
   split: SplitType;
   splitDetails: SplitAllocationInput[];
 };
@@ -32,6 +38,8 @@ const getInitialFormValues = (): ExpenseFormValues => ({
   amount: '',
   transactionDate: getTodayDateInput(),
   category: DEFAULT_CATEGORY,
+  groupId: '',
+  expenseGroup: '',
   split: DEFAULT_SPLIT,
   splitDetails: DEFAULT_CUSTOM_SPLIT_DETAILS,
 });
@@ -41,6 +49,8 @@ const toFormValuesFromExpense = (expense: Expense): ExpenseFormValues => ({
   amount: String(expense.amount),
   transactionDate: expense.transactionDate.slice(0, 10),
   category: expense.category,
+  groupId: expense.groupId ?? '',
+  expenseGroup: expense.groupId ? (expense.expenseGroup ?? '') : '',
   split: expense.split,
   splitDetails:
     expense.splitDetails.length > 0
@@ -56,7 +66,12 @@ export const HomePage = (): JSX.Element => {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const { data, loading, error } = useQuery<GetExpensesResponse>(GET_EXPENSES);
+  const { data: groupsData } = useQuery<{ groups: GroupSummary[] }>(GET_GROUPS);
   const { addExpense, updateExpense, deleteExpense, isMutating } = useExpenseActions(GET_EXPENSES);
+  const { data: groupTemplatesData } = useQuery<{ groupSplitTemplates: SplitTemplate[] }>(GET_GROUP_SPLIT_TEMPLATES, {
+    variables: { groupId: formValues.groupId },
+    skip: !formValues.groupId || formValues.split !== 'Shared',
+  });
 
   const resetForm = () => {
     setFormValues(getInitialFormValues());
@@ -68,6 +83,26 @@ export const HomePage = (): JSX.Element => {
   const stats = useMemo(() => getDashboardStats(totalAmount), [totalAmount]);
   const trendData = useMemo(() => getTrendData(expenses), [expenses]);
   const breakdownData = useMemo(() => getBreakdownData(expenses), [expenses]);
+  const monthlyOverview = useMemo(() => getMonthlyOverview(expenses), [expenses]);
+  const householdOptions = useMemo(() => groupsData?.groups ?? [], [groupsData?.groups]);
+  const sortedCategoryOptions = useMemo(
+    () => [...DEFAULT_CATEGORY_OPTIONS].sort((left, right) => left.localeCompare(right)),
+    [],
+  );
+  const merchantCategoryLookup = useMemo(() => {
+    return buildMerchantSuggestions(expenses);
+  }, [expenses]);
+  const merchantOptions = useMemo(
+    () => Array.from(merchantCategoryLookup.values()).map((entry) => entry.merchant),
+    [merchantCategoryLookup],
+  );
+  const expenseGroupOptions = useMemo(
+    () =>
+      (groupTemplatesData?.groupSplitTemplates ?? [])
+        .map((template) => template.category)
+        .sort((left, right) => left.localeCompare(right)),
+    [groupTemplatesData?.groupSplitTemplates],
+  );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -80,6 +115,9 @@ export const HomePage = (): JSX.Element => {
       !formValues.category ||
       !formValues.split
     ) {
+      return;
+    }
+    if (formValues.split === 'Shared' && (!formValues.groupId || !formValues.expenseGroup)) {
       return;
     }
 
@@ -99,8 +137,10 @@ export const HomePage = (): JSX.Element => {
         amount: parsedAmount,
         transactionDate: formValues.transactionDate,
         category: formValues.category,
+        expenseGroup: formValues.split === 'Shared' ? formValues.expenseGroup : undefined,
         split: formValues.split,
         splitDetails: payloadSplitDetails,
+        groupId: formValues.split === 'Shared' ? formValues.groupId : undefined,
       });
     } else {
       await addExpense({
@@ -108,8 +148,10 @@ export const HomePage = (): JSX.Element => {
         amount: parsedAmount,
         transactionDate: formValues.transactionDate,
         category: formValues.category,
+        expenseGroup: formValues.split === 'Shared' ? formValues.expenseGroup : undefined,
         split: formValues.split,
         splitDetails: payloadSplitDetails,
+        groupId: formValues.split === 'Shared' ? formValues.groupId : undefined,
       });
     }
 
@@ -123,13 +165,19 @@ export const HomePage = (): JSX.Element => {
 
   const onInputChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = event.target;
+    const normalizedMerchant = value.trim().toLowerCase();
+    const matchedMerchantCategory =
+      name === 'title' ? merchantCategoryLookup.get(normalizedMerchant)?.category : undefined;
     setFormValues({
       ...formValues,
       [name]:
         name === 'split' ? (value as SplitType) : (value as ExpenseFormValues[keyof ExpenseFormValues]),
+      ...(matchedMerchantCategory ? { category: matchedMerchantCategory } : {}),
       ...(name === 'split' && value === 'Custom' && formValues.splitDetails.length === 0
         ? { splitDetails: DEFAULT_CUSTOM_SPLIT_DETAILS }
         : {}),
+      ...(name === 'split' && value !== 'Shared' ? { groupId: '', expenseGroup: '' } : {}),
+      ...(name === 'groupId' ? { expenseGroup: '' } : {}),
     });
   };
 
@@ -189,27 +237,20 @@ export const HomePage = (): JSX.Element => {
       <PageSurface>
         <HeaderRow>
           <HeaderText>
-            <SectionTitle>Dashboard</SectionTitle>
+            <SectionTitle>Personal Finances</SectionTitle>
             <SectionSubtitle>Overview of your expenses and spending patterns</SectionSubtitle>
           </HeaderText>
-          <Button
-            type="button"
-            $variant="accent"
-            $size="lg"
-            $radius="md"
-            $weight="semibold"
-            $elevation="accent"
-          >
-            + Add Expense
-          </Button>
+          <UserMenu />
         </HeaderRow>
 
         <StatsSection stats={stats} />
 
-        <ChartsSection trendData={trendData} breakdownData={breakdownData} />
-
         <ExpenseForm
           {...formValues}
+          categoryOptions={sortedCategoryOptions}
+          merchantOptions={merchantOptions}
+          householdOptions={householdOptions.map((group) => ({ id: group.id, name: group.name }))}
+          expenseGroupOptions={expenseGroupOptions}
           editingId={editingId}
           isMutating={isMutating}
           onInputChange={onInputChange}
@@ -219,6 +260,9 @@ export const HomePage = (): JSX.Element => {
           onSubmit={handleSubmit}
           onCancel={resetForm}
         />
+
+        <ChartsSection trendData={trendData} breakdownData={breakdownData} />
+        <MonthlyOverviewSection rows={monthlyOverview} />
 
         {loading ? <MutedText>Loading expenses...</MutedText> : null}
         {error ? <MutedText>Error: {error.message}</MutedText> : null}
