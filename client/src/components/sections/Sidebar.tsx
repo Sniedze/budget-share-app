@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Upload, type LucideIcon } from 'lucide-react';
+import { HandCoins, LayoutDashboard, Users, Upload, type LucideIcon } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import styled from 'styled-components';
 import { colors, radii, spacing } from '../../styles/tokens';
@@ -121,6 +121,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { label: 'Personal Finances', Icon: LayoutDashboard, to: '/' },
   { label: 'Household', Icon: Users, to: '/groups' },
+  { label: 'Settlements', Icon: HandCoins, to: '/settlements' },
   { label: 'Import Statement', Icon: Upload, to: '/import' },
 ];
 

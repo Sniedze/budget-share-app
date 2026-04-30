@@ -32,7 +32,9 @@ export const ensureSchema = async (): Promise<void> => {
     split_details JSON NULL,
     group_id INT NULL,
     created_by_user_id INT NULL,
-    paid_by_user_id INT NULL
+    paid_by_user_id INT NULL,
+    transaction_dedup_hash CHAR(64) NULL,
+    UNIQUE KEY uniq_expense_creator_dedup (created_by_user_id, transaction_dedup_hash)
   )
     `);
 
@@ -100,6 +102,38 @@ export const ensureSchema = async (): Promise<void> => {
       ON DELETE CASCADE
   )
     `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS settlement_payments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_id INT NOT NULL,
+    expense_group VARCHAR(64) NULL,
+    from_member VARCHAR(255) NOT NULL,
+    to_member VARCHAR(255) NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    note VARCHAR(500) NULL,
+    settled_at DATE NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_settlement_payments_group
+      FOREIGN KEY (group_id) REFERENCES \`groups\`(id)
+      ON DELETE CASCADE
+  )
+    `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id INT NULL,
+    actor_email VARCHAR(255) NOT NULL,
+    action VARCHAR(64) NOT NULL,
+    entity_type VARCHAR(64) NOT NULL,
+    entity_id VARCHAR(64) NOT NULL,
+    before_state JSON NULL,
+    after_state JSON NULL,
+    metadata JSON NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+    `);
 };
 
 type ColumnCheckRow = {
@@ -113,7 +147,7 @@ export const migrateSchema = async (): Promise<void> => {
         FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
           AND TABLE_NAME = 'expenses'
-          AND COLUMN_NAME IN ('created_at', 'transaction_date', 'category', 'expense_group', 'split_type', 'split_details', 'group_id', 'created_by_user_id', 'paid_by_user_id')
+          AND COLUMN_NAME IN ('created_at', 'transaction_date', 'category', 'expense_group', 'split_type', 'split_details', 'group_id', 'created_by_user_id', 'paid_by_user_id', 'transaction_dedup_hash')
       `,
   );
 
@@ -212,6 +246,30 @@ export const migrateSchema = async (): Promise<void> => {
     await db.execute(`
         ALTER TABLE expenses
         ADD COLUMN paid_by_user_id INT NULL
+      `);
+  }
+
+  if (!existingColumns.has('transaction_dedup_hash')) {
+    await db.execute(`
+        ALTER TABLE expenses
+        ADD COLUMN transaction_dedup_hash CHAR(64) NULL
+      `);
+  }
+
+  const [indexRows] = await db.query<RowDataPacket[]>(
+    `
+      SELECT INDEX_NAME AS indexName
+      FROM information_schema.STATISTICS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'expenses'
+        AND INDEX_NAME = 'uniq_expense_creator_dedup'
+      LIMIT 1
+    `,
+  );
+  if (indexRows.length === 0) {
+    await db.execute(`
+        ALTER TABLE expenses
+        ADD UNIQUE KEY uniq_expense_creator_dedup (created_by_user_id, transaction_dedup_hash)
       `);
   }
 };

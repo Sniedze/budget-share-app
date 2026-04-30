@@ -75,6 +75,44 @@ export const typeDefs = `#graphql
     splitDetails: [SplitAllocation!]!
   }
 
+  type SettlementBalance {
+    memberName: String!
+    amount: Float!
+  }
+
+  type SettlementTransfer {
+    fromMember: String!
+    toMember: String!
+    amount: Float!
+  }
+
+  type ExpenseGroupSettlement {
+    expenseGroup: String!
+    totalExpenses: Float!
+    balances: [SettlementBalance!]!
+    transfers: [SettlementTransfer!]!
+  }
+
+  type SettlementPayment {
+    id: ID!
+    groupId: ID!
+    expenseGroup: String
+    fromMember: String!
+    toMember: String!
+    amount: Float!
+    note: String
+    settledAt: String!
+  }
+
+  type HouseholdSettlement {
+    groupId: ID!
+    groupName: String!
+    balances: [SettlementBalance!]!
+    transfers: [SettlementTransfer!]!
+    expenseGroups: [ExpenseGroupSettlement!]!
+    payments: [SettlementPayment!]!
+  }
+
   type User {
     id: ID!
     email: String!
@@ -146,6 +184,16 @@ export const typeDefs = `#graphql
     paidByUserId: ID
   }
 
+  input RecordSettlementPaymentInput {
+    groupId: ID!
+    expenseGroup: String
+    fromMember: String!
+    toMember: String!
+    amount: Float!
+    note: String
+    settledAt: String!
+  }
+
   input DeleteExpenseInput {
     id: ID!
   }
@@ -170,6 +218,7 @@ export const typeDefs = `#graphql
     groups: [Group!]!
     myInvitations: [GroupInvitation!]!
     groupSplitTemplates(groupId: ID!): [SplitTemplate!]!
+    householdSettlements: [HouseholdSettlement!]!
   }
 
   type Mutation {
@@ -182,5 +231,6 @@ export const typeDefs = `#graphql
     login(input: LoginInput!): AuthPayload!
     refreshSession(input: RefreshSessionInput!): AuthPayload!
     upsertGroupSplitTemplate(input: UpsertSplitTemplateInput!): SplitTemplate!
+    recordSettlementPayment(input: RecordSettlementPaymentInput!): SettlementPayment!
   }
 `;

@@ -6,6 +6,11 @@ import type {
   UpdateExpenseInput,
 } from './types.js';
 import { db } from '../../db/mysql.js';
+import { logAuditEvent } from '../audit/service.js';
+import {
+  DUPLICATE_TRANSACTION_MESSAGE,
+  computeTransactionDedupHash,
+} from './transactionDedup.js';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 type ExpenseRow = {
@@ -21,6 +26,7 @@ type ExpenseRow = {
   group_id: number | null;
   created_by_user_id: number | null;
   paid_by_user_id: number | null;
+  transaction_dedup_hash: string | null;
 } & RowDataPacket;
 
 type TemplateRow = {
@@ -154,6 +160,15 @@ const parseSplitDetails = (rawValue: string | SplitAllocation[] | null): SplitAl
   }
 };
 
+const isMysqlDuplicateKeyError = (error: unknown): boolean => {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'ER_DUP_ENTRY'
+  );
+};
+
 const isGroupMember = async (groupId: number, userEmail: string): Promise<boolean> => {
   const [rows] = await db.query<RowDataPacket[]>(
     `
@@ -177,7 +192,7 @@ const canAccessExpense = async (row: ExpenseRow, userId: string, userEmail: stri
 
 export const listExpenses = async (userId: string, userEmail: string): Promise<Expense[]> => {
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses ORDER BY transaction_date DESC, id DESC',
+    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash FROM expenses ORDER BY transaction_date DESC, id DESC',
   );
 
   const visible: Expense[] = [];
@@ -252,14 +267,39 @@ export const createExpense = async (
     throw new Error('You are not a member of this group.');
   }
   const paidByUserId = input.paidByUserId ? Number(input.paidByUserId) : Number(actor.userId);
-
-  const [result] = await db.execute<ResultSetHeader>(
-    'INSERT INTO expenses (title, amount, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [input.title, input.amount, input.transactionDate, category, expenseGroup, split, splitDetailsJson, groupId, Number(actor.userId), paidByUserId],
+  const transactionDedupHash = computeTransactionDedupHash(
+    input.transactionDate,
+    input.amount,
+    input.title,
   );
 
+  let result: ResultSetHeader;
+  try {
+    [result] = await db.execute<ResultSetHeader>(
+      'INSERT INTO expenses (title, amount, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        input.title,
+        input.amount,
+        input.transactionDate,
+        category,
+        expenseGroup,
+        split,
+        splitDetailsJson,
+        groupId,
+        Number(actor.userId),
+        paidByUserId,
+        transactionDedupHash,
+      ],
+    );
+  } catch (error) {
+    if (isMysqlDuplicateKeyError(error)) {
+      throw new Error(DUPLICATE_TRANSACTION_MESSAGE);
+    }
+    throw error;
+  }
+
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash FROM expenses WHERE id = ? LIMIT 1',
     [result.insertId],
   );
 
@@ -300,7 +340,7 @@ export const createExpense = async (
 
 export const deleteExpense = async (id: string, actor: { userId: string; email: string }): Promise<boolean> => {
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, group_id, created_by_user_id, paid_by_user_id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, group_id, created_by_user_id, paid_by_user_id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, transaction_dedup_hash FROM expenses WHERE id = ? LIMIT 1',
     [id],
   );
   const row = rows[0];
@@ -317,6 +357,29 @@ export const deleteExpense = async (id: string, actor: { userId: string; email: 
   }
 
   const [result] = await db.execute<ResultSetHeader>('DELETE FROM expenses WHERE id = ?', [id]);
+  if (result.affectedRows > 0) {
+    await logAuditEvent({
+      actorUserId: actor.userId,
+      actorEmail: actor.email,
+      action: 'DELETE_EXPENSE',
+      entityType: 'expense',
+      entityId: String(row.id),
+      beforeState: {
+        id: row.id,
+        title: row.title,
+        amount: Number(row.amount),
+        transactionDate: toIsoString(row.transaction_date),
+        category: row.category,
+        expenseGroup: row.expense_group,
+        split: row.split_type,
+        splitDetails: parseSplitDetails(row.split_details),
+        groupId: row.group_id,
+        createdByUserId: row.created_by_user_id,
+        paidByUserId: row.paid_by_user_id,
+      },
+      afterState: null,
+    });
+  }
 
   return result.affectedRows > 0;
 };
@@ -335,7 +398,7 @@ export const updateExpense = async (
   const splitDetailsJson = splitDetails === null ? null : JSON.stringify(splitDetails);
 
   const [existingRows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash FROM expenses WHERE id = ? LIMIT 1',
     [input.id],
   );
   const existing = existingRows[0];
@@ -360,18 +423,42 @@ export const updateExpense = async (
     throw new Error('You are not a member of this group.');
   }
   const nextPaidByUserId = input.paidByUserId ? Number(input.paidByUserId) : existing.paid_by_user_id;
+  const nextDedupHash =
+    existing.created_by_user_id === null
+      ? null
+      : computeTransactionDedupHash(input.transactionDate, input.amount, input.title);
 
-  const [updateResult] = await db.execute<ResultSetHeader>(
-    'UPDATE expenses SET title = ?, amount = ?, transaction_date = ?, category = ?, expense_group = ?, split_type = ?, split_details = COALESCE(?, split_details), group_id = ?, paid_by_user_id = ? WHERE id = ?',
-    [input.title, input.amount, input.transactionDate, category, expenseGroup, split, splitDetailsJson, nextGroupId, nextPaidByUserId, input.id],
-  );
+  let updateResult: ResultSetHeader;
+  try {
+    [updateResult] = await db.execute<ResultSetHeader>(
+      'UPDATE expenses SET title = ?, amount = ?, transaction_date = ?, category = ?, expense_group = ?, split_type = ?, split_details = COALESCE(?, split_details), group_id = ?, paid_by_user_id = ?, transaction_dedup_hash = ? WHERE id = ?',
+      [
+        input.title,
+        input.amount,
+        input.transactionDate,
+        category,
+        expenseGroup,
+        split,
+        splitDetailsJson,
+        nextGroupId,
+        nextPaidByUserId,
+        nextDedupHash,
+        input.id,
+      ],
+    );
+  } catch (error) {
+    if (isMysqlDuplicateKeyError(error)) {
+      throw new Error(DUPLICATE_TRANSACTION_MESSAGE);
+    }
+    throw error;
+  }
 
   if (updateResult.affectedRows === 0) {
     return null;
   }
 
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash FROM expenses WHERE id = ? LIMIT 1',
     [input.id],
   );
 
@@ -380,6 +467,40 @@ export const updateExpense = async (
   if (!row) {
     return null;
   }
+
+  await logAuditEvent({
+    actorUserId: actor.userId,
+    actorEmail: actor.email,
+    action: 'UPDATE_EXPENSE',
+    entityType: 'expense',
+    entityId: String(row.id),
+    beforeState: {
+      id: existing.id,
+      title: existing.title,
+      amount: Number(existing.amount),
+      transactionDate: toIsoString(existing.transaction_date),
+      category: existing.category,
+      expenseGroup: existing.expense_group,
+      split: existing.split_type,
+      splitDetails: parseSplitDetails(existing.split_details),
+      groupId: existing.group_id,
+      createdByUserId: existing.created_by_user_id,
+      paidByUserId: existing.paid_by_user_id,
+    },
+    afterState: {
+      id: row.id,
+      title: row.title,
+      amount: Number(row.amount),
+      transactionDate: toIsoString(row.transaction_date),
+      category: row.category,
+      expenseGroup: row.expense_group,
+      split: row.split_type,
+      splitDetails: parseSplitDetails(row.split_details),
+      groupId: row.group_id,
+      createdByUserId: row.created_by_user_id,
+      paidByUserId: row.paid_by_user_id,
+    },
+  });
 
   return {
     id: String(row.id),

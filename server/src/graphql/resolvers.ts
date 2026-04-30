@@ -6,9 +6,11 @@ import {
 } from '../modules/expenses/service.js';
 import {
   createGroup,
+  listHouseholdSettlements,
   listGroups,
   listInvitations,
   listSplitTemplates,
+  recordSettlementPayment,
   updateGroup,
   upsertSplitTemplate,
 } from '../modules/groups/service.js';
@@ -19,7 +21,12 @@ import type {
   UpdateExpenseInput,
 } from '../modules/expenses/types.js';
 import type { GraphqlContext } from './context.js';
-import type { CreateGroupInput, UpdateGroupInput, UpsertSplitTemplateInput } from '../modules/groups/types.js';
+import type {
+  CreateGroupInput,
+  RecordSettlementPaymentInput,
+  UpdateGroupInput,
+  UpsertSplitTemplateInput,
+} from '../modules/groups/types.js';
 import type { LoginInput, RegisterInput } from '../modules/auth/types.js';
 
 const requireAuth = (context: GraphqlContext) => {
@@ -53,6 +60,10 @@ export const resolvers = {
       const user = requireAuth(context);
       return listSplitTemplates(args.groupId, user.email);
     },
+    householdSettlements: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
+      const user = requireAuth(context);
+      return listHouseholdSettlements(user.email);
+    },
   },
   Mutation: {
     addExpense: async (_parent: unknown, args: { input: CreateExpenseInput }, context: GraphqlContext) => {
@@ -73,7 +84,7 @@ export const resolvers = {
     },
     updateGroup: async (_parent: unknown, args: { input: UpdateGroupInput }, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return updateGroup(args.input, user.email);
+      return updateGroup(args.input, { userId: user.id, email: user.email });
     },
     register: async (_parent: unknown, args: { input: RegisterInput }) => {
       return register(args.input);
@@ -91,6 +102,14 @@ export const resolvers = {
     ) => {
       const user = requireAuth(context);
       return upsertSplitTemplate(args.input, user.email);
+    },
+    recordSettlementPayment: async (
+      _parent: unknown,
+      args: { input: RecordSettlementPaymentInput },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      return recordSettlementPayment(args.input, user.email);
     },
   },
 };

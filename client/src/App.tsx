@@ -5,6 +5,7 @@ import { HomePage } from './pages/HomePage';
 import { ImportPage } from './pages/ImportPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { SettlementsPage } from './pages/SettlementsPage';
 
 const RequireAuth = ({ children }: { children: JSX.Element }): JSX.Element => {
   const location = useLocation();
@@ -63,6 +64,14 @@ const App = (): JSX.Element => {
         element={
           <RequireAuth>
             <HouseholdPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/settlements"
+        element={
+          <RequireAuth>
+            <SettlementsPage />
           </RequireAuth>
         }
       />
