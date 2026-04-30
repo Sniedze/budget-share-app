@@ -156,6 +156,8 @@ export const HouseholdPage = (): JSX.Element => {
     sortedExpenseCategories,
     expenseMembers,
     selectedExpenseTemplate,
+    expenseIsPrivate,
+    setExpenseIsPrivate,
     expenseError,
     isCreatingExpense,
     isExpenseSubmitDisabled,
@@ -348,6 +350,7 @@ export const HouseholdPage = (): JSX.Element => {
                           <Th>Total</Th>
                           <Th>Expense Ratio</Th>
                           <Th>Your Share</Th>
+                          <Th>Private</Th>
                         </Tr>
                       </Thead>
                       <Tbody>
@@ -360,11 +363,12 @@ export const HouseholdPage = (): JSX.Element => {
                             <Td>${expense.total.toFixed(2)}</Td>
                             <Td>{getExpenseRatioLabel(expense.total, expense.yourShare)}</Td>
                             <Td>${expense.yourShare.toFixed(2)}</Td>
+                            <Td>{expense.isPrivate ? 'Yes' : '—'}</Td>
                           </Tr>
                         ))}
                         {activeExpenseGroupExpenses.length === 0 ? (
                           <Tr key="no-expense-group-expenses">
-                            <Td colSpan={7}>No expenses for this expense group yet.</Td>
+                            <Td colSpan={8}>No expenses for this expense group yet.</Td>
                           </Tr>
                         ) : null}
                       </Tbody>
@@ -437,6 +441,8 @@ export const HouseholdPage = (): JSX.Element => {
         categoryOptions={sortedExpenseCategories}
         expenseMembers={expenseMembers}
         hasPredefinedSplit={Boolean(selectedExpenseTemplate)}
+        expenseIsPrivate={expenseIsPrivate}
+        onExpensePrivateChange={setExpenseIsPrivate}
         expenseError={expenseError}
         isSubmitting={isCreatingExpense}
         isSubmitDisabled={isExpenseSubmitDisabled}

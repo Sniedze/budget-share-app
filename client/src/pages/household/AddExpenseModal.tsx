@@ -91,6 +91,8 @@ type AddExpenseModalProps = {
   categoryOptions: readonly string[];
   expenseMembers: ExpenseMember[];
   hasPredefinedSplit: boolean;
+  expenseIsPrivate: boolean;
+  onExpensePrivateChange: (value: boolean) => void;
   expenseError: string | null;
   isSubmitting: boolean;
   isSubmitDisabled: boolean;
@@ -119,6 +121,8 @@ export const AddExpenseModal = ({
   categoryOptions,
   expenseMembers,
   hasPredefinedSplit,
+  expenseIsPrivate,
+  onExpensePrivateChange,
   expenseError,
   isSubmitting,
   isSubmitDisabled,
@@ -214,6 +218,16 @@ export const AddExpenseModal = ({
                   </option>
                 ))}
               </ExpenseCategorySelect>
+            </SectionBlock>
+            <SectionBlock>
+              <FieldLabel style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500 }}>
+                <input
+                  type="checkbox"
+                  checked={expenseIsPrivate}
+                  onChange={(event) => onExpensePrivateChange(event.target.checked)}
+                />
+                Private in this household (only you see it; excluded from household total and settlements)
+              </FieldLabel>
             </SectionBlock>
             <SectionBlock>
               <FieldLabel>Expense Group Split</FieldLabel>

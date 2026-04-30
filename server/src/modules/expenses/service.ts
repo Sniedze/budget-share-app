@@ -27,7 +27,13 @@ type ExpenseRow = {
   created_by_user_id: number | null;
   paid_by_user_id: number | null;
   transaction_dedup_hash: string | null;
+  is_private?: number;
 } & RowDataPacket;
+
+const rowIsPrivate = (row: { is_private?: number | boolean | null }): boolean => {
+  const v = row.is_private;
+  return v === true || v === 1;
+};
 
 type TemplateRow = {
   split_details: string;
@@ -192,7 +198,7 @@ const canAccessExpense = async (row: ExpenseRow, userId: string, userEmail: stri
 
 export const listExpenses = async (userId: string, userEmail: string): Promise<Expense[]> => {
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash FROM expenses ORDER BY transaction_date DESC, id DESC',
+    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private FROM expenses ORDER BY transaction_date DESC, id DESC',
   );
 
   const visible: Expense[] = [];
@@ -202,6 +208,9 @@ export const listExpenses = async (userId: string, userEmail: string): Promise<E
       continue;
     }
     if (!(await canAccessExpense(row, userId, userEmail))) {
+      continue;
+    }
+    if (row.group_id !== null && rowIsPrivate(row) && String(row.created_by_user_id) !== userId) {
       continue;
     }
     visible.push({
@@ -217,6 +226,7 @@ export const listExpenses = async (userId: string, userEmail: string): Promise<E
       groupId: row.group_id === null ? undefined : String(row.group_id),
       createdByUserId: row.created_by_user_id === null ? undefined : String(row.created_by_user_id),
       paidByUserId: row.paid_by_user_id === null ? undefined : String(row.paid_by_user_id),
+      isPrivate: rowIsPrivate(row),
     });
   }
   return visible;
@@ -267,6 +277,7 @@ export const createExpense = async (
     throw new Error('You are not a member of this group.');
   }
   const paidByUserId = input.paidByUserId ? Number(input.paidByUserId) : Number(actor.userId);
+  const isPrivate = groupId !== null && Boolean(input.isPrivate);
   const transactionDedupHash = computeTransactionDedupHash(
     input.transactionDate,
     input.amount,
@@ -276,7 +287,7 @@ export const createExpense = async (
   let result: ResultSetHeader;
   try {
     [result] = await db.execute<ResultSetHeader>(
-      'INSERT INTO expenses (title, amount, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO expenses (title, amount, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         input.title,
         input.amount,
@@ -289,6 +300,7 @@ export const createExpense = async (
         Number(actor.userId),
         paidByUserId,
         transactionDedupHash,
+        isPrivate ? 1 : 0,
       ],
     );
   } catch (error) {
@@ -299,7 +311,7 @@ export const createExpense = async (
   }
 
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private FROM expenses WHERE id = ? LIMIT 1',
     [result.insertId],
   );
 
@@ -319,6 +331,7 @@ export const createExpense = async (
       groupId: groupId === null ? undefined : String(groupId),
       createdByUserId: actor.userId,
       paidByUserId: String(paidByUserId),
+      isPrivate,
     };
   }
 
@@ -335,12 +348,13 @@ export const createExpense = async (
     groupId: row.group_id === null ? undefined : String(row.group_id),
     createdByUserId: row.created_by_user_id === null ? undefined : String(row.created_by_user_id),
     paidByUserId: row.paid_by_user_id === null ? undefined : String(row.paid_by_user_id),
+    isPrivate: rowIsPrivate(row),
   };
 };
 
 export const deleteExpense = async (id: string, actor: { userId: string; email: string }): Promise<boolean> => {
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, group_id, created_by_user_id, paid_by_user_id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, transaction_dedup_hash FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, group_id, created_by_user_id, paid_by_user_id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, transaction_dedup_hash, is_private FROM expenses WHERE id = ? LIMIT 1',
     [id],
   );
   const row = rows[0];
@@ -348,12 +362,17 @@ export const deleteExpense = async (id: string, actor: { userId: string; email: 
     return false;
   }
 
-  const canDelete =
-    row.group_id === null
-      ? row.created_by_user_id !== null && String(row.created_by_user_id) === actor.userId
-      : await isGroupMember(row.group_id, actor.email);
-  if (!canDelete) {
-    throw new Error('Not authorized to delete this expense.');
+  if (row.group_id === null) {
+    if (row.created_by_user_id === null || String(row.created_by_user_id) !== actor.userId) {
+      throw new Error('Not authorized to delete this expense.');
+    }
+  } else {
+    if (!(await isGroupMember(row.group_id, actor.email))) {
+      throw new Error('Not authorized to delete this expense.');
+    }
+    if (rowIsPrivate(row) && String(row.created_by_user_id) !== actor.userId) {
+      throw new Error('Not authorized to delete this private expense.');
+    }
   }
 
   const [result] = await db.execute<ResultSetHeader>('DELETE FROM expenses WHERE id = ?', [id]);
@@ -376,6 +395,7 @@ export const deleteExpense = async (id: string, actor: { userId: string; email: 
         groupId: row.group_id,
         createdByUserId: row.created_by_user_id,
         paidByUserId: row.paid_by_user_id,
+        isPrivate: rowIsPrivate(row),
       },
       afterState: null,
     });
@@ -398,7 +418,7 @@ export const updateExpense = async (
   const splitDetailsJson = splitDetails === null ? null : JSON.stringify(splitDetails);
 
   const [existingRows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private FROM expenses WHERE id = ? LIMIT 1',
     [input.id],
   );
   const existing = existingRows[0];
@@ -414,6 +434,13 @@ export const updateExpense = async (
   if (!canEdit) {
     throw new Error('Not authorized to update this expense.');
   }
+  if (
+    existingGroupId !== null &&
+    rowIsPrivate(existing) &&
+    String(existing.created_by_user_id) !== actor.userId
+  ) {
+    throw new Error('Not authorized to update this private expense.');
+  }
 
   const nextGroupId = input.groupId ? Number(input.groupId) : existingGroupId;
   if (nextGroupId !== null && !expenseGroup) {
@@ -423,6 +450,8 @@ export const updateExpense = async (
     throw new Error('You are not a member of this group.');
   }
   const nextPaidByUserId = input.paidByUserId ? Number(input.paidByUserId) : existing.paid_by_user_id;
+  const nextIsPrivate =
+    nextGroupId === null ? false : input.isPrivate !== undefined ? Boolean(input.isPrivate) : rowIsPrivate(existing);
   const nextDedupHash =
     existing.created_by_user_id === null
       ? null
@@ -431,7 +460,7 @@ export const updateExpense = async (
   let updateResult: ResultSetHeader;
   try {
     [updateResult] = await db.execute<ResultSetHeader>(
-      'UPDATE expenses SET title = ?, amount = ?, transaction_date = ?, category = ?, expense_group = ?, split_type = ?, split_details = COALESCE(?, split_details), group_id = ?, paid_by_user_id = ?, transaction_dedup_hash = ? WHERE id = ?',
+      'UPDATE expenses SET title = ?, amount = ?, transaction_date = ?, category = ?, expense_group = ?, split_type = ?, split_details = COALESCE(?, split_details), group_id = ?, paid_by_user_id = ?, transaction_dedup_hash = ?, is_private = ? WHERE id = ?',
       [
         input.title,
         input.amount,
@@ -443,6 +472,7 @@ export const updateExpense = async (
         nextGroupId,
         nextPaidByUserId,
         nextDedupHash,
+        nextIsPrivate ? 1 : 0,
         input.id,
       ],
     );
@@ -458,7 +488,7 @@ export const updateExpense = async (
   }
 
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private FROM expenses WHERE id = ? LIMIT 1',
     [input.id],
   );
 
@@ -486,6 +516,7 @@ export const updateExpense = async (
       groupId: existing.group_id,
       createdByUserId: existing.created_by_user_id,
       paidByUserId: existing.paid_by_user_id,
+      isPrivate: rowIsPrivate(existing),
     },
     afterState: {
       id: row.id,
@@ -499,6 +530,7 @@ export const updateExpense = async (
       groupId: row.group_id,
       createdByUserId: row.created_by_user_id,
       paidByUserId: row.paid_by_user_id,
+      isPrivate: rowIsPrivate(row),
     },
   });
 
@@ -515,5 +547,6 @@ export const updateExpense = async (
     groupId: row.group_id === null ? undefined : String(row.group_id),
     createdByUserId: row.created_by_user_id === null ? undefined : String(row.created_by_user_id),
     paidByUserId: row.paid_by_user_id === null ? undefined : String(row.paid_by_user_id),
+    isPrivate: rowIsPrivate(row),
   };
 };

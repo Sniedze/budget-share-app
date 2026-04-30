@@ -49,6 +49,8 @@ type GroupExpenseRow = {
   amount: string;
   transactionDate: Date | string;
   paidByName: string | null;
+  isPrivate: number;
+  createdByUserId: number | null;
 } & RowDataPacket;
 
 type SplitTemplateRow = {
@@ -274,7 +276,9 @@ const buildSettlementForScope = (
   return { balances, transfers, totalExpenses };
 };
 
-export const listGroups = async (userEmail: string): Promise<Group[]> => {
+const expenseRowIsPrivate = (row: { isPrivate?: number }): boolean => row.isPrivate === 1;
+
+export const listGroups = async (userEmail: string, viewerUserId: string): Promise<Group[]> => {
   const normalizedEmail = userEmail.trim().toLowerCase();
   const [groupRows] = await db.query<GroupRow[]>(
     `
@@ -325,7 +329,9 @@ export const listGroups = async (userEmail: string): Promise<Group[]> => {
         e.category,
         e.amount,
         e.transaction_date AS transactionDate,
-        u.full_name AS paidByName
+        u.full_name AS paidByName,
+        COALESCE(e.is_private, 0) AS isPrivate,
+        e.created_by_user_id AS createdByUserId
       FROM expenses e
       LEFT JOIN users u ON u.id = e.paid_by_user_id
       WHERE e.group_id IN (?)
@@ -337,10 +343,19 @@ export const listGroups = async (userEmail: string): Promise<Group[]> => {
   const expensesByGroupId = new Map<number, Group['expenses']>();
   const totalsByGroupId = new Map<number, { totalSpent: number; yourShare: number }>();
   for (const row of expenseRows) {
+    const isPrivate = expenseRowIsPrivate(row);
+    if (isPrivate && String(row.createdByUserId ?? '') !== viewerUserId) {
+      continue;
+    }
     const groupMembers = membersByGroupId.get(row.groupId) ?? [];
     const viewerMember = groupMembers.find((member) => member.email.trim().toLowerCase() === normalizedEmail);
     const amount = Number(row.amount);
-    const yourShare = viewerMember ? Number(((amount * viewerMember.ratio) / 100).toFixed(2)) : 0;
+    const yourShare =
+      isPrivate && String(row.createdByUserId ?? '') === viewerUserId
+        ? amount
+        : viewerMember
+          ? Number(((amount * viewerMember.ratio) / 100).toFixed(2))
+          : 0;
 
     const groupExpenses = expensesByGroupId.get(row.groupId) ?? [];
     groupExpenses.push({
@@ -351,11 +366,14 @@ export const listGroups = async (userEmail: string): Promise<Group[]> => {
       paidBy: row.paidByName ?? 'Member',
       total: amount,
       yourShare,
+      isPrivate,
     });
     expensesByGroupId.set(row.groupId, groupExpenses);
 
     const runningTotals = totalsByGroupId.get(row.groupId) ?? { totalSpent: 0, yourShare: 0 };
-    runningTotals.totalSpent = Number((runningTotals.totalSpent + amount).toFixed(2));
+    if (!isPrivate) {
+      runningTotals.totalSpent = Number((runningTotals.totalSpent + amount).toFixed(2));
+    }
     runningTotals.yourShare = Number((runningTotals.yourShare + yourShare).toFixed(2));
     totalsByGroupId.set(row.groupId, runningTotals);
   }
@@ -829,8 +847,11 @@ export const upsertSplitTemplate = async (
   };
 };
 
-export const listHouseholdSettlements = async (userEmail: string): Promise<HouseholdSettlement[]> => {
-  const groups = await listGroups(userEmail);
+export const listHouseholdSettlements = async (
+  userEmail: string,
+  viewerUserId: string,
+): Promise<HouseholdSettlement[]> => {
+  const groups = await listGroups(userEmail, viewerUserId);
   if (groups.length === 0) {
     return [];
   }
@@ -849,6 +870,7 @@ export const listHouseholdSettlements = async (userEmail: string): Promise<House
       FROM expenses e
       LEFT JOIN users payer ON payer.id = e.paid_by_user_id
       WHERE e.group_id IN (?)
+        AND COALESCE(e.is_private, 0) = 0
       ORDER BY e.transaction_date DESC, e.id DESC
     `,
     [groupIds],

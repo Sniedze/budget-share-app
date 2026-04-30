@@ -24,6 +24,7 @@ export type Expense = {
   groupId?: string;
   createdByUserId?: string;
   paidByUserId?: string;
+  isPrivate: boolean;
 };
 
 export type GetExpensesResponse = {
@@ -40,6 +41,7 @@ export type AddExpenseInput = {
   splitDetails?: SplitAllocationInput[];
   groupId?: string;
   paidByUserId?: string;
+  isPrivate?: boolean;
 };
 
 export type UpdateExpenseInput = {
@@ -53,4 +55,5 @@ export type UpdateExpenseInput = {
   splitDetails?: SplitAllocationInput[];
   groupId?: string;
   paidByUserId?: string;
+  isPrivate?: boolean;
 };

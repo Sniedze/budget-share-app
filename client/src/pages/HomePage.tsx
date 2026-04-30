@@ -52,6 +52,7 @@ type ExpenseFormValues = {
   category: string;
   groupId: string;
   expenseGroup: string;
+  isPrivate: boolean;
   split: SplitType;
   splitDetails: SplitAllocationInput[];
 };
@@ -63,6 +64,7 @@ const getInitialFormValues = (): ExpenseFormValues => ({
   category: DEFAULT_CATEGORY,
   groupId: '',
   expenseGroup: '',
+  isPrivate: false,
   split: DEFAULT_SPLIT,
   splitDetails: DEFAULT_CUSTOM_SPLIT_DETAILS,
 });
@@ -74,6 +76,7 @@ const toFormValuesFromExpense = (expense: Expense): ExpenseFormValues => ({
   category: expense.category,
   groupId: expense.groupId ?? '',
   expenseGroup: expense.groupId ? (expense.expenseGroup ?? '') : '',
+  isPrivate: expense.isPrivate ?? false,
   split: expense.split,
   splitDetails:
     expense.splitDetails.length > 0
@@ -172,6 +175,7 @@ export const HomePage = (): JSX.Element => {
         split: values.split,
         splitDetails: values.split === 'Custom' ? normalizedSplitDetails : undefined,
         groupId: values.split === 'Shared' ? values.groupId : undefined,
+        isPrivate: values.split === 'Shared' && Boolean(values.groupId) ? values.isPrivate : false,
       };
     };
 
@@ -207,6 +211,14 @@ export const HomePage = (): JSX.Element => {
   };
 
   const onInputChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement && target.name === 'isPrivate') {
+      setFormValues((previous) => ({
+        ...previous,
+        isPrivate: target.checked,
+      }));
+      return;
+    }
     const { name, value } = event.target;
     const normalizedMerchant = value.trim().toLowerCase();
     const matchedMerchantCategory =
@@ -219,7 +231,7 @@ export const HomePage = (): JSX.Element => {
       ...(name === 'split' && value === 'Custom' && formValues.splitDetails.length === 0
         ? { splitDetails: DEFAULT_CUSTOM_SPLIT_DETAILS }
         : {}),
-      ...(name === 'split' && value !== 'Shared' ? { groupId: '', expenseGroup: '' } : {}),
+      ...(name === 'split' && value !== 'Shared' ? { groupId: '', expenseGroup: '', isPrivate: false } : {}),
       ...(name === 'groupId' ? { expenseGroup: '' } : {}),
     });
   };

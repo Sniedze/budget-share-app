@@ -87,6 +87,7 @@ export const RecentExpensesSection = ({
               <Th>Category</Th>
               <Th>Amount</Th>
               <Th>Split</Th>
+              <Th>Private</Th>
               <Th>Actions</Th>
             </tr>
           </Thead>
@@ -100,6 +101,7 @@ export const RecentExpensesSection = ({
                 </Td>
                 <Td>${expense.amount.toFixed(2)}</Td>
                 <Td>{formatSplitLabel(expense)}</Td>
+                <Td>{expense.isPrivate && expense.groupId ? 'Yes' : '—'}</Td>
                 <Td>
                   <Actions>
                     <Button

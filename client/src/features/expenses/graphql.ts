@@ -14,6 +14,7 @@ export const GET_EXPENSES = gql`
       groupId
       createdByUserId
       paidByUserId
+      isPrivate
       splitDetails {
         participant
         ratio
@@ -37,6 +38,7 @@ export const ADD_EXPENSE = gql`
       groupId
       createdByUserId
       paidByUserId
+      isPrivate
       splitDetails {
         participant
         ratio
@@ -60,6 +62,7 @@ export const UPDATE_EXPENSE = gql`
       groupId
       createdByUserId
       paidByUserId
+      isPrivate
       splitDetails {
         participant
         ratio

@@ -19,6 +19,7 @@ export type Expense = {
   groupId?: string;
   createdByUserId?: string;
   paidByUserId?: string;
+  isPrivate: boolean;
 };
 
 export type CreateExpenseInput = {
@@ -34,6 +35,7 @@ export type CreateExpenseInput = {
   }>;
   groupId?: string;
   paidByUserId?: string;
+  isPrivate?: boolean;
 };
 
 export type DeleteExpenseInput = {
@@ -54,4 +56,5 @@ export type UpdateExpenseInput = {
   }>;
   groupId?: string;
   paidByUserId?: string;
+  isPrivate?: boolean;
 };

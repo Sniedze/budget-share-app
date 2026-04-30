@@ -108,6 +108,7 @@ export const useHouseholdPageState = () => {
   const [expenseCategory, setExpenseCategory] = useState('General');
   const [expenseMembers, setExpenseMembers] = useState<Array<{ name: string; selected: boolean; ratio: number }>>([]);
   const [expenseError, setExpenseError] = useState<string | null>(null);
+  const [expenseIsPrivate, setExpenseIsPrivate] = useState(false);
   const [templateCategory, setTemplateCategory] = useState(PREDEFINED_EXPENSE_GROUPS[0]);
   const [customTemplateCategory, setCustomTemplateCategory] = useState('');
   const [editingTemplateCategory, setEditingTemplateCategory] = useState<string | null>(null);
@@ -324,6 +325,7 @@ export const useHouseholdPageState = () => {
     setExpenseDate(new Date().toISOString().slice(0, 10));
     setExpenseGroup(preferredExpenseGroup ?? expenseGroupOptions[0] ?? 'Groceries');
     setExpenseCategory('General');
+    setExpenseIsPrivate(false);
     setExpenseError(null);
     setExpenseMembers(
       activeGroup.members.map((member) => ({
@@ -704,6 +706,7 @@ export const useHouseholdPageState = () => {
         split,
         splitDetails,
         groupId: activeGroup.id,
+        isPrivate: expenseIsPrivate,
       });
       closeExpenseModal();
     } catch (mutationError) {
@@ -842,6 +845,8 @@ export const useHouseholdPageState = () => {
     sortedExpenseCategories,
     expenseMembers,
     selectedExpenseTemplate,
+    expenseIsPrivate,
+    setExpenseIsPrivate,
     expenseError,
     isCreatingExpense,
     isExpenseSubmitDisabled,

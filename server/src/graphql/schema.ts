@@ -18,6 +18,7 @@ export const typeDefs = `#graphql
     groupId: ID
     createdByUserId: ID
     paidByUserId: ID
+    isPrivate: Boolean!
   }
 
   type SplitAllocation {
@@ -40,6 +41,7 @@ export const typeDefs = `#graphql
     paidBy: String!
     total: Float!
     yourShare: Float!
+    isPrivate: Boolean!
   }
 
   type Group {
@@ -182,6 +184,7 @@ export const typeDefs = `#graphql
     splitDetails: [SplitAllocationInput!]
     groupId: ID
     paidByUserId: ID
+    isPrivate: Boolean
   }
 
   input RecordSettlementPaymentInput {
@@ -209,6 +212,7 @@ export const typeDefs = `#graphql
     splitDetails: [SplitAllocationInput!]
     groupId: ID
     paidByUserId: ID
+    isPrivate: Boolean
   }
 
   type Query {

@@ -12,6 +12,7 @@ export type GroupExpense = {
   paidBy: string;
   total: number;
   yourShare: number;
+  isPrivate: boolean;
 };
 
 export type GroupSummary = {

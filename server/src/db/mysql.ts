@@ -34,6 +34,7 @@ export const ensureSchema = async (): Promise<void> => {
     created_by_user_id INT NULL,
     paid_by_user_id INT NULL,
     transaction_dedup_hash CHAR(64) NULL,
+    is_private TINYINT(1) NOT NULL DEFAULT 0,
     UNIQUE KEY uniq_expense_creator_dedup (created_by_user_id, transaction_dedup_hash)
   )
     `);
@@ -147,7 +148,7 @@ export const migrateSchema = async (): Promise<void> => {
         FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
           AND TABLE_NAME = 'expenses'
-          AND COLUMN_NAME IN ('created_at', 'transaction_date', 'category', 'expense_group', 'split_type', 'split_details', 'group_id', 'created_by_user_id', 'paid_by_user_id', 'transaction_dedup_hash')
+          AND COLUMN_NAME IN ('created_at', 'transaction_date', 'category', 'expense_group', 'split_type', 'split_details', 'group_id', 'created_by_user_id', 'paid_by_user_id', 'transaction_dedup_hash', 'is_private')
       `,
   );
 
@@ -270,6 +271,13 @@ export const migrateSchema = async (): Promise<void> => {
     await db.execute(`
         ALTER TABLE expenses
         ADD UNIQUE KEY uniq_expense_creator_dedup (created_by_user_id, transaction_dedup_hash)
+      `);
+  }
+
+  if (!existingColumns.has('is_private')) {
+    await db.execute(`
+        ALTER TABLE expenses
+        ADD COLUMN is_private TINYINT(1) NOT NULL DEFAULT 0
       `);
   }
 };

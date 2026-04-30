@@ -46,7 +46,7 @@ export const resolvers = {
     },
     groups: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return listGroups(user.email);
+      return listGroups(user.email, user.id);
     },
     myInvitations: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
       const user = requireAuth(context);
@@ -62,7 +62,7 @@ export const resolvers = {
     },
     householdSettlements: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return listHouseholdSettlements(user.email);
+      return listHouseholdSettlements(user.email, user.id);
     },
   },
   Mutation: {

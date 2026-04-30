@@ -21,6 +21,7 @@ export const GET_GROUPS = gql`
         paidBy
         total
         yourShare
+        isPrivate
       }
     }
   }
@@ -62,6 +63,7 @@ export const CREATE_GROUP = gql`
         paidBy
         total
         yourShare
+        isPrivate
       }
     }
   }
@@ -88,6 +90,7 @@ export const UPDATE_GROUP = gql`
         paidBy
         total
         yourShare
+        isPrivate
       }
     }
   }

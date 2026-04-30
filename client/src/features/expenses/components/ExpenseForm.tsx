@@ -123,6 +123,7 @@ type ExpenseFormProps = {
   category: string;
   groupId: string;
   expenseGroup: string;
+  isPrivate: boolean;
   split: SplitType;
   splitDetails: SplitAllocationInput[];
   categoryOptions: string[];
@@ -144,6 +145,7 @@ type ExpenseFormProps = {
     category: string;
     split: SplitType;
     expenseGroup: string;
+    isPrivate: boolean;
   }>;
   queuedExpensesCount: number;
   onQueueExpense: () => void;
@@ -158,6 +160,7 @@ export const ExpenseForm = ({
   category,
   groupId,
   expenseGroup,
+  isPrivate,
   split,
   splitDetails,
   categoryOptions,
@@ -346,6 +349,18 @@ export const ExpenseForm = ({
             </FieldGroup>
           </ModeRow>
           <MutedText>Shared expense requires both household and expense group.</MutedText>
+          <FieldGroup>
+            <LabelText style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}>
+              <Input
+                type="checkbox"
+                name="isPrivate"
+                checked={isPrivate}
+                onChange={onInputChange}
+                style={{ minWidth: 'auto', width: 'auto' }}
+              />
+              Private in this household (only you see it; excluded from household total and settlements)
+            </LabelText>
+          </FieldGroup>
         </>
       ) : null}
       {split === 'Custom' ? (
@@ -394,6 +409,7 @@ export const ExpenseForm = ({
                 <QueuedHeadCell>Category</QueuedHeadCell>
                 <QueuedHeadCell>Split</QueuedHeadCell>
                 <QueuedHeadCell>Expense Group</QueuedHeadCell>
+                <QueuedHeadCell>Private</QueuedHeadCell>
                 <QueuedHeadCell>Action</QueuedHeadCell>
               </tr>
             </thead>
@@ -406,6 +422,7 @@ export const ExpenseForm = ({
                   <QueuedCell>{queuedExpense.category}</QueuedCell>
                   <QueuedCell>{queuedExpense.split}</QueuedCell>
                   <QueuedCell>{queuedExpense.expenseGroup || '-'}</QueuedCell>
+                  <QueuedCell>{queuedExpense.split === 'Shared' && queuedExpense.isPrivate ? 'Yes' : '—'}</QueuedCell>
                   <QueuedCell>
                     <Button
                       type="button"
