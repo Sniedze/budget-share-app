@@ -98,6 +98,24 @@ const SplitRow = styled.div`
   gap: 8px;
 `;
 
+const QueuedTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+`;
+
+const QueuedHeadCell = styled.th`
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #dbe5ff;
+  color: #4b5563;
+`;
+
+const QueuedCell = styled.td`
+  padding: 8px;
+  border-bottom: 1px solid #e5edff;
+`;
+
 type ExpenseFormProps = {
   title: string;
   amount: string;
@@ -119,6 +137,18 @@ type ExpenseFormProps = {
   onRemoveSplitDetail: (index: number) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
+  queuedExpenses: Array<{
+    title: string;
+    amount: string;
+    transactionDate: string;
+    category: string;
+    split: SplitType;
+    expenseGroup: string;
+  }>;
+  queuedExpensesCount: number;
+  onQueueExpense: () => void;
+  onClearQueuedExpenses: () => void;
+  onRemoveQueuedExpense: (index: number) => void;
 };
 
 export const ExpenseForm = ({
@@ -142,6 +172,11 @@ export const ExpenseForm = ({
   onRemoveSplitDetail,
   onSubmit,
   onCancel,
+  queuedExpenses,
+  queuedExpensesCount,
+  onQueueExpense,
+  onClearQueuedExpenses,
+  onRemoveQueuedExpense,
 }: ExpenseFormProps): JSX.Element => {
   const hasBaseFields =
     title.trim().length > 0 &&
@@ -150,6 +185,14 @@ export const ExpenseForm = ({
     category.trim().length > 0;
   const isSharedIncomplete = split === 'Shared' && (!groupId || !expenseGroup);
   const isSubmitDisabled = isMutating || !hasBaseFields || isSharedIncomplete;
+  const canQueueExpense = !editingId && !isSubmitDisabled;
+  const queuedTotalAmount = queuedExpenses.reduce((sum, queuedExpense) => {
+    const amount = Number(queuedExpense.amount);
+    if (!Number.isFinite(amount)) {
+      return sum;
+    }
+    return sum + amount;
+  }, 0);
   const pickClosestOption = (rawValue: string, options: string[]): string => {
     const value = rawValue.trim().toLowerCase();
     if (!value) {
@@ -339,14 +382,73 @@ export const ExpenseForm = ({
           </Button>
         </SplitDetails>
       ) : null}
+      {!editingId && queuedExpensesCount > 0 ? (
+        <>
+          <SectionLabel>Queued Expenses</SectionLabel>
+          <QueuedTable>
+            <thead>
+              <tr>
+                <QueuedHeadCell>Merchant</QueuedHeadCell>
+                <QueuedHeadCell>Amount</QueuedHeadCell>
+                <QueuedHeadCell>Date</QueuedHeadCell>
+                <QueuedHeadCell>Category</QueuedHeadCell>
+                <QueuedHeadCell>Split</QueuedHeadCell>
+                <QueuedHeadCell>Expense Group</QueuedHeadCell>
+                <QueuedHeadCell>Action</QueuedHeadCell>
+              </tr>
+            </thead>
+            <tbody>
+              {queuedExpenses.map((queuedExpense, index) => (
+                <tr key={`${queuedExpense.title}-${queuedExpense.transactionDate}-${index}`}>
+                  <QueuedCell>{queuedExpense.title}</QueuedCell>
+                  <QueuedCell>{queuedExpense.amount}</QueuedCell>
+                  <QueuedCell>{queuedExpense.transactionDate}</QueuedCell>
+                  <QueuedCell>{queuedExpense.category}</QueuedCell>
+                  <QueuedCell>{queuedExpense.split}</QueuedCell>
+                  <QueuedCell>{queuedExpense.expenseGroup || '-'}</QueuedCell>
+                  <QueuedCell>
+                    <Button
+                      type="button"
+                      $variant="secondary"
+                      $size="sm"
+                      onClick={() => onRemoveQueuedExpense(index)}
+                      disabled={isMutating}
+                    >
+                      Remove
+                    </Button>
+                  </QueuedCell>
+                </tr>
+              ))}
+            </tbody>
+          </QueuedTable>
+          <MutedText>Queued total: {queuedTotalAmount.toFixed(2)}</MutedText>
+        </>
+      ) : null}
       <Actions>
         <Button $variant="primary" type="submit" disabled={isSubmitDisabled}>
-          {editingId ? 'Save' : 'Add expense'}
+          {editingId
+            ? 'Save'
+            : queuedExpensesCount > 0
+              ? `Add ${queuedExpensesCount + 1} expenses`
+              : 'Add expense'}
         </Button>
+        {!editingId ? (
+          <Button type="button" $variant="secondary" onClick={onQueueExpense} disabled={!canQueueExpense}>
+            + Queue expense
+          </Button>
+        ) : null}
         <Button $variant="secondary" type="button" onClick={onCancel} disabled={isMutating}>
           Cancel
         </Button>
+        {!editingId && queuedExpensesCount > 0 ? (
+          <Button type="button" $variant="secondary" onClick={onClearQueuedExpenses} disabled={isMutating}>
+            Clear queued ({queuedExpensesCount})
+          </Button>
+        ) : null}
       </Actions>
+      {!editingId && queuedExpensesCount > 0 ? (
+        <MutedText>{queuedExpensesCount} expense(s) queued for batch add.</MutedText>
+      ) : null}
     </Form>
     </FormCard>
   );

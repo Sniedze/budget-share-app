@@ -1,5 +1,6 @@
 import { useQuery } from '@apollo/client/react';
 import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
+import styled from 'styled-components';
 import { ChartsSection, MonthlyOverviewSection, RecentExpensesSection, Sidebar, StatsSection } from '../components/sections';
 import { AppLayout, HeaderRow, HeaderText, MutedText, PageSurface, SectionSubtitle, SectionTitle, UserMenu } from '../components/ui';
 import { GET_EXPENSES, buildMerchantSuggestions, getBreakdownData, getDashboardStats, getTotalAmount, getTrendData, ExpenseForm, useExpenseActions } from '../features/expenses';
@@ -7,6 +8,7 @@ import { getMonthlyOverview } from '../features/expenses/selectors/expenseAnalyt
 import type { Expense, GetExpensesResponse, SplitAllocationInput, SplitType } from '../features/expenses';
 import { GET_GROUPS, GET_GROUP_SPLIT_TEMPLATES } from '../features/groups';
 import type { GroupSummary, SplitTemplate } from '../features/groups';
+import { colors, radii, spacing } from '../styles/tokens';
 
 const DEFAULT_CATEGORY = 'General';
 const DEFAULT_SPLIT: SplitType = 'Personal';
@@ -21,6 +23,27 @@ const getTodayDateInput = (): string => {
   const timezoneOffsetMs = now.getTimezoneOffset() * 60 * 1000;
   return new Date(now.getTime() - timezoneOffsetMs).toISOString().slice(0, 10);
 };
+
+const AnalyticsTabs = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: ${spacing.sm};
+  padding: ${spacing.xs};
+  border: 1px solid ${colors.border};
+  border-radius: ${radii.full};
+  background: ${colors.surface};
+`;
+
+const AnalyticsTabButton = styled.button<{ $isActive: boolean }>`
+  border: 0;
+  cursor: pointer;
+  border-radius: ${radii.full};
+  padding: ${spacing.sm} ${spacing.lg};
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: ${({ $isActive }) => ($isActive ? '#ffffff' : colors.textMuted)};
+  background: ${({ $isActive }) => ($isActive ? colors.primary : 'transparent')};
+`;
 
 type ExpenseFormValues = {
   title: string;
@@ -63,7 +86,9 @@ const toFormValuesFromExpense = (expense: Expense): ExpenseFormValues => ({
 
 export const HomePage = (): JSX.Element => {
   const [formValues, setFormValues] = useState<ExpenseFormValues>(() => getInitialFormValues());
+  const [queuedExpenses, setQueuedExpenses] = useState<ExpenseFormValues[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [analyticsView, setAnalyticsView] = useState<'table' | 'charts'>('table');
 
   const { data, loading, error } = useQuery<GetExpensesResponse>(GET_EXPENSES);
   const { data: groupsData } = useQuery<{ groups: GroupSummary[] }>(GET_GROUPS);
@@ -77,6 +102,11 @@ export const HomePage = (): JSX.Element => {
     setFormValues(getInitialFormValues());
     setEditingId(null);
   };
+
+  const cloneFormValues = (values: ExpenseFormValues): ExpenseFormValues => ({
+    ...values,
+    splitDetails: values.splitDetails.map((detail) => ({ ...detail })),
+  });
 
   const expenses = useMemo(() => data?.expenses ?? [], [data]);
   const totalAmount = useMemo(() => getTotalAmount(expenses), [expenses]);
@@ -107,52 +137,65 @@ export const HomePage = (): JSX.Element => {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const parsedAmount = Number(formValues.amount);
-    if (
-      !formValues.title.trim() ||
-      Number.isNaN(parsedAmount) ||
-      !formValues.transactionDate ||
-      !formValues.category ||
-      !formValues.split
-    ) {
-      return;
-    }
-    if (formValues.split === 'Shared' && (!formValues.groupId || !formValues.expenseGroup)) {
-      return;
-    }
+    const isBaseFormValid = (values: ExpenseFormValues): boolean => {
+      const parsedAmount = Number(values.amount);
+      if (
+        !values.title.trim() ||
+        Number.isNaN(parsedAmount) ||
+        !values.transactionDate ||
+        !values.category ||
+        !values.split
+      ) {
+        return false;
+      }
+      if (values.split === 'Shared' && (!values.groupId || !values.expenseGroup)) {
+        return false;
+      }
+      return true;
+    };
 
-    const normalizedSplitDetails = formValues.splitDetails
-      .map((detail) => ({
-        participant: detail.participant.trim(),
-        ratio: Number(detail.ratio),
-      }))
-      .filter((detail) => detail.participant.length > 0 && Number.isFinite(detail.ratio) && detail.ratio > 0);
+    const toAddPayload = (values: ExpenseFormValues) => {
+      const parsedAmount = Number(values.amount);
+      const normalizedSplitDetails = values.splitDetails
+        .map((detail) => ({
+          participant: detail.participant.trim(),
+          ratio: Number(detail.ratio),
+        }))
+        .filter((detail) => detail.participant.length > 0 && Number.isFinite(detail.ratio) && detail.ratio > 0);
 
-    const payloadSplitDetails = formValues.split === 'Custom' ? normalizedSplitDetails : undefined;
+      return {
+        title: values.title.trim(),
+        amount: parsedAmount,
+        transactionDate: values.transactionDate,
+        category: values.category,
+        expenseGroup: values.split === 'Shared' ? values.expenseGroup : undefined,
+        split: values.split,
+        splitDetails: values.split === 'Custom' ? normalizedSplitDetails : undefined,
+        groupId: values.split === 'Shared' ? values.groupId : undefined,
+      };
+    };
 
     if (editingId) {
+      if (!isBaseFormValid(formValues)) {
+        return;
+      }
+      const payload = toAddPayload(formValues);
       await updateExpense({
         id: editingId,
-        title: formValues.title.trim(),
-        amount: parsedAmount,
-        transactionDate: formValues.transactionDate,
-        category: formValues.category,
-        expenseGroup: formValues.split === 'Shared' ? formValues.expenseGroup : undefined,
-        split: formValues.split,
-        splitDetails: payloadSplitDetails,
-        groupId: formValues.split === 'Shared' ? formValues.groupId : undefined,
+        ...payload,
       });
     } else {
-      await addExpense({
-        title: formValues.title.trim(),
-        amount: parsedAmount,
-        transactionDate: formValues.transactionDate,
-        category: formValues.category,
-        expenseGroup: formValues.split === 'Shared' ? formValues.expenseGroup : undefined,
-        split: formValues.split,
-        splitDetails: payloadSplitDetails,
-        groupId: formValues.split === 'Shared' ? formValues.groupId : undefined,
-      });
+      const expensesToCreate = [...queuedExpenses];
+      if (isBaseFormValid(formValues)) {
+        expensesToCreate.push(formValues);
+      }
+      if (expensesToCreate.length === 0) {
+        return;
+      }
+      for (const values of expensesToCreate) {
+        await addExpense(toAddPayload(values));
+      }
+      setQueuedExpenses([]);
     }
 
     resetForm();
@@ -230,6 +273,29 @@ export const HomePage = (): JSX.Element => {
     }
   };
 
+  const handleQueueExpense = () => {
+    const parsedAmount = Number(formValues.amount);
+    const isValid =
+      formValues.title.trim().length > 0 &&
+      !Number.isNaN(parsedAmount) &&
+      formValues.transactionDate.trim().length > 0 &&
+      formValues.category.trim().length > 0 &&
+      (formValues.split !== 'Shared' || (formValues.groupId.trim().length > 0 && formValues.expenseGroup.trim().length > 0));
+    if (!isValid || editingId) {
+      return;
+    }
+    setQueuedExpenses((previous) => [...previous, cloneFormValues(formValues)]);
+    setFormValues(getInitialFormValues());
+  };
+
+  const handleClearQueuedExpenses = () => {
+    setQueuedExpenses([]);
+  };
+
+  const handleRemoveQueuedExpense = (index: number) => {
+    setQueuedExpenses((previous) => previous.filter((_, queuedIndex) => queuedIndex !== index));
+  };
+
   return (
     <AppLayout>
       <Sidebar />
@@ -259,10 +325,12 @@ export const HomePage = (): JSX.Element => {
           onRemoveSplitDetail={handleRemoveSplitDetail}
           onSubmit={handleSubmit}
           onCancel={resetForm}
+          queuedExpenses={queuedExpenses}
+          queuedExpensesCount={queuedExpenses.length}
+          onQueueExpense={handleQueueExpense}
+          onClearQueuedExpenses={handleClearQueuedExpenses}
+          onRemoveQueuedExpense={handleRemoveQueuedExpense}
         />
-
-        <ChartsSection trendData={trendData} breakdownData={breakdownData} />
-        <MonthlyOverviewSection rows={monthlyOverview} />
 
         {loading ? <MutedText>Loading expenses...</MutedText> : null}
         {error ? <MutedText>Error: {error.message}</MutedText> : null}
@@ -274,6 +342,25 @@ export const HomePage = (): JSX.Element => {
             onDelete={handleDelete}
           />
         ) : null}
+
+        <AnalyticsTabs>
+          <AnalyticsTabButton $isActive={analyticsView === 'table'} type="button" onClick={() => setAnalyticsView('table')}>
+            Monthly Overview
+          </AnalyticsTabButton>
+          <AnalyticsTabButton
+            $isActive={analyticsView === 'charts'}
+            type="button"
+            onClick={() => setAnalyticsView('charts')}
+          >
+            Charts
+          </AnalyticsTabButton>
+        </AnalyticsTabs>
+
+        {analyticsView === 'table' ? (
+          <MonthlyOverviewSection rows={monthlyOverview} />
+        ) : (
+          <ChartsSection trendData={trendData} breakdownData={breakdownData} />
+        )}
       </PageSurface>
     </AppLayout>
   );

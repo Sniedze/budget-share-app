@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import type { Expense } from '../../features/expenses';
 import {
@@ -29,6 +30,12 @@ const Actions = styled.div`
   gap: ${spacing.sm};
 `;
 
+const Footer = styled.div`
+  margin-top: ${spacing.md};
+  display: flex;
+  justify-content: center;
+`;
+
 const formatDate = (value: string): string => new Date(value).toISOString().slice(0, 10);
 
 const formatSplitLabel = (expense: Expense): string => {
@@ -49,6 +56,13 @@ export const RecentExpensesSection = ({
   onEdit,
   onDelete,
 }: RecentExpensesSectionProps): JSX.Element => {
+  const PAGE_SIZE = 8;
+  const sortedExpenses = useMemo(
+    () => [...expenses].sort((a, b) => b.transactionDate.localeCompare(a.transactionDate)),
+    [expenses],
+  );
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
   if (!expenses.length) {
     return (
       <SectionCard>
@@ -58,9 +72,8 @@ export const RecentExpensesSection = ({
     );
   }
 
-  const recent = [...expenses]
-    .sort((a, b) => b.transactionDate.localeCompare(a.transactionDate))
-    .slice(0, 8);
+  const visibleExpenses = sortedExpenses.slice(0, visibleCount);
+  const hasMore = visibleCount < sortedExpenses.length;
 
   return (
     <SectionCard>
@@ -78,7 +91,7 @@ export const RecentExpensesSection = ({
             </tr>
           </Thead>
           <tbody>
-            {recent.map((expense) => (
+            {visibleExpenses.map((expense) => (
               <Tr key={expense.id}>
                 <Td>{formatDate(expense.transactionDate)}</Td>
                 <Td>{expense.title}</Td>
@@ -114,6 +127,32 @@ export const RecentExpensesSection = ({
           </tbody>
         </Table>
       </TableWrapper>
+      {hasMore || visibleCount > PAGE_SIZE ? (
+        <Footer>
+          <Actions>
+            {hasMore ? (
+              <Button
+                type="button"
+                $variant="secondary"
+                onClick={() => setVisibleCount((previous) => previous + PAGE_SIZE)}
+                disabled={isMutating}
+              >
+                Load more
+              </Button>
+            ) : null}
+            {visibleCount > PAGE_SIZE ? (
+              <Button
+                type="button"
+                $variant="secondary"
+                onClick={() => setVisibleCount(PAGE_SIZE)}
+                disabled={isMutating}
+              >
+                See less
+              </Button>
+            ) : null}
+          </Actions>
+        </Footer>
+      ) : null}
     </SectionCard>
   );
 };

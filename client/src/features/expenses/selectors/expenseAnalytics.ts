@@ -15,6 +15,10 @@ export type MonthlyOverviewPoint = {
   total: number;
   personal: number;
   shared: number;
+  categories: Array<{
+    name: string;
+    total: number;
+  }>;
 };
 
 export type DashboardStat = {
@@ -99,12 +103,15 @@ export const getBreakdownData = (expenses: Expense[]): BreakdownPoint[] => {
 };
 
 export const getMonthlyOverview = (expenses: Expense[]): MonthlyOverviewPoint[] => {
-  const byMonth = new Map<string, { total: number; personal: number; shared: number }>();
+  const byMonth = new Map<
+    string,
+    { total: number; personal: number; shared: number; categories: Map<string, number> }
+  >();
 
   for (const expense of expenses) {
     const date = new Date(expense.transactionDate);
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    const current = byMonth.get(monthKey) ?? { total: 0, personal: 0, shared: 0 };
+    const current = byMonth.get(monthKey) ?? { total: 0, personal: 0, shared: 0, categories: new Map<string, number>() };
 
     current.total += expense.amount;
     if (expense.groupId) {
@@ -112,6 +119,8 @@ export const getMonthlyOverview = (expenses: Expense[]): MonthlyOverviewPoint[] 
     } else {
       current.personal += expense.amount;
     }
+    const categoryName = expense.category.trim() || 'Other';
+    current.categories.set(categoryName, (current.categories.get(categoryName) ?? 0) + expense.amount);
     byMonth.set(monthKey, current);
   }
 
@@ -126,6 +135,9 @@ export const getMonthlyOverview = (expenses: Expense[]): MonthlyOverviewPoint[] 
         total: Number(values.total.toFixed(2)),
         personal: Number(values.personal.toFixed(2)),
         shared: Number(values.shared.toFixed(2)),
+        categories: Array.from(values.categories.entries())
+          .map(([name, total]) => ({ name, total: Number(total.toFixed(2)) }))
+          .sort((left, right) => right.total - left.total),
       };
     });
 };

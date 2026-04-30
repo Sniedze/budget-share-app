@@ -1,3 +1,4 @@
+import { Fragment, useState } from 'react';
 import styled from 'styled-components';
 import type { MonthlyOverviewPoint } from '../../features/expenses';
 import { colors, spacing } from '../../styles/tokens';
@@ -38,9 +39,33 @@ const Cell = styled.td`
   border-bottom: 1px solid ${colors.border};
 `;
 
-const formatCurrency = (value: number): string => `$${value.toFixed(2)}`;
+const SummaryRow = styled.tr`
+  cursor: pointer;
+  transition: background 0.15s ease-in-out;
 
+  &:hover {
+    background: #eef2ff;
+  }
+`;
+
+const ExpandedCell = styled.td`
+  padding: ${spacing.sm} ${spacing.xs} ${spacing.md};
+  border-bottom: 1px solid ${colors.border};
+  background: #f8fafc;
+`;
+
+const CategoryList = styled.div`
+  display: grid;
+  gap: 4px;
+`;
+
+const formatCurrency = (value: number): string => `$${value.toFixed(2)}`;
 export const MonthlyOverviewSection = ({ rows }: MonthlyOverviewSectionProps): JSX.Element => {
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+  const toggleExpanded = (month: string) => {
+    setExpandedMonth((previous) => (previous === month ? null : month));
+  };
+
   return (
     <SectionCard>
       <Title>Monthly Overview</Title>
@@ -58,12 +83,27 @@ export const MonthlyOverviewSection = ({ rows }: MonthlyOverviewSectionProps): J
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.month}>
-                <Cell>{row.month}</Cell>
-                <Cell>{formatCurrency(row.total)}</Cell>
-                <Cell>{formatCurrency(row.personal)}</Cell>
-                <Cell>{formatCurrency(row.shared)}</Cell>
-              </tr>
+              <Fragment key={row.month}>
+                <SummaryRow onClick={() => toggleExpanded(row.month)}>
+                  <Cell>{row.month}</Cell>
+                  <Cell>{formatCurrency(row.total)}</Cell>
+                  <Cell>{formatCurrency(row.personal)}</Cell>
+                  <Cell>{formatCurrency(row.shared)}</Cell>
+                </SummaryRow>
+                {expandedMonth === row.month ? (
+                  <tr>
+                    <ExpandedCell colSpan={4}>
+                      <CategoryList>
+                        {row.categories.map((entry) => (
+                          <MutedText key={`${row.month}-${entry.name}`}>
+                            {entry.name}: {formatCurrency(entry.total)}
+                          </MutedText>
+                        ))}
+                      </CategoryList>
+                    </ExpandedCell>
+                  </tr>
+                ) : null}
+              </Fragment>
             ))}
           </tbody>
         </Table>
