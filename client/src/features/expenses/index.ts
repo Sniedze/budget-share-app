@@ -1,6 +1,11 @@
 export { ExpenseForm } from './components/ExpenseForm';
 export { ExpenseList } from './components/ExpenseList';
 export { GET_EXPENSES } from './graphql';
+export {
+  BACKEND_DUPLICATE_EXPENSE_PREFIX,
+  getMutationErrorMessage,
+  isBackendDuplicateExpenseError,
+} from './graphqlErrors';
 export { useExpenseActions } from './hooks/useExpenseActions';
 export {
   getBreakdownData,

@@ -23,7 +23,14 @@ import {
   Tr,
   UserMenu,
 } from '../components/ui';
-import { GET_EXPENSES, useExpenseActions, type GetExpensesResponse, type SplitType } from '../features/expenses';
+import {
+  GET_EXPENSES,
+  getMutationErrorMessage,
+  isBackendDuplicateExpenseError,
+  useExpenseActions,
+  type GetExpensesResponse,
+  type SplitType,
+} from '../features/expenses';
 import { useAuth } from '../features/auth';
 import { GET_GROUPS } from '../features/groups';
 import type { GroupSummary } from '../features/groups';
@@ -439,6 +446,7 @@ export const ImportPage = (): JSX.Element => {
   const [rows, setRows] = useState<ImportedRow[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
   const [importInfo, setImportInfo] = useState<string | null>(null);
+  const [importBackendDuplicateFailureCount, setImportBackendDuplicateFailureCount] = useState(0);
   const [manualMappingData, setManualMappingData] = useState<ParsedStatementData | null>(null);
   const [manualMappingSignatures, setManualMappingSignatures] = useState<string[]>([]);
   const [manualDateIndex, setManualDateIndex] = useState('');
@@ -534,6 +542,7 @@ export const ImportPage = (): JSX.Element => {
   const parseStatement = async (file: File) => {
     setImportError(null);
     setImportInfo(null);
+    setImportBackendDuplicateFailureCount(0);
     const text = (await file.text()).replace(/^\uFEFF/, '');
     const userScope = user?.id ?? 'anonymous';
     const contentFingerprint = createContentFingerprint(text);
@@ -779,6 +788,7 @@ export const ImportPage = (): JSX.Element => {
     setManualMappingData(null);
     setManualMappingSignatures([]);
     setImportError(null);
+    setImportBackendDuplicateFailureCount(0);
     if (manualMappingSignatures.length > 0) {
       manualMappingSignatures.forEach((signature) => {
         saveMappingForSignature(signature, {
@@ -839,6 +849,7 @@ export const ImportPage = (): JSX.Element => {
 
   const onApproveSelected = async () => {
     setImportError(null);
+    setImportBackendDuplicateFailureCount(0);
     const selectedRows = rows.filter((row) => row.selected);
     if (selectedRows.length === 0) {
       setImportError('Select at least one row to import.');
@@ -867,6 +878,7 @@ export const ImportPage = (): JSX.Element => {
 
     const successfulIds = new Set<string>();
     const failedRows: string[] = [];
+    let backendDuplicateFailures = 0;
 
     for (const row of selectedRows) {
       try {
@@ -881,10 +893,16 @@ export const ImportPage = (): JSX.Element => {
         });
         successfulIds.add(row.id);
       } catch (error) {
-        failedRows.push(
-          `${row.title}: ${error instanceof Error ? error.message : 'import failed'}`,
-        );
+        const message = getMutationErrorMessage(error);
+        if (isBackendDuplicateExpenseError(message)) {
+          backendDuplicateFailures += 1;
+        }
+        failedRows.push(`${row.title}: ${message}`);
       }
+    }
+
+    if (backendDuplicateFailures > 0) {
+      setImportBackendDuplicateFailureCount(backendDuplicateFailures);
     }
 
     setRows((previous) => previous.filter((row) => !successfulIds.has(row.id)));
@@ -904,6 +922,7 @@ export const ImportPage = (): JSX.Element => {
     setRows([]);
     setImportError(null);
     setImportInfo(null);
+    setImportBackendDuplicateFailureCount(0);
     setManualMappingData(null);
     setManualMappingSignatures([]);
     setManualDateIndex('');
@@ -1003,6 +1022,14 @@ export const ImportPage = (): JSX.Element => {
           {importError ? (
             <DuplicateNotice $severity="warning">
               <ErrorText>{importError}</ErrorText>
+              {importBackendDuplicateFailureCount > 0 ? (
+                <MutedText style={{ marginTop: 8, display: 'block' }}>
+                  The server rejected {importBackendDuplicateFailureCount} row(s) that match an expense you already
+                  saved (same date, amount, and merchant text). Overlapping bank exports (for example April only vs
+                  year-to-date) often cause this. Edit the merchant or date slightly only if it is genuinely a different
+                  transaction, or remove those rows from the selection.
+                </MutedText>
+              ) : null}
             </DuplicateNotice>
           ) : isExactFileReupload ? (
             <DuplicateNotice $severity="warning">
