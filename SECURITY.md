@@ -33,3 +33,24 @@
 - Use advisory status checker:
   - `npm run audit:check-known`
   - Reports whether `GHSA-w5hq-g745-h8pq` is still present in audit output.
+
+## Import Pipeline Security
+
+- Scope:
+  - Bank statement import currently supports local CSV/TXT files in the client.
+  - No raw statement files are uploaded or stored server-side.
+- Data handling:
+  - Parsing is performed in-browser and only approved rows are sent as expense mutations.
+  - Import batches do not persist original file content.
+- Input guardrails:
+  - Allowed file types: `.csv`, `.txt` (with MIME checks).
+  - Maximum file size: `2MB`.
+  - Maximum parsed data rows: `1000`.
+- Injection hardening:
+  - Imported text is sanitized to strip control characters.
+  - Spreadsheet formula-leading values (`=`, `+`, `-`, `@`) are neutralized by prefixing before use.
+- Authorization and access:
+  - Imported expenses use the same authenticated GraphQL mutations and user-scoped authorization as manual entry.
+- Failure behavior:
+  - Imports are processed row-by-row with partial-failure reporting.
+  - Successful rows are committed; failed rows remain for review and correction.
