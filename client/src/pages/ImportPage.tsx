@@ -1,5 +1,6 @@
 import { useQuery } from '@apollo/client/react';
-import { ChangeEvent, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, DragEvent, useMemo, useRef, useState } from 'react';
+import { Upload } from 'lucide-react';
 import styled from 'styled-components';
 import { Sidebar } from '../components/sections';
 import {
@@ -24,39 +25,36 @@ import {
   UserMenu,
 } from '../components/ui';
 import {
+  DEFAULT_EXPENSE_CATEGORIES,
+  DEFAULT_INCOME_CATEGORIES,
   GET_EXPENSES,
   getMutationErrorMessage,
   isBackendDuplicateExpenseError,
+  isOutgoingExpense,
   useExpenseActions,
   type GetExpensesResponse,
   type SplitType,
 } from '../features/expenses';
 import { useAuth } from '../features/auth';
 import { GET_GROUPS } from '../features/groups';
+import { APP_CURRENCY_CODE, normalizeStatementCurrency } from '../format/currency';
+import { EXPENSE_TITLE_DESCRIPTION_SEPARATOR } from '../format/expenseTitle';
 import type { GroupSummary } from '../features/groups';
 import { colors, spacing } from '../styles/tokens';
 
-const DEFAULT_CATEGORY_OPTIONS = [
-  'General',
-  'Groceries',
-  'Utilities',
-  'Rent',
-  'Transport',
-  'Entertainment',
-  'Health',
-  'Other',
-];
 const MAX_IMPORT_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 const MAX_IMPORT_ROWS = 1000;
 const ALLOWED_FILE_EXTENSIONS = ['.csv', '.txt'];
 const ALLOWED_MIME_TYPES = ['text/csv', 'text/plain', 'application/vnd.ms-excel'];
-const IMPORT_COLUMN_MAPPING_STORAGE_KEY = 'budgetshare.import.columnMappings.v1';
-const IMPORT_FILE_FINGERPRINTS_STORAGE_KEY = 'budgetshare.import.fileFingerprints.v1';
+const IMPORT_COLUMN_MAPPING_STORAGE_KEY = 'budgetshare.import.columnMappings.v2';
+const IMPORT_CUSTOM_CATEGORIES_STORAGE_KEY = 'budgetshare.import.customCategories.v1';
+const IMPORT_MERCHANT_RULES_STORAGE_KEY = 'budgetshare.import.merchantRules.v1';
 
 const Panel = styled(Card)`
   display: grid;
   gap: ${spacing.md};
   margin-bottom: ${spacing.lg};
+  padding: ${spacing.lg};
 `;
 
 const Actions = styled.div`
@@ -65,9 +63,97 @@ const Actions = styled.div`
   flex-wrap: wrap;
 `;
 
+const UploadSectionTitle = styled.h3`
+  margin: 0;
+  color: ${colors.textPrimary};
+  font-size: 30px;
+  line-height: 1.1;
+`;
+
+const UploadSectionSubtitle = styled.p`
+  margin: 4px 0 0;
+  color: ${colors.textMuted};
+  font-size: 14px;
+`;
+
+const UploadBox = styled.div<{ $isDragActive: boolean }>`
+  border: 1px dashed #d1d5db;
+  border-radius: 12px;
+  min-height: 280px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  background: ${({ $isDragActive }) => ($isDragActive ? '#eef2ff' : '#fafafa')};
+  border-color: ${({ $isDragActive }) => ($isDragActive ? '#6366f1' : '#d1d5db')};
+  transition: background-color 120ms ease, border-color 120ms ease;
+`;
+
+const UploadInner = styled.div`
+  display: grid;
+  gap: ${spacing.sm};
+  justify-items: center;
+  max-width: 520px;
+`;
+
+const UploadIconWrap = styled.div`
+  color: #9ca3af;
+  display: inline-flex;
+`;
+
+const HiddenFileInput = styled(Input)`
+  display: none;
+`;
+
+const UploadPrimaryText = styled.h4`
+  margin: 0;
+  font-size: 22px;
+  color: ${colors.textPrimary};
+`;
+
+const UploadSecondaryText = styled.p`
+  margin: 0;
+  font-size: 14px;
+  color: ${colors.textMuted};
+`;
+
+const DropHint = styled.p`
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4338ca;
+`;
+
+const UploadFootnote = styled.p`
+  margin: ${spacing.sm} 0 0;
+  font-size: 12px;
+  color: #9ca3af;
+`;
+
+const UploadedFileName = styled.p`
+  margin: 0;
+  font-size: 13px;
+  color: ${colors.textMuted};
+`;
+
 const InlineInput = styled(Input)`
   min-width: 120px;
 `;
+
+const CurrencyInput = styled(InlineInput)`
+  min-width: 84px;
+  width: 84px;
+`;
+
+const AmountInput = styled(InlineInput)`
+  min-width: 96px;
+  width: 96px;
+`;
+
+const CategorySelect = styled(InlineInput)`
+  min-width: 170px;
+  width: 170px;
+`;
+
 
 const ImportSummary = styled.div`
   display: flex;
@@ -84,12 +170,30 @@ const DuplicateNotice = styled(Card)<{ $severity: 'warning' | 'info' }>`
   padding: ${spacing.sm} ${spacing.md};
 `;
 
+const RulePanel = styled(Card)`
+  margin: ${spacing.sm} 0;
+  padding: ${spacing.sm} ${spacing.md};
+  display: grid;
+  gap: ${spacing.sm};
+`;
+
+const RuleRow = styled.div`
+  display: grid;
+  grid-template-columns: 80px 100px minmax(160px, 1fr) 160px 120px 140px 160px auto;
+  gap: ${spacing.sm};
+  align-items: center;
+`;
+
 type ImportedRow = {
   id: string;
   selected: boolean;
   transactionDate: string;
   title: string;
+  description: string;
   amount: string;
+  currency: string;
+  /** Outgoing = expense / debit; incoming = credit / deposit (not imported as expenses by default). */
+  flow: 'out' | 'in';
   category: string;
   split: SplitType;
   groupId: string;
@@ -107,9 +211,25 @@ type SavedColumnMapping = {
   dateIndex: number;
   merchantIndex: number;
   amountIndex: number;
+  currencyIndex?: number;
+  descriptionIndex?: number;
   dateHeaderKey?: string;
   merchantHeaderKey?: string;
   amountHeaderKey?: string;
+  currencyHeaderKey?: string;
+  descriptionHeaderKey?: string;
+};
+
+type ImportMerchantRule = {
+  id: string;
+  flow: 'out' | 'in';
+  matchType: 'exact' | 'contains';
+  pattern: string;
+  category: string;
+  split?: SplitType;
+  groupId?: string;
+  expenseGroup?: string;
+  updatedAt: string;
 };
 
 const parseDelimitedLine = (line: string, delimiter: string): string[] => {
@@ -139,6 +259,38 @@ const parseDelimitedLine = (line: string, delimiter: string): string[] => {
   return result;
 };
 
+/** Split into logical CSV rows; newlines inside double-quoted fields do not end a row. */
+const splitCsvRecords = (text: string): string[] => {
+  const records: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    if (char === '"') {
+      const next = text[i + 1];
+      current += char;
+      if (inQuotes && next === '"') {
+        current += next;
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (!inQuotes && (char === '\n' || char === '\r')) {
+      if (char === '\r' && text[i + 1] === '\n') {
+        i += 1;
+      }
+      records.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  records.push(current);
+  return records;
+};
+
 const detectDelimiter = (sampleLines: string[]): string => {
   const candidates = [',', ';', '\t'];
   const scored = candidates.map((candidate) => {
@@ -160,6 +312,73 @@ const normalizeHeaderKey = (value: string): string =>
 
 const includesAnyAlias = (header: string, aliases: string[]): boolean =>
   aliases.some((alias) => header.includes(alias));
+
+const DATE_COLUMN_ALIASES = [
+  'date',
+  'transactiondate',
+  'bookingdate',
+  'datums',
+  'maksumadate',
+  'paymentdate',
+  'dato',
+];
+
+const DESCRIPTION_COLUMN_ALIASES = [
+  'beskrivelse',
+  'description',
+  'memo',
+  'notat',
+  'kommentar',
+  'note',
+  'meddelelse',
+  'details',
+];
+
+/** Use saved index when valid; otherwise detect Beskrivelse / description column (excludes merchant column). */
+const resolveDescriptionColumnIndex = (
+  headerNorm: string[],
+  merchantIndex: number,
+  savedDescriptionIndex: number | undefined,
+): number => {
+  const saved =
+    savedDescriptionIndex !== undefined &&
+    savedDescriptionIndex >= 0 &&
+    savedDescriptionIndex < headerNorm.length &&
+    savedDescriptionIndex !== merchantIndex
+      ? savedDescriptionIndex
+      : -1;
+  if (saved >= 0) {
+    return saved;
+  }
+  return headerNorm.findIndex(
+    (cell, idx) => idx !== merchantIndex && includesAnyAlias(cell, DESCRIPTION_COLUMN_ALIASES),
+  );
+};
+
+/** Lower rank = preferred when a CSV has several date-like columns (e.g. valør vs bogføring). */
+const dateColumnRank = (normalizedHeaderCell: string): number => {
+  const h = normalizedHeaderCell;
+  if (
+    h.includes('bogfr') ||
+    h.includes('bogf') ||
+    h.includes('bokfr') ||
+    h.includes('booked') ||
+    h.includes('posting') ||
+    h.includes('tilskrev')
+  ) {
+    return 0;
+  }
+  if (h.includes('handels') || h.includes('transaktions') || h.includes('transaktion')) {
+    return 1;
+  }
+  if (h.includes('dato') || h.includes('date')) {
+    return 2;
+  }
+  if (h.includes('valr') || h.includes('valor')) {
+    return 4;
+  }
+  return 3;
+};
 
 const getHeaderSignature = (header: string[]): string =>
   header.map((cell) => normalizeHeaderKey(cell)).join('|');
@@ -189,39 +408,114 @@ const saveMappingForSignature = (signature: string, mapping: SavedColumnMapping)
   }
 };
 
-const createContentFingerprint = (content: string): string => {
-  let hash = 5381;
-  for (let index = 0; index < content.length; index += 1) {
-    hash = (hash * 33) ^ content.charCodeAt(index);
-  }
-  return (hash >>> 0).toString(36);
-};
-
-const loadSavedFileFingerprints = (): Record<string, true> => {
+const loadCustomImportCategories = (): string[] => {
   try {
-    const raw = localStorage.getItem(IMPORT_FILE_FINGERPRINTS_STORAGE_KEY);
+    const raw = localStorage.getItem(IMPORT_CUSTOM_CATEGORIES_STORAGE_KEY);
     if (!raw) {
-      return {};
+      return [];
     }
-    return JSON.parse(raw) as Record<string, true>;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter(Boolean);
   } catch {
-    return {};
+    return [];
   }
 };
 
-const saveFileFingerprint = (key: string): void => {
+const loadMerchantRules = (): ImportMerchantRule[] => {
   try {
-    const previous = loadSavedFileFingerprints();
-    localStorage.setItem(
-      IMPORT_FILE_FINGERPRINTS_STORAGE_KEY,
-      JSON.stringify({
-        ...previous,
-        [key]: true,
-      }),
-    );
+    const raw = localStorage.getItem(IMPORT_MERCHANT_RULES_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((item): item is ImportMerchantRule => {
+      if (typeof item !== 'object' || item === null) {
+        return false;
+      }
+      const candidate = item as Partial<ImportMerchantRule>;
+      return (
+        (candidate.flow === 'out' || candidate.flow === 'in') &&
+        (candidate.matchType === 'exact' || candidate.matchType === 'contains') &&
+        typeof candidate.pattern === 'string' &&
+        candidate.pattern.trim().length > 0 &&
+        typeof candidate.category === 'string' &&
+        candidate.category.trim().length > 0
+      );
+    });
   } catch {
-    // Ignore storage failures.
+    return [];
   }
+};
+
+const saveMerchantRules = (rules: ImportMerchantRule[]): void => {
+  try {
+    localStorage.setItem(IMPORT_MERCHANT_RULES_STORAGE_KEY, JSON.stringify(rules));
+  } catch {
+    // Keep import flow functional even if storage fails.
+  }
+};
+
+const findMatchingMerchantRule = (
+  rules: ImportMerchantRule[],
+  merchant: string,
+  flow: 'out' | 'in',
+): ImportMerchantRule | null => {
+  const normalized = merchant.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  for (const rule of rules) {
+    if (rule.flow !== flow) {
+      continue;
+    }
+    const pattern = rule.pattern.trim().toLowerCase();
+    if (!pattern) {
+      continue;
+    }
+    if (rule.matchType === 'exact' && normalized === pattern) {
+      return rule;
+    }
+    if (rule.matchType === 'contains' && normalized.includes(pattern)) {
+      return rule;
+    }
+  }
+  return null;
+};
+
+const applyMerchantRuleToRow = (
+  row: ImportedRow,
+  rule: ImportMerchantRule | null,
+): ImportedRow => {
+  if (!rule) {
+    return row;
+  }
+  if (row.flow === 'in') {
+    return {
+      ...row,
+      category: rule.category,
+      split: 'Personal',
+      groupId: '',
+      expenseGroup: '',
+      confidence: 'high',
+    };
+  }
+  const nextSplit = rule.split ?? row.split;
+  return {
+    ...row,
+    category: rule.category,
+    split: nextSplit,
+    groupId: nextSplit === 'Shared' ? rule.groupId ?? row.groupId : '',
+    expenseGroup: nextSplit === 'Shared' ? rule.expenseGroup ?? row.expenseGroup : '',
+    confidence: 'high',
+  };
 };
 
 const resolveSavedMapping = (
@@ -242,10 +536,32 @@ const resolveSavedMapping = (
   const resolvedDateIndex = findIndexByHeaderKey(mapping.dateHeaderKey);
   const resolvedMerchantIndex = findIndexByHeaderKey(mapping.merchantHeaderKey);
   const resolvedAmountIndex = findIndexByHeaderKey(mapping.amountHeaderKey);
+  const resolvedCurrencyIndex = findIndexByHeaderKey(mapping.currencyHeaderKey);
+  const resolvedDescriptionIndex = findIndexByHeaderKey(mapping.descriptionHeaderKey);
 
   const dateIndex = resolvedDateIndex >= 0 ? resolvedDateIndex : mapping.dateIndex;
   const merchantIndex = resolvedMerchantIndex >= 0 ? resolvedMerchantIndex : mapping.merchantIndex;
   const amountIndex = resolvedAmountIndex >= 0 ? resolvedAmountIndex : mapping.amountIndex;
+  let currencyIndex = -1;
+  if (resolvedCurrencyIndex >= 0) {
+    currencyIndex = resolvedCurrencyIndex;
+  } else if (
+    mapping.currencyIndex !== undefined &&
+    mapping.currencyIndex >= 0 &&
+    mapping.currencyIndex < header.length
+  ) {
+    currencyIndex = mapping.currencyIndex;
+  }
+  let descriptionIndex = -1;
+  if (resolvedDescriptionIndex >= 0) {
+    descriptionIndex = resolvedDescriptionIndex;
+  } else if (
+    mapping.descriptionIndex !== undefined &&
+    mapping.descriptionIndex >= 0 &&
+    mapping.descriptionIndex < header.length
+  ) {
+    descriptionIndex = mapping.descriptionIndex;
+  }
 
   const isValid =
     dateIndex >= 0 &&
@@ -264,43 +580,343 @@ const resolveSavedMapping = (
     dateIndex,
     merchantIndex,
     amountIndex,
+    currencyIndex,
+    descriptionIndex,
   };
 };
 
+type SavedMappingPick = {
+  mapping: SavedColumnMapping;
+  matchedStorageKey: string;
+};
+
+const merchantHistoryKey = (merchant: string, flow: 'out' | 'in'): string =>
+  `${merchant.trim().toLowerCase()}|${flow}`;
+
+const categoryHistoryKey = (category: string): string => category.trim().toLowerCase();
+
+/**
+ * Use a saved mapping only when it truly fits this file:
+ * - Keys derived from the full header row (headerSignature / anonymousHeaderSignature) always match.
+ * - Filename-only keys apply only if date/merchant/amount header keys match the cells at resolved indices
+ *   (avoids reusing another bank’s export that shares the same default filename).
+ */
+const pickCompatibleSavedMapping = (
+  savedMappings: Record<string, SavedColumnMapping>,
+  mappingLookupOrder: string[],
+  headerSignature: string,
+  anonymousHeaderSignature: string,
+  originalHeader: string[],
+): SavedMappingPick | null => {
+  const headerShapeKeys = new Set([headerSignature, anonymousHeaderSignature]);
+  for (const key of mappingLookupOrder) {
+    const raw = savedMappings[key];
+    if (!raw) {
+      continue;
+    }
+    const resolved = resolveSavedMapping(raw, originalHeader);
+    if (!resolved) {
+      continue;
+    }
+    if (headerShapeKeys.has(key)) {
+      return { mapping: resolved, matchedStorageKey: key };
+    }
+    const cellKey = (idx: number) => normalizeHeaderKey(originalHeader[idx] ?? '');
+    const fileKeyBacked =
+      raw.dateHeaderKey &&
+      raw.merchantHeaderKey &&
+      raw.amountHeaderKey &&
+      cellKey(resolved.dateIndex) === raw.dateHeaderKey &&
+      cellKey(resolved.merchantIndex) === raw.merchantHeaderKey &&
+      cellKey(resolved.amountIndex) === raw.amountHeaderKey;
+    if (fileKeyBacked) {
+      return { mapping: resolved, matchedStorageKey: key };
+    }
+  }
+  return null;
+};
+
+const formatDateYmd = (date: Date): string => {
+  const year = String(date.getUTCFullYear());
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/** Normalize odd bank/Excel spacing and dash characters before parsing dates. */
+const sanitizeDateInputForParse = (raw: string): string =>
+  raw
+    .trim()
+    .replace(/[\uFEFF\u200E\u200F]/g, '')
+    .replace(/[\u00A0\u2007\u202F]/g, ' ')
+    .replace(/[\u2013\u2014]/g, '-');
+
+/** Heuristic content score: which column actually looks like dates in the data rows. */
+const scoreDateColumnContent = (dataRows: string[][], colIdx: number): number => {
+  if (colIdx < 0 || dataRows.length === 0) {
+    return -1000;
+  }
+  const sample = Math.min(100, dataRows.length);
+  let score = 0;
+  for (let i = 0; i < sample; i += 1) {
+    const raw = sanitizeDateInputForParse(dataRows[i][colIdx] ?? '');
+    if (!raw) {
+      continue;
+    }
+    const noSpace = raw.replace(/\s+/g, '');
+    // Penalise typical EU bank amounts in the wrong column
+    if (/^\d{1,3}(?:\.\d{3})+,\d{2}$/.test(raw) || /^\d+,\d{2}$/.test(noSpace) || /^\d+[.,]\d{2}$/.test(noSpace)) {
+      score -= 6;
+      continue;
+    }
+    if (/^\d{4}[-./]\d{1,2}[-./]\d{1,2}(?:[T\s]|$)/.test(raw)) {
+      score += 6;
+      continue;
+    }
+    if (/^\d{1,2}\.\d{1,2}\.\d{4}(?:\s|$)/.test(raw) || /^\d{1,2}\/\d{1,2}\/\d{4}(?:\s|$)/.test(raw)) {
+      score += 6;
+      continue;
+    }
+    if (/\d{1,2}[./-]\d{1,2}[./-]\d{4}/.test(raw)) {
+      score += 3;
+      continue;
+    }
+    if (/^\d{5,6}$/.test(noSpace)) {
+      score += 1;
+    }
+    if (/\d{1,2}[./-]\d{1,2}[./-]\d{2}(?:\D|$)/.test(raw)) {
+      score += 1;
+    }
+  }
+  return score;
+};
+
+/**
+ * Pick the date column using row content, not headers alone. Fixes wrong/stale mappings (e.g. valør
+ * vs bogføring, or reference IDs interpreted as Excel serials).
+ */
+const pickDateColumnFromData = (
+  headerNorm: string[],
+  dataRows: string[][],
+  rememberedDateIndex: number,
+): number => {
+  const width = headerNorm.length;
+  if (width === 0) {
+    return -1;
+  }
+  const fromHeader: number[] = [];
+  for (let i = 0; i < width; i += 1) {
+    if (includesAnyAlias(headerNorm[i] ?? '', DATE_COLUMN_ALIASES)) {
+      fromHeader.push(i);
+    }
+  }
+  const baseIndices = fromHeader.length > 0 ? fromHeader : Array.from({ length: width }, (_, j) => j);
+  const indexSet = new Set(baseIndices);
+  if (rememberedDateIndex >= 0 && rememberedDateIndex < width) {
+    indexSet.add(rememberedDateIndex);
+  }
+  const indices = Array.from(indexSet);
+
+  let bestIdx = indices[0];
+  let bestTotal = -Infinity;
+  for (const idx of indices) {
+    const s = scoreDateColumnContent(dataRows, idx);
+    const tieBreak = (10 - dateColumnRank(headerNorm[idx] ?? '')) * 0.02;
+    const total = s + tieBreak;
+    if (total > bestTotal) {
+      bestTotal = total;
+      bestIdx = idx;
+    }
+  }
+
+  if (rememberedDateIndex < 0 || !indices.includes(rememberedDateIndex)) {
+    return bestIdx;
+  }
+  const remScore = scoreDateColumnContent(dataRows, rememberedDateIndex);
+  const bestScore = scoreDateColumnContent(dataRows, bestIdx);
+  if (bestScore >= remScore + 3) {
+    return bestIdx;
+  }
+  return rememberedDateIndex;
+};
+
+const parseDmyPartsToYmd = (aStr: string, bStr: string, yearStr: string): string => {
+  const a = Number.parseInt(aStr, 10);
+  const b = Number.parseInt(bStr, 10);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) {
+    return '';
+  }
+  let year = Number.parseInt(yearStr, 10);
+  if (!Number.isFinite(year)) {
+    return '';
+  }
+  if (yearStr.length === 2) {
+    year += year >= 70 ? 1900 : 2000;
+  }
+  if (year < 1900 || year > 2100) {
+    return '';
+  }
+
+  let day: number;
+  let month: number;
+  if (a > 12) {
+    day = a;
+    month = b;
+  } else if (b > 12) {
+    month = a;
+    day = b;
+  } else {
+    day = a;
+    month = b;
+  }
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return '';
+  }
+  const trial = new Date(Date.UTC(year, month - 1, day));
+  if (
+    trial.getUTCFullYear() !== year ||
+    trial.getUTCMonth() !== month - 1 ||
+    trial.getUTCDate() !== day
+  ) {
+    return '';
+  }
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
+
+const DMY_SEGMENT = '(\\d{1,2})[./-](\\d{1,2})[./-](\\d{2,4})';
+
+/** Split on spaces and semicolons so "26.03.2026;30.03.2026" tries each token as a full date. */
+const splitDateishTokens = (s: string): string[] =>
+  s
+    .split(/[\s;]+/)
+    .map((t) => t.replace(/[,;:]+$/g, '').trim())
+    .filter(Boolean);
+
+/**
+ * Pick one calendar date from a cell: merge token-sized matches and regex scans, prefer any match
+ * with a 4-digit year, then the rightmost match (booking date often after valør; avoids returning
+ * the first token like `26.03.30` when `30.03.2026` appears later).
+ */
+const pickBestDmyYmd = (trimmed: string): string => {
+  type Cand = { ymd: string; fourDigitYear: boolean; pos: number };
+  const cands: Cand[] = [];
+  const dmyFull = new RegExp(`^${DMY_SEGMENT}$`);
+  let searchFrom = 0;
+  for (const token of splitDateishTokens(trimmed)) {
+    const m = token.match(dmyFull);
+    if (m) {
+      const ymd = parseDmyPartsToYmd(m[1], m[2], m[3]);
+      if (ymd) {
+        const pos = trimmed.indexOf(token, searchFrom);
+        const at = pos >= 0 ? pos : searchFrom;
+        if (pos >= 0) {
+          searchFrom = pos + token.length;
+        }
+        cands.push({ ymd, fourDigitYear: m[3].length >= 4, pos: at });
+      }
+    }
+  }
+  const re = new RegExp(DMY_SEGMENT, 'g');
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(trimmed)) !== null) {
+    const ymd = parseDmyPartsToYmd(match[1], match[2], match[3]);
+    if (ymd) {
+      cands.push({ ymd, fourDigitYear: match[3].length >= 4, pos: match.index });
+    }
+  }
+  if (cands.length === 0) {
+    return '';
+  }
+  const preferFour = cands.some((c) => c.fourDigitYear);
+  const pool = preferFour ? cands.filter((c) => c.fourDigitYear) : cands;
+  pool.sort((a, b) => a.pos - b.pos);
+  return pool[pool.length - 1].ymd;
+};
+
 const normalizeDate = (raw: string): string => {
-  const trimmed = raw.trim();
+  const trimmed = sanitizeDateInputForParse(raw);
   if (!trimmed) {
     return '';
   }
-  const isoLike = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  // ISO order year-month-day: hyphens, slashes (e.g. Danish banks 2026/01/30), or dots
+  const isoLike = trimmed.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})(?:[T\s]|$)/);
   if (isoLike) {
-    const year = isoLike[1];
-    const month = isoLike[2].padStart(2, '0');
-    const day = isoLike[3].padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const year = Number.parseInt(isoLike[1], 10);
+    const month = Number.parseInt(isoLike[2], 10);
+    const day = Number.parseInt(isoLike[3], 10);
+    const trial = new Date(Date.UTC(year, month - 1, day));
+    if (
+      trial.getUTCFullYear() === year &&
+      trial.getUTCMonth() === month - 1 &&
+      trial.getUTCDate() === day
+    ) {
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+    return '';
   }
-  const dateTimeIsoLike = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})T/);
+  const dateTimeIsoLike = trimmed.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})T/);
   if (dateTimeIsoLike) {
-    const year = dateTimeIsoLike[1];
-    const month = dateTimeIsoLike[2].padStart(2, '0');
-    const day = dateTimeIsoLike[3].padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const year = Number.parseInt(dateTimeIsoLike[1], 10);
+    const month = Number.parseInt(dateTimeIsoLike[2], 10);
+    const day = Number.parseInt(dateTimeIsoLike[3], 10);
+    const trial = new Date(Date.UTC(year, month - 1, day));
+    if (
+      trial.getUTCFullYear() === year &&
+      trial.getUTCMonth() === month - 1 &&
+      trial.getUTCDate() === day
+    ) {
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+    return '';
   }
-  const slash = trimmed.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
-  if (slash) {
-    const day = slash[1];
-    const month = slash[2];
-    const year = slash[3];
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+
+  const dmyPick = pickBestDmyYmd(trimmed);
+  if (dmyPick) {
+    return dmyPick;
   }
+
+  // Excel serial only for a whole-cell integer (avoid amounts like 45483,00 or 26.03 parsed wrong)
+  const excelCompact = trimmed.replace(/\s+/g, '');
+  if (/^\d+$/.test(excelCompact)) {
+    const n = Number.parseInt(excelCompact, 10);
+    if (n >= 30000 && n <= 120000) {
+      const epoch = Date.UTC(1899, 11, 30);
+      const d = new Date(epoch + n * 86400000);
+      if (!Number.isNaN(d.getTime())) {
+        return formatDateYmd(d);
+      }
+    }
+  }
+
   const direct = new Date(trimmed);
   if (!Number.isNaN(direct.getTime())) {
-    const year = String(direct.getUTCFullYear());
-    const month = String(direct.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(direct.getUTCDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return formatDateYmd(direct);
   }
   return '';
+};
+
+const padDataRowsToWidth = (rows: string[][], width: number): string[][] =>
+  rows.map((row) => {
+    if (row.length >= width) {
+      return row;
+    }
+    return [...row, ...Array(width - row.length).fill('')];
+  });
+
+const rowLooksLikeRepeatedHeader = (cells: string[], headerCells: string[]): boolean => {
+  if (cells.length < 2 || headerCells.length < 2) {
+    return false;
+  }
+  let matches = 0;
+  const max = Math.min(cells.length, headerCells.length, 8);
+  for (let i = 0; i < max; i += 1) {
+    const c = normalizeHeaderKey(cells[i] ?? '');
+    const h = normalizeHeaderKey(headerCells[i] ?? '');
+    if (c && h && c === h) {
+      matches += 1;
+    }
+  }
+  return matches >= 3 || (matches >= 2 && normalizeHeaderKey(cells[0] ?? '') === normalizeHeaderKey(headerCells[0] ?? ''));
 };
 
 const sanitizeCellText = (raw: string): string => {
@@ -330,17 +946,117 @@ const getFallbackHeader = (header: string[], dataRows: string[][]): string[] => 
   return Array.from({ length: Math.max(widthFromRows, 1) }, (_, index) => `Column ${index + 1}`);
 };
 
-const normalizeAmountValue = (raw: string): number => {
-  const normalized = raw.replace(',', '.').replace(/[^\d.-]/g, '');
+/** Parsed numeric amount; negative = outflow in signed-column statements, parentheses = negative. */
+const parseSignedAmountFromCell = (raw: string): number => {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return 0;
+  }
+  const negativeByParentheses = /^\(.*\)$/.test(trimmed);
+  const cleaned = trimmed
+    .replace(/[()]/g, '')
+    .replace(/\s+/g, '')
+    .replace(/[^\d,.-]/g, '');
+  const lastComma = cleaned.lastIndexOf(',');
+  const lastDot = cleaned.lastIndexOf('.');
+  let decimalSeparator = '';
+  if (lastComma >= 0 && lastDot >= 0) {
+    decimalSeparator = lastComma > lastDot ? ',' : '.';
+  } else if (lastComma >= 0) {
+    decimalSeparator = ',';
+  } else if (lastDot >= 0) {
+    decimalSeparator = '.';
+  }
+  let normalized = cleaned;
+  if (decimalSeparator === ',') {
+    normalized = normalized.replace(/\./g, '').replace(',', '.');
+  } else if (decimalSeparator === '.') {
+    normalized = normalized.replace(/,/g, '');
+  } else {
+    normalized = normalized.replace(/[,.]/g, '');
+  }
   const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? Math.abs(parsed) : 0;
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return negativeByParentheses ? -Math.abs(parsed) : parsed;
 };
 
-const formatDateYmd = (date: Date): string => {
-  const year = String(date.getUTCFullYear());
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+const normalizeAmountValue = (raw: string): number => Math.abs(parseSignedAmountFromCell(raw));
+
+/**
+ * When the file has a single amount column (no debit+credit pair), values are often all positive
+ * (expense-only export). Then treat every non-zero row as outgoing instead of incoming.
+ */
+const computeAmountColumnAssumeAllOutgoing = (
+  dataRows: string[][],
+  amountIndex: number,
+  debitIndex: number,
+  creditIndex: number,
+): boolean => {
+  if (amountIndex < 0) {
+    return false;
+  }
+  if (debitIndex >= 0 && creditIndex >= 0) {
+    return false;
+  }
+  let seenNonZero = false;
+  let seenNegative = false;
+  const sample = Math.min(200, dataRows.length);
+  for (let i = 0; i < sample; i += 1) {
+    const s = parseSignedAmountFromCell(dataRows[i][amountIndex] ?? '');
+    if (s !== 0) {
+      seenNonZero = true;
+    }
+    if (s < 0) {
+      seenNegative = true;
+    }
+  }
+  return seenNonZero && !seenNegative;
+};
+
+const resolveRowAmountAndFlow = (
+  cells: string[],
+  amountIndex: number,
+  debitIndex: number,
+  creditIndex: number,
+  amountColumnAssumeAllOutgoing: boolean,
+): { magnitude: number; flow: 'in' | 'out' } | null => {
+  const debitSigned = debitIndex >= 0 ? parseSignedAmountFromCell(cells[debitIndex] ?? '') : 0;
+  const creditSigned = creditIndex >= 0 ? parseSignedAmountFromCell(cells[creditIndex] ?? '') : 0;
+  const debitMag = Math.abs(debitSigned);
+  const creditMag = Math.abs(creditSigned);
+
+  if (debitIndex >= 0 && creditIndex >= 0) {
+    if (debitMag > 0 && creditMag <= 0) {
+      return { magnitude: debitMag, flow: 'out' };
+    }
+    if (creditMag > 0 && debitMag <= 0) {
+      return { magnitude: creditMag, flow: 'in' };
+    }
+    if (debitMag > 0 && creditMag > 0) {
+      return { magnitude: debitMag, flow: 'out' };
+    }
+  } else if (debitIndex >= 0 && debitMag > 0) {
+    return { magnitude: debitMag, flow: 'out' };
+  } else if (creditIndex >= 0 && creditMag > 0) {
+    return { magnitude: creditMag, flow: 'in' };
+  }
+
+  if (amountIndex >= 0) {
+    const signed = parseSignedAmountFromCell(cells[amountIndex] ?? '');
+    if (signed === 0) {
+      return null;
+    }
+    const magnitude = Math.abs(signed);
+    if (amountColumnAssumeAllOutgoing) {
+      return { magnitude, flow: 'out' };
+    }
+    const flow = signed < 0 ? 'out' : 'in';
+    return { magnitude, flow };
+  }
+
+  return null;
 };
 
 const getDateSignatureVariants = (rawDate: string): string[] => {
@@ -366,11 +1082,22 @@ const buildImportSignature = (row: {
   title: string;
   transactionDate: string;
   amount: string;
+  flow: 'in' | 'out';
 }): string => {
   const merchant = sanitizeCellText(row.title).toLowerCase();
   const date = normalizeDate(row.transactionDate);
   const amount = normalizeAmountValue(row.amount).toFixed(2);
-  return `${merchant}|${date}|${amount}`;
+  const base = `${merchant}|${date}|${amount}`;
+  return row.flow === 'in' ? `${base}|in` : base;
+};
+
+const buildExpenseTitleForImport = (row: ImportedRow): string => {
+  const merchant = row.title.trim();
+  const desc = row.description.trim();
+  if (merchant && desc && desc !== merchant) {
+    return `${merchant}${EXPENSE_TITLE_DESCRIPTION_SEPARATOR}${desc}`;
+  }
+  return merchant || desc;
 };
 
 const applyDuplicateFlags = (
@@ -407,35 +1134,57 @@ const buildImportedRows = (
   amountIndex: number,
   debitIndex: number,
   creditIndex: number,
+  currencyIndex: number,
+  descriptionIndex: number,
+  amountColumnAssumeAllOutgoing: boolean,
+  merchantRules: ImportMerchantRule[],
   merchantHistory: Map<
     string,
     { category: string; split: SplitType; groupId: string; expenseGroup: string; transactionDate: string }
   >,
 ): ImportedRow[] =>
-  dataRows.map((cells, index) => {
+  dataRows.flatMap((cells, index) => {
     const transactionDate = normalizeDate(cells[dateIndex] ?? '');
     const title = sanitizeCellText(cells[merchantIndex] ?? '');
-    const rawAmountCell = amountIndex >= 0 ? cells[amountIndex] ?? '' : '';
-    const rawDebitCell = debitIndex >= 0 ? cells[debitIndex] ?? '' : '';
-    const rawCreditCell = creditIndex >= 0 ? cells[creditIndex] ?? '' : '';
-    const amountSource = rawAmountCell || rawDebitCell || rawCreditCell;
-    const amountRaw = amountSource.replace(',', '.').replace(/[^\d.-]/g, '');
-    const amount = String(Math.abs(Number(amountRaw || '0')));
-    const history = merchantHistory.get(title.toLowerCase());
-    const isShared = history?.split === 'Shared';
-    return {
-      id: `${Date.now()}-${index}`,
-      selected: true,
-      transactionDate,
-      title,
-      amount,
-      category: history?.category ?? 'General',
-      split: isShared ? 'Shared' : 'Personal',
-      groupId: history?.groupId ?? '',
-      expenseGroup: history?.expenseGroup ?? '',
-      confidence: history ? 'high' : title ? 'medium' : 'low',
-      duplicateType: 'none',
-    };
+    const description =
+      descriptionIndex >= 0 ? sanitizeCellText(cells[descriptionIndex] ?? '') : '';
+    const resolved = resolveRowAmountAndFlow(
+      cells,
+      amountIndex,
+      debitIndex,
+      creditIndex,
+      amountColumnAssumeAllOutgoing,
+    );
+    if (!resolved || resolved.magnitude <= 0) {
+      return [];
+    }
+    const amount = String(resolved.magnitude);
+    const flow = resolved.flow;
+    const rawCurrencyCell = currencyIndex >= 0 ? cells[currencyIndex] ?? '' : '';
+    const currency = normalizeStatementCurrency(rawCurrencyCell);
+    const history = merchantHistory.get(merchantHistoryKey(title, flow));
+    const isIncoming = flow === 'in';
+    const isShared = !isIncoming && history?.split === 'Shared';
+    const hasLabel = Boolean(title.trim() || description.trim());
+    const baseRow: ImportedRow = {
+        id: `${Date.now()}-${index}`,
+        selected: true,
+        transactionDate,
+        title,
+        description,
+        amount,
+        currency,
+        flow,
+        category: isIncoming ? 'Salary' : history?.category ?? 'General',
+        split: isShared ? 'Shared' : 'Personal',
+        groupId: isShared ? history?.groupId ?? '' : '',
+        expenseGroup: isShared ? history?.expenseGroup ?? '' : '',
+        confidence: history ? 'high' : hasLabel ? 'medium' : 'low',
+        duplicateType: 'none',
+      };
+    const rule = findMatchingMerchantRule(merchantRules, title, flow);
+    const rowWithRule = applyMerchantRuleToRow(baseRow, rule);
+    return [rowWithRule];
   });
 
 export const ImportPage = (): JSX.Element => {
@@ -452,13 +1201,27 @@ export const ImportPage = (): JSX.Element => {
   const [manualDateIndex, setManualDateIndex] = useState('');
   const [manualMerchantIndex, setManualMerchantIndex] = useState('');
   const [manualAmountIndex, setManualAmountIndex] = useState('');
-  const [currentFileFingerprintKey, setCurrentFileFingerprintKey] = useState<string | null>(null);
-  const [isExactFileReupload, setIsExactFileReupload] = useState(false);
+  const [manualDescriptionIndex, setManualDescriptionIndex] = useState('');
+  const [manualCurrencyIndex, setManualCurrencyIndex] = useState('');
+  const [customCategories] = useState<string[]>(() => loadCustomImportCategories());
+  const [merchantRules, setMerchantRules] = useState<ImportMerchantRule[]>(() => loadMerchantRules());
+  const [newRuleMatchType, setNewRuleMatchType] = useState<'exact' | 'contains'>('exact');
+  const [uploadedFileName, setUploadedFileName] = useState('');
+  const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const groups = useMemo(() => groupsData?.groups ?? [], [groupsData?.groups]);
-  const categoryOptions = useMemo(
-    () => [...DEFAULT_CATEGORY_OPTIONS].sort((left, right) => left.localeCompare(right)),
+  const categoryOptions = useMemo(() => {
+    const existingOutgoingCategories = (expensesData?.expenses ?? [])
+      .filter(isOutgoingExpense)
+      .map((expense) => expense.category.trim())
+      .filter(Boolean);
+    return Array.from(
+      new Set([...DEFAULT_EXPENSE_CATEGORIES, ...existingOutgoingCategories, ...customCategories]),
+    ).sort((left, right) => left.localeCompare(right));
+  }, [customCategories, expensesData?.expenses]);
+  const incomingCategoryOptions = useMemo(
+    () => [...DEFAULT_INCOME_CATEGORIES].sort((left, right) => left.localeCompare(right)),
     [],
   );
 
@@ -486,23 +1249,87 @@ export const ImportPage = (): JSX.Element => {
       .slice()
       .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate))
       .forEach((expense) => {
-        const merchant = expense.title.trim().toLowerCase();
-        if (!merchant || map.has(merchant)) {
+        const flow: 'out' | 'in' = isOutgoingExpense(expense) ? 'out' : 'in';
+        const historyKey = merchantHistoryKey(expense.title, flow);
+        if (!expense.title.trim() || map.has(historyKey)) {
           return;
         }
-        map.set(merchant, {
+        map.set(historyKey, {
           category: expense.category,
-          split: expense.split === 'Shared' ? 'Shared' : 'Personal',
-          groupId: expense.groupId ?? '',
-          expenseGroup: expense.expenseGroup ?? '',
+          // Incoming rows are always personal/no household in import flow.
+          split: flow === 'out' && expense.split === 'Shared' ? 'Shared' : 'Personal',
+          groupId: flow === 'out' ? expense.groupId ?? '' : '',
+          expenseGroup: flow === 'out' ? expense.expenseGroup ?? '' : '',
           transactionDate: expense.transactionDate,
         });
       });
     return map;
   }, [expensesData?.expenses]);
+  const sharedCategoryHistory = useMemo(() => {
+    const map = new Map<string, { groupId: string; expenseGroup: string }>();
+    (expensesData?.expenses ?? [])
+      .filter((expense) => isOutgoingExpense(expense) && expense.split === 'Shared')
+      .slice()
+      .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate))
+      .forEach((expense) => {
+        const key = categoryHistoryKey(expense.category);
+        const groupId = (expense.groupId ?? '').trim();
+        const expenseGroup = (expense.expenseGroup ?? '').trim();
+        if (!key || !groupId || !expenseGroup || map.has(key)) {
+          return;
+        }
+        map.set(key, { groupId, expenseGroup });
+      });
+    return map;
+  }, [expensesData?.expenses]);
+
+  const applySharedCategoryDefaults = (row: ImportedRow): ImportedRow => {
+    if (row.flow === 'in') {
+      return { ...row, split: 'Personal', groupId: '', expenseGroup: '' };
+    }
+    if (row.split !== 'Shared') {
+      return row;
+    }
+    const categoryKey = categoryHistoryKey(row.category);
+    const history = sharedCategoryHistory.get(categoryKey);
+    let nextGroupId = row.groupId;
+    let nextExpenseGroup = row.expenseGroup;
+
+    if (!nextGroupId && history?.groupId) {
+      nextGroupId = history.groupId;
+    }
+
+    const groupOptions = nextGroupId ? expenseGroupByHousehold.get(nextGroupId) ?? [] : [];
+    const matchedByCategory = groupOptions.find(
+      (option) => option.trim().toLowerCase() === categoryKey,
+    );
+    if (!nextExpenseGroup && matchedByCategory) {
+      nextExpenseGroup = matchedByCategory;
+    }
+
+    if (!nextExpenseGroup && history && history.groupId === nextGroupId) {
+      const matchedByHistory = groupOptions.find(
+        (option) => option.trim().toLowerCase() === history.expenseGroup.trim().toLowerCase(),
+      );
+      if (matchedByHistory) {
+        nextExpenseGroup = matchedByHistory;
+      }
+    }
+
+    if (nextGroupId === row.groupId && nextExpenseGroup === row.expenseGroup) {
+      return row;
+    }
+
+    return {
+      ...row,
+      groupId: nextGroupId,
+      expenseGroup: nextExpenseGroup,
+    };
+  };
+
   const existingExpenseSignatures = useMemo(() => {
     const signatures = new Set<string>();
-    (expensesData?.expenses ?? []).forEach((expense) => {
+    (expensesData?.expenses ?? []).filter(isOutgoingExpense).forEach((expense) => {
       const merchant = sanitizeCellText(expense.title).toLowerCase();
       const amount = normalizeAmountValue(String(expense.amount)).toFixed(2);
       const dateVariants = getDateSignatureVariants(expense.transactionDate);
@@ -539,20 +1366,49 @@ export const ImportPage = (): JSX.Element => {
     return null;
   }, [duplicateStats.existing, rows.length]);
 
+  const rowNeedsManualAdjustment = (row: ImportedRow): boolean => {
+    if (!row.transactionDate || !row.category || normalizeAmountValue(row.amount) <= 0) {
+      return true;
+    }
+    if (row.duplicateType !== 'none') {
+      return true;
+    }
+    if (normalizeStatementCurrency(row.currency) !== APP_CURRENCY_CODE) {
+      return true;
+    }
+    if (row.flow === 'out' && row.split === 'Shared' && (!row.groupId || !row.expenseGroup)) {
+      return true;
+    }
+    return false;
+  };
+
+  const sortRowsForInitialReview = (inputRows: ImportedRow[]): ImportedRow[] =>
+    inputRows
+      .map((row, index) => ({ row, index }))
+      .sort((left, right) => {
+        const leftNeeds = rowNeedsManualAdjustment(left.row);
+        const rightNeeds = rowNeedsManualAdjustment(right.row);
+        if (leftNeeds !== rightNeeds) {
+          return leftNeeds ? -1 : 1;
+        }
+        const leftConfidence =
+          left.row.confidence === 'low' ? 0 : left.row.confidence === 'medium' ? 1 : 2;
+        const rightConfidence =
+          right.row.confidence === 'low' ? 0 : right.row.confidence === 'medium' ? 1 : 2;
+        if (leftConfidence !== rightConfidence) {
+          return leftConfidence - rightConfidence;
+        }
+        return left.index - right.index;
+      })
+      .map((entry) => entry.row);
+
   const parseStatement = async (file: File) => {
     setImportError(null);
     setImportInfo(null);
     setImportBackendDuplicateFailureCount(0);
     const text = (await file.text()).replace(/^\uFEFF/, '');
     const userScope = user?.id ?? 'anonymous';
-    const contentFingerprint = createContentFingerprint(text);
-    const fingerprintKey = `${userScope}:${contentFingerprint}`;
-    setCurrentFileFingerprintKey(fingerprintKey);
-    const savedFingerprints = loadSavedFileFingerprints();
-    const seenBefore = Boolean(savedFingerprints[fingerprintKey]);
-    setIsExactFileReupload(seenBefore);
-    const rawLines = text
-      .split(/\r?\n/)
+    const rawLines = splitCsvRecords(text)
       .map((line) => line.trim())
       .filter(Boolean);
     if (rawLines.length < 2) {
@@ -566,8 +1422,12 @@ export const ImportPage = (): JSX.Element => {
 
     const delimiter = detectDelimiter(rawLines.slice(0, 6));
     const parsedHeader = parseDelimitedLine(rawLines[0], delimiter);
-    const dataRows = rawLines.slice(1).map((line) => parseDelimitedLine(line, delimiter));
+    let dataRows = rawLines.slice(1).map((line) => parseDelimitedLine(line, delimiter));
     const originalHeader = getFallbackHeader(parsedHeader, dataRows);
+    dataRows = padDataRowsToWidth(
+      dataRows.filter((row) => !rowLooksLikeRepeatedHeader(row, originalHeader)),
+      originalHeader.length,
+    );
     const normalizedFileName = file.name.trim().toLowerCase();
     const baseHeaderSignature = getHeaderSignature(originalHeader);
     const headerSignature = `${userScope}:${baseHeaderSignature}`;
@@ -576,74 +1436,141 @@ export const ImportPage = (): JSX.Element => {
     const anonymousFileSignature = `anonymous:file:${normalizedFileName}`;
     const header = originalHeader.map((cell) => normalizeHeaderKey(cell));
     const savedMappings = loadSavedMappings();
+    const debitAliases = [
+      'debit',
+      'withdrawal',
+      'outflow',
+      'expense',
+      'udbetaling',
+      'udgift',
+      'debitering',
+      'afgang',
+      'belobud',
+    ];
+    const creditAliases = [
+      'credit',
+      'deposit',
+      'inflow',
+      'income',
+      'indbetaling',
+      'tilgang',
+      'kreditering',
+      'belobind',
+    ];
+    const currencyAliases = ['currency', 'valuta', 'coin', 'ccy', 'curr', 'iso4217'];
+    const fallbackDebitIndex = header.findIndex((cell) => includesAnyAlias(cell, debitAliases));
+    const fallbackCreditIndex = header.findIndex((cell) => includesAnyAlias(cell, creditAliases));
+    const fallbackCurrencyIndex = header.findIndex((cell) => includesAnyAlias(cell, currencyAliases));
     const mappingLookupOrder = [headerSignature, fileSignature, anonymousHeaderSignature, anonymousFileSignature];
-    const rememberedMappingKey = mappingLookupOrder.find((key) => Boolean(savedMappings[key]));
-    const rememberedMappingRaw = rememberedMappingKey ? savedMappings[rememberedMappingKey] : undefined;
-    const rememberedMapping = resolveSavedMapping(rememberedMappingRaw, originalHeader);
+    const rememberedPick = pickCompatibleSavedMapping(
+      savedMappings,
+      mappingLookupOrder,
+      headerSignature,
+      anonymousHeaderSignature,
+      originalHeader,
+    );
+    const rememberedMapping = rememberedPick?.mapping ?? null;
     const isRememberedMappingValid = rememberedMapping !== null;
+    const hasSavedLayoutsButNoneMatch =
+      Object.keys(savedMappings).length > 0 && rememberedPick === null;
 
     if (isRememberedMappingValid) {
       if (userScope !== 'anonymous' && !savedMappings[headerSignature]) {
         saveMappingForSignature(headerSignature, rememberedMapping);
       }
+      const rememberedCurrencyIdx = rememberedMapping.currencyIndex ?? -1;
+      const resolvedDateIndex = pickDateColumnFromData(header, dataRows, rememberedMapping.dateIndex);
+      const resolvedDescriptionIdx = resolveDescriptionColumnIndex(
+        header,
+        rememberedMapping.merchantIndex,
+        rememberedMapping.descriptionIndex,
+      );
+      const rememberedAssumeOutgoing = computeAmountColumnAssumeAllOutgoing(
+        dataRows,
+        rememberedMapping.amountIndex,
+        fallbackDebitIndex,
+        fallbackCreditIndex,
+      );
       const parsedRows = buildImportedRows(
         dataRows,
-        rememberedMapping.dateIndex,
+        resolvedDateIndex,
         rememberedMapping.merchantIndex,
         rememberedMapping.amountIndex,
-        -1,
-        -1,
+        fallbackDebitIndex,
+        fallbackCreditIndex,
+        rememberedCurrencyIdx >= 0 ? rememberedCurrencyIdx : fallbackCurrencyIndex,
+        resolvedDescriptionIdx,
+        rememberedAssumeOutgoing,
+        merchantRules,
         merchantHistory,
       );
-      const validRows = parsedRows.filter((row) => row.title && Number(row.amount) > 0);
+      const validRows = parsedRows.filter(
+        (row) => (row.title.trim() || row.description.trim()) && Number(row.amount) > 0,
+      );
       if (validRows.length > 0) {
-        const flaggedRows = applyDuplicateFlags(validRows, existingExpenseSignatures);
-        setRows(
-          seenBefore
-            ? flaggedRows.map((row) => ({
-                ...row,
-                selected: false,
-                duplicateType: row.duplicateType === 'none' ? 'existing' : row.duplicateType,
-              }))
-            : flaggedRows,
+        const flaggedRows = applyDuplicateFlags(
+          validRows.map(applySharedCategoryDefaults),
+          existingExpenseSignatures,
         );
+        setRows(sortRowsForInitialReview(flaggedRows));
         setManualMappingData(null);
         setManualMappingSignatures([]);
         setManualDateIndex('');
         setManualMerchantIndex('');
         setManualAmountIndex('');
+        setManualDescriptionIndex('');
+        setManualCurrencyIndex('');
         if (userScope !== 'anonymous') {
-          saveMappingForSignature(headerSignature, rememberedMapping);
-          saveMappingForSignature(fileSignature, rememberedMapping);
-        }
-        if (!seenBefore) {
-          saveFileFingerprint(fingerprintKey);
+          let mappingToPersist = rememberedMapping;
+          if (resolvedDateIndex !== rememberedMapping.dateIndex) {
+            mappingToPersist = {
+              ...mappingToPersist,
+              dateIndex: resolvedDateIndex,
+              dateHeaderKey: normalizeHeaderKey(originalHeader[resolvedDateIndex] ?? ''),
+            };
+          }
+          if (resolvedDescriptionIdx >= 0) {
+            mappingToPersist = {
+              ...mappingToPersist,
+              descriptionIndex: resolvedDescriptionIdx,
+              descriptionHeaderKey: normalizeHeaderKey(originalHeader[resolvedDescriptionIdx] ?? ''),
+            };
+          }
+          saveMappingForSignature(headerSignature, mappingToPersist);
+          saveMappingForSignature(fileSignature, mappingToPersist);
         }
         setImportInfo(`Parsed ${validRows.length} transaction(s) using remembered column mapping.`);
         return;
       }
     }
-    const dateAliases = ['date', 'transactiondate', 'bookingdate', 'datums', 'maksumadate', 'paymentdate'];
     const merchantAliases = [
       'merchant',
-      'description',
       'payee',
       'title',
       'recipient',
       'counterparty',
       'sanemejs',
       'nosaukums',
-      'details',
+      'navn',
+      'afsender',
+      'modtager',
     ];
-    const amountAliases = ['amount', 'sum', 'value', 'summa', 'apjoms'];
-    const debitAliases = ['debit', 'withdrawal', 'outflow', 'expense'];
-    const creditAliases = ['credit', 'deposit', 'inflow', 'income'];
-
-    const dateIndex = header.findIndex((cell) => includesAnyAlias(cell, dateAliases));
-    const merchantIndex = header.findIndex((cell) => includesAnyAlias(cell, merchantAliases));
+    const amountAliases = ['amount', 'sum', 'value', 'summa', 'apjoms', 'belob', 'belb'];
+    const dateIndex = pickDateColumnFromData(header, dataRows, -1);
+    const descriptionCandidate = header.findIndex((cell) => includesAnyAlias(cell, DESCRIPTION_COLUMN_ALIASES));
+    const merchantIndex = header.findIndex(
+      (cell, idx) =>
+        (descriptionCandidate < 0 || idx !== descriptionCandidate) && includesAnyAlias(cell, merchantAliases),
+    );
+    const descriptionIndex = resolveDescriptionColumnIndex(
+      header,
+      merchantIndex,
+      descriptionCandidate >= 0 ? descriptionCandidate : undefined,
+    );
     const amountIndex = header.findIndex((cell) => includesAnyAlias(cell, amountAliases));
-    const debitIndex = header.findIndex((cell) => includesAnyAlias(cell, debitAliases));
-    const creditIndex = header.findIndex((cell) => includesAnyAlias(cell, creditAliases));
+    const debitIndex = fallbackDebitIndex;
+    const creditIndex = fallbackCreditIndex;
+    const currencyColumnIndex = fallbackCurrencyIndex;
 
     if (dateIndex < 0 || merchantIndex < 0 || (amountIndex < 0 && debitIndex < 0 && creditIndex < 0)) {
       setManualMappingData({
@@ -654,9 +1581,27 @@ export const ImportPage = (): JSX.Element => {
       const rememberedDateIndex = isRememberedMappingValid ? String(rememberedMapping.dateIndex) : '';
       const rememberedMerchantIndex = isRememberedMappingValid ? String(rememberedMapping.merchantIndex) : '';
       const rememberedAmountIndex = isRememberedMappingValid ? String(rememberedMapping.amountIndex) : '';
+      const rememberedCurrencyIndex =
+        isRememberedMappingValid &&
+        rememberedMapping !== null &&
+        rememberedMapping.currencyIndex !== undefined &&
+        rememberedMapping.currencyIndex >= 0
+          ? String(rememberedMapping.currencyIndex)
+          : '';
+      const rememberedDescriptionIndexStr =
+        isRememberedMappingValid &&
+        rememberedMapping !== null &&
+        rememberedMapping.descriptionIndex !== undefined &&
+        rememberedMapping.descriptionIndex >= 0
+          ? String(rememberedMapping.descriptionIndex)
+          : '';
       setManualDateIndex(dateIndex >= 0 ? String(dateIndex) : '');
       setManualMerchantIndex(merchantIndex >= 0 ? String(merchantIndex) : '');
       setManualAmountIndex(amountIndex >= 0 ? String(amountIndex) : '');
+      setManualDescriptionIndex(
+        descriptionIndex >= 0 ? String(descriptionIndex) : rememberedDescriptionIndexStr,
+      );
+      setManualCurrencyIndex(currencyColumnIndex >= 0 ? String(currencyColumnIndex) : rememberedCurrencyIndex);
       if (dateIndex < 0) {
         setManualDateIndex(rememberedDateIndex);
       }
@@ -667,11 +1612,17 @@ export const ImportPage = (): JSX.Element => {
         setManualAmountIndex(rememberedAmountIndex);
       }
       setImportError(
-        'Could not auto-detect required columns. Please map Date, Merchant, and Amount manually below.',
+        `${hasSavedLayoutsButNoneMatch ? 'This file’s column headers don’t match any saved import layout. Map columns below; the new layout will be saved without removing your others.\n\n' : ''}Could not auto-detect required columns. Please map Date, Merchant, Amount, and optionally Description and Currency below.`,
       );
       return;
     }
 
+    const amountColumnAssumeAllOutgoing = computeAmountColumnAssumeAllOutgoing(
+      dataRows,
+      amountIndex,
+      debitIndex,
+      creditIndex,
+    );
     const parsedRows = buildImportedRows(
       dataRows,
       dateIndex,
@@ -679,59 +1630,69 @@ export const ImportPage = (): JSX.Element => {
       amountIndex,
       debitIndex,
       creditIndex,
+      currencyColumnIndex,
+      descriptionIndex,
+      amountColumnAssumeAllOutgoing,
+      merchantRules,
       merchantHistory,
     );
 
-    const validRows = parsedRows.filter((row) => row.title && Number(row.amount) > 0);
+    const validRows = parsedRows.filter(
+      (row) => (row.title.trim() || row.description.trim()) && Number(row.amount) > 0,
+    );
     if (validRows.length === 0) {
       setImportError('No valid transactions found after parsing.');
       return;
     }
-    const flaggedRows = applyDuplicateFlags(validRows, existingExpenseSignatures);
-    setRows(
-      seenBefore
-        ? flaggedRows.map((row) => ({
-            ...row,
-            selected: false,
-            duplicateType: row.duplicateType === 'none' ? 'existing' : row.duplicateType,
-          }))
-        : flaggedRows,
+    const flaggedRows = applyDuplicateFlags(
+      validRows.map(applySharedCategoryDefaults),
+      existingExpenseSignatures,
     );
+    setRows(sortRowsForInitialReview(flaggedRows));
     setManualMappingData(null);
     setManualMappingSignatures([]);
     setManualDateIndex('');
     setManualMerchantIndex('');
     setManualAmountIndex('');
+    setManualDescriptionIndex('');
+    setManualCurrencyIndex('');
     const preferredAmountIndex = amountIndex >= 0 ? amountIndex : debitIndex >= 0 ? debitIndex : creditIndex;
     if (dateIndex >= 0 && merchantIndex >= 0 && preferredAmountIndex >= 0) {
-      saveMappingForSignature(headerSignature, {
+      const baseMapping: SavedColumnMapping = {
         dateIndex,
         merchantIndex,
         amountIndex: preferredAmountIndex,
         dateHeaderKey: normalizeHeaderKey(originalHeader[dateIndex] ?? ''),
         merchantHeaderKey: normalizeHeaderKey(originalHeader[merchantIndex] ?? ''),
         amountHeaderKey: normalizeHeaderKey(originalHeader[preferredAmountIndex] ?? ''),
-      });
-      saveMappingForSignature(fileSignature, {
-        dateIndex,
-        merchantIndex,
-        amountIndex: preferredAmountIndex,
-        dateHeaderKey: normalizeHeaderKey(originalHeader[dateIndex] ?? ''),
-        merchantHeaderKey: normalizeHeaderKey(originalHeader[merchantIndex] ?? ''),
-        amountHeaderKey: normalizeHeaderKey(originalHeader[preferredAmountIndex] ?? ''),
-      });
+        ...(descriptionIndex >= 0
+          ? {
+              descriptionIndex,
+              descriptionHeaderKey: normalizeHeaderKey(originalHeader[descriptionIndex] ?? ''),
+            }
+          : {}),
+      };
+      const mappingToSave: SavedColumnMapping =
+        currencyColumnIndex >= 0
+          ? {
+              ...baseMapping,
+              currencyIndex: currencyColumnIndex,
+              currencyHeaderKey: normalizeHeaderKey(originalHeader[currencyColumnIndex] ?? ''),
+            }
+          : baseMapping;
+      saveMappingForSignature(headerSignature, mappingToSave);
+      saveMappingForSignature(fileSignature, mappingToSave);
     }
-    if (!seenBefore) {
-      saveFileFingerprint(fingerprintKey);
-    }
-    setImportInfo(`Parsed ${validRows.length} transaction(s). Review and approve import.`);
+    setImportInfo(
+      `${hasSavedLayoutsButNoneMatch ? 'Headers didn’t match a saved layout; this one was mapped from scratch and saved alongside your others.\n\n' : ''}Parsed ${validRows.length} transaction(s). Review and approve import.`,
+    );
   };
 
-  const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handleSelectedFile = async (file: File | null) => {
     if (!file) {
       return;
     }
+    setUploadedFileName(file.name);
     const fileName = file.name.toLowerCase();
     const hasAllowedExtension = ALLOWED_FILE_EXTENSIONS.some((extension) => fileName.endsWith(extension));
     const hasAllowedMimeType = ALLOWED_MIME_TYPES.includes(file.type);
@@ -750,6 +1711,17 @@ export const ImportPage = (): JSX.Element => {
     }
   };
 
+  const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    await handleSelectedFile(event.target.files?.[0] ?? null);
+  };
+
+  const onDropFile = async (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragActive(false);
+    const file = event.dataTransfer.files?.[0] ?? null;
+    await handleSelectedFile(file);
+  };
+
   const onApplyManualMapping = () => {
     if (!manualMappingData) {
       return;
@@ -757,10 +1729,28 @@ export const ImportPage = (): JSX.Element => {
     const dateIndex = Number(manualDateIndex);
     const merchantIndex = Number(manualMerchantIndex);
     const amountIndex = Number(manualAmountIndex);
+    const parsedManualCurrencyIndex =
+      manualCurrencyIndex === '' ? -1 : Number(manualCurrencyIndex);
+    const currencyIdx =
+      Number.isInteger(parsedManualCurrencyIndex) && parsedManualCurrencyIndex >= 0
+        ? parsedManualCurrencyIndex
+        : -1;
+    const parsedManualDescriptionIndex =
+      manualDescriptionIndex === '' ? -1 : Number(manualDescriptionIndex);
+    const descriptionIdx =
+      Number.isInteger(parsedManualDescriptionIndex) && parsedManualDescriptionIndex >= 0
+        ? parsedManualDescriptionIndex
+        : -1;
     if (!Number.isInteger(dateIndex) || !Number.isInteger(merchantIndex) || !Number.isInteger(amountIndex)) {
       setImportError('Select Date, Merchant, and Amount columns to continue.');
       return;
     }
+    const manualAssumeOutgoing = computeAmountColumnAssumeAllOutgoing(
+      manualMappingData.dataRows,
+      amountIndex,
+      -1,
+      -1,
+    );
     const parsedRows = buildImportedRows(
       manualMappingData.dataRows,
       dateIndex,
@@ -768,55 +1758,60 @@ export const ImportPage = (): JSX.Element => {
       amountIndex,
       -1,
       -1,
+      currencyIdx,
+      descriptionIdx,
+      manualAssumeOutgoing,
+      merchantRules,
       merchantHistory,
     );
-    const validRows = parsedRows.filter((row) => row.title && Number(row.amount) > 0);
+    const validRows = parsedRows.filter(
+      (row) => (row.title.trim() || row.description.trim()) && Number(row.amount) > 0,
+    );
     if (validRows.length === 0) {
       setImportError('No valid transactions found with selected mapping.');
       return;
     }
-    const flaggedRows = applyDuplicateFlags(validRows, existingExpenseSignatures);
-    setRows(
-      isExactFileReupload
-        ? flaggedRows.map((row) => ({
-            ...row,
-            selected: false,
-            duplicateType: row.duplicateType === 'none' ? 'existing' : row.duplicateType,
-          }))
-        : flaggedRows,
+    const flaggedRows = applyDuplicateFlags(
+      validRows.map(applySharedCategoryDefaults),
+      existingExpenseSignatures,
     );
+    setRows(sortRowsForInitialReview(flaggedRows));
     setManualMappingData(null);
     setManualMappingSignatures([]);
     setImportError(null);
     setImportBackendDuplicateFailureCount(0);
+    const manualBaseMapping: SavedColumnMapping = {
+      dateIndex,
+      merchantIndex,
+      amountIndex,
+      dateHeaderKey: normalizeHeaderKey(manualMappingData.header[dateIndex] ?? ''),
+      merchantHeaderKey: normalizeHeaderKey(manualMappingData.header[merchantIndex] ?? ''),
+      amountHeaderKey: normalizeHeaderKey(manualMappingData.header[amountIndex] ?? ''),
+    };
+    let manualMappingPayload: SavedColumnMapping =
+      currencyIdx >= 0
+        ? {
+            ...manualBaseMapping,
+            currencyIndex: currencyIdx,
+            currencyHeaderKey: normalizeHeaderKey(manualMappingData.header[currencyIdx] ?? ''),
+          }
+        : manualBaseMapping;
+    if (descriptionIdx >= 0) {
+      manualMappingPayload = {
+        ...manualMappingPayload,
+        descriptionIndex: descriptionIdx,
+        descriptionHeaderKey: normalizeHeaderKey(manualMappingData.header[descriptionIdx] ?? ''),
+      };
+    }
     if (manualMappingSignatures.length > 0) {
       manualMappingSignatures.forEach((signature) => {
-        saveMappingForSignature(signature, {
-          dateIndex,
-          merchantIndex,
-          amountIndex,
-          dateHeaderKey: normalizeHeaderKey(manualMappingData.header[dateIndex] ?? ''),
-          merchantHeaderKey: normalizeHeaderKey(manualMappingData.header[merchantIndex] ?? ''),
-          amountHeaderKey: normalizeHeaderKey(manualMappingData.header[amountIndex] ?? ''),
-        });
+        saveMappingForSignature(signature, manualMappingPayload);
       });
     } else {
-      saveMappingForSignature(`anonymous:manual:${Date.now()}`, {
-        dateIndex,
-        merchantIndex,
-        amountIndex,
-        dateHeaderKey: normalizeHeaderKey(manualMappingData.header[dateIndex] ?? ''),
-        merchantHeaderKey: normalizeHeaderKey(manualMappingData.header[merchantIndex] ?? ''),
-        amountHeaderKey: normalizeHeaderKey(manualMappingData.header[amountIndex] ?? ''),
-      });
-    }
-    if (currentFileFingerprintKey) {
-      const fingerprints = loadSavedFileFingerprints();
-      if (!fingerprints[currentFileFingerprintKey]) {
-        saveFileFingerprint(currentFileFingerprintKey);
-      }
+      saveMappingForSignature(`anonymous:manual:${Date.now()}`, manualMappingPayload);
     }
     setImportInfo(`Parsed ${validRows.length} transaction(s) using manual column mapping.`);
+    setManualDescriptionIndex('');
   };
 
   const updateRow = (id: string, patch: Partial<ImportedRow>) => {
@@ -825,7 +1820,15 @@ export const ImportPage = (): JSX.Element => {
         if (row.id !== id) {
           return row;
         }
-        const next = { ...row, ...patch };
+        let next = { ...row, ...patch };
+        if (next.flow === 'in') {
+          next = {
+            ...next,
+            split: 'Personal',
+            groupId: '',
+            expenseGroup: '',
+          };
+        }
         if (patch.split && patch.split !== 'Shared') {
           next.groupId = '';
           next.expenseGroup = '';
@@ -833,7 +1836,7 @@ export const ImportPage = (): JSX.Element => {
         if (patch.groupId !== undefined && patch.groupId !== row.groupId) {
           next.expenseGroup = '';
         }
-        return next;
+        return applySharedCategoryDefaults(next);
       }), existingExpenseSignatures),
     );
   };
@@ -842,9 +1845,103 @@ export const ImportPage = (): JSX.Element => {
     setRows((previous) =>
       previous.map((row) => ({
         ...row,
-        selected: !isExactFileReupload && row.duplicateType === 'none' ? selected : false,
+        selected: row.duplicateType === 'none' ? selected : false,
       })),
     );
+  };
+
+  const learnRulesFromImportedRows = (importedRows: ImportedRow[]) => {
+    if (importedRows.length === 0) {
+      return;
+    }
+    setMerchantRules((previous) => {
+      const next = [...previous];
+      importedRows.forEach((row) => {
+        const pattern = row.title.trim().toLowerCase();
+        if (!pattern) {
+          return;
+        }
+        const flow = row.flow;
+        const existingIndex = next.findIndex(
+          (rule) => rule.flow === flow && rule.matchType === 'exact' && rule.pattern.trim().toLowerCase() === pattern,
+        );
+        const candidate: ImportMerchantRule = {
+          id: existingIndex >= 0 ? next[existingIndex].id : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          flow,
+          matchType: 'exact',
+          pattern,
+          category: row.category,
+          split: flow === 'out' ? row.split : 'Personal',
+          groupId: flow === 'out' && row.split === 'Shared' ? row.groupId : '',
+          expenseGroup: flow === 'out' && row.split === 'Shared' ? row.expenseGroup : '',
+          updatedAt: new Date().toISOString(),
+        };
+        if (existingIndex >= 0) {
+          next[existingIndex] = candidate;
+        } else {
+          next.push(candidate);
+        }
+      });
+      saveMerchantRules(next);
+      return next;
+    });
+  };
+
+  const upsertRuleFromRow = (row: ImportedRow, matchType: 'exact' | 'contains') => {
+    const pattern = row.title.trim().toLowerCase();
+    if (!pattern) {
+      return;
+    }
+    setMerchantRules((previous) => {
+      const next = [...previous];
+      const existingIndex = next.findIndex(
+        (rule) => rule.flow === row.flow && rule.matchType === matchType && rule.pattern.trim().toLowerCase() === pattern,
+      );
+      const candidate: ImportMerchantRule = {
+        id: existingIndex >= 0 ? next[existingIndex].id : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        flow: row.flow,
+        matchType,
+        pattern,
+        category: row.category,
+        split: row.flow === 'out' ? row.split : 'Personal',
+        groupId: row.flow === 'out' && row.split === 'Shared' ? row.groupId : '',
+        expenseGroup: row.flow === 'out' && row.split === 'Shared' ? row.expenseGroup : '',
+        updatedAt: new Date().toISOString(),
+      };
+      if (existingIndex >= 0) {
+        next[existingIndex] = candidate;
+      } else {
+        next.push(candidate);
+      }
+      saveMerchantRules(next);
+      return next;
+    });
+    setImportInfo(`Saved ${matchType} rule for "${row.title}".`);
+  };
+
+  const updateMerchantRule = (id: string, patch: Partial<ImportMerchantRule>) => {
+    setMerchantRules((previous) => {
+      const next = previous.map((rule) => {
+        if (rule.id !== id) {
+          return rule;
+        }
+        return {
+          ...rule,
+          ...patch,
+          updatedAt: new Date().toISOString(),
+        };
+      });
+      saveMerchantRules(next);
+      return next;
+    });
+  };
+
+  const deleteMerchantRule = (id: string) => {
+    setMerchantRules((previous) => {
+      const next = previous.filter((rule) => rule.id !== id);
+      saveMerchantRules(next);
+      return next;
+    });
   };
 
   const onApproveSelected = async () => {
@@ -855,23 +1952,26 @@ export const ImportPage = (): JSX.Element => {
       setImportError('Select at least one row to import.');
       return;
     }
-    if (isExactFileReupload) {
-      setImportError('This exact statement file was already uploaded. Remove file and upload a new statement.');
-      return;
-    }
-
     for (const row of selectedRows) {
+      const expenseTitle = buildExpenseTitleForImport(row);
       const parsedAmount = normalizeAmountValue(row.amount);
-      if (!row.title.trim() || !row.transactionDate || !row.category || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-        setImportError(`Row "${row.title || '(missing merchant)'}" has invalid required fields.`);
+      if (!expenseTitle || !row.transactionDate || !row.category || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        setImportError(`Row "${expenseTitle || '(missing label)'}" has invalid required fields.`);
         return;
       }
       if (row.duplicateType !== 'none') {
-        setImportError(`Row "${row.title}" is marked as duplicate (${row.duplicateType}). Update it before import.`);
+        setImportError(`Row "${expenseTitle}" is marked as duplicate (${row.duplicateType}). Update it before import.`);
         return;
       }
-      if (row.split === 'Shared' && (!row.groupId || !row.expenseGroup)) {
-        setImportError(`Shared row "${row.title}" requires household and expense group.`);
+      if (row.flow !== 'in' && row.split === 'Shared' && (!row.groupId || !row.expenseGroup)) {
+        setImportError(`Shared row "${expenseTitle}" requires household and expense group.`);
+        return;
+      }
+      const rowCurrencyCode = normalizeStatementCurrency(row.currency);
+      if (rowCurrencyCode !== APP_CURRENCY_CODE) {
+        setImportError(
+          `Row "${expenseTitle}" is ${rowCurrencyCode}, not ${APP_CURRENCY_CODE}. Fix the currency or remove the row.`,
+        );
         return;
       }
     }
@@ -882,14 +1982,17 @@ export const ImportPage = (): JSX.Element => {
 
     for (const row of selectedRows) {
       try {
+        const isIncoming = row.flow === 'in';
         await addExpense({
-          title: row.title.trim(),
+          title: buildExpenseTitleForImport(row),
           amount: normalizeAmountValue(row.amount),
           transactionDate: row.transactionDate,
           category: row.category,
-          split: row.split,
-          groupId: row.split === 'Shared' ? row.groupId : undefined,
-          expenseGroup: row.split === 'Shared' ? row.expenseGroup : undefined,
+          split: isIncoming ? 'Personal' : row.split,
+          groupId: isIncoming ? undefined : row.split === 'Shared' ? row.groupId : undefined,
+          expenseGroup: isIncoming ? undefined : row.split === 'Shared' ? row.expenseGroup : undefined,
+          currency: APP_CURRENCY_CODE,
+          flow: isIncoming ? 'Incoming' : 'Outgoing',
         });
         successfulIds.add(row.id);
       } catch (error) {
@@ -897,7 +2000,7 @@ export const ImportPage = (): JSX.Element => {
         if (isBackendDuplicateExpenseError(message)) {
           backendDuplicateFailures += 1;
         }
-        failedRows.push(`${row.title}: ${message}`);
+        failedRows.push(`${buildExpenseTitleForImport(row)}: ${message}`);
       }
     }
 
@@ -905,10 +2008,10 @@ export const ImportPage = (): JSX.Element => {
       setImportBackendDuplicateFailureCount(backendDuplicateFailures);
     }
 
+    const successfullyImportedRows = selectedRows.filter((row) => successfulIds.has(row.id));
+    learnRulesFromImportedRows(successfullyImportedRows);
+
     setRows((previous) => previous.filter((row) => !successfulIds.has(row.id)));
-    if (successfulIds.size > 0 && currentFileFingerprintKey) {
-      saveFileFingerprint(currentFileFingerprintKey);
-    }
     if (failedRows.length === 0) {
       setImportInfo(`Imported ${successfulIds.size} expense(s) successfully.`);
       return;
@@ -928,8 +2031,9 @@ export const ImportPage = (): JSX.Element => {
     setManualDateIndex('');
     setManualMerchantIndex('');
     setManualAmountIndex('');
-    setCurrentFileFingerprintKey(null);
-    setIsExactFileReupload(false);
+    setManualDescriptionIndex('');
+    setManualCurrencyIndex('');
+    setUploadedFileName('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -946,6 +2050,7 @@ export const ImportPage = (): JSX.Element => {
           title: row.title,
           transactionDate: row.transactionDate,
           amount: row.amount,
+          flow: row.flow,
         });
         if (seenSignatures.has(signature)) {
           return false;
@@ -969,8 +2074,52 @@ export const ImportPage = (): JSX.Element => {
         </HeaderRow>
 
         <Panel>
-          <MutedText>Supported now: CSV/TXT with date, merchant/description, amount columns (max 2MB, 1000 rows).</MutedText>
-          <Input ref={fileInputRef} type="file" accept=".csv,text/csv,.txt" onChange={onFileChange} />
+          <div>
+            <UploadSectionTitle>Import Bank Statement</UploadSectionTitle>
+            <UploadSectionSubtitle>
+              Upload your bank statement and automatically categorize your transactions.
+            </UploadSectionSubtitle>
+          </div>
+          <UploadBox
+            $isDragActive={isDragActive}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setIsDragActive(true);
+            }}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setIsDragActive(true);
+            }}
+            onDragLeave={() => setIsDragActive(false)}
+            onDrop={onDropFile}
+          >
+            <UploadInner>
+              <UploadIconWrap aria-hidden>
+                <Upload size={44} strokeWidth={1.8} />
+              </UploadIconWrap>
+              <UploadPrimaryText>Upload Bank Statement</UploadPrimaryText>
+              <UploadSecondaryText>
+                Supports CSV/TXT formats (currency column optional, stored as {APP_CURRENCY_CODE})
+              </UploadSecondaryText>
+              {isDragActive ? <DropHint>Drop file here</DropHint> : null}
+              <Button
+                type="button"
+                $variant="accent"
+                $weight="semibold"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Choose File
+              </Button>
+              <HiddenFileInput
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv,.txt"
+                onChange={onFileChange}
+              />
+              {uploadedFileName ? <UploadedFileName>Selected file: {uploadedFileName}</UploadedFileName> : null}
+              <UploadFootnote>Your data is processed locally and never uploaded without your approval.</UploadFootnote>
+            </UploadInner>
+          </UploadBox>
           {manualMappingData ? (
             <>
               <MutedText>Manual mapping required for this file format.</MutedText>
@@ -1007,6 +2156,30 @@ export const ImportPage = (): JSX.Element => {
                     </option>
                   ))}
                 </InlineInput>
+                <InlineInput
+                  as="select"
+                  value={manualDescriptionIndex}
+                  onChange={(event) => setManualDescriptionIndex(event.target.value)}
+                >
+                  <option value="">Description column (optional)</option>
+                  {manualMappingData.header.map((column, index) => (
+                    <option key={`desc-col-${index}`} value={String(index)}>
+                      {column || `Column ${index + 1}`}
+                    </option>
+                  ))}
+                </InlineInput>
+                <InlineInput
+                  as="select"
+                  value={manualCurrencyIndex}
+                  onChange={(event) => setManualCurrencyIndex(event.target.value)}
+                >
+                  <option value="">Currency column (optional)</option>
+                  {manualMappingData.header.map((column, index) => (
+                    <option key={`currency-col-${index}`} value={String(index)}>
+                      {column || `Column ${index + 1}`}
+                    </option>
+                  ))}
+                </InlineInput>
                 <Button type="button" onClick={onApplyManualMapping}>
                   Apply mapping
                 </Button>
@@ -1015,10 +2188,128 @@ export const ImportPage = (): JSX.Element => {
           ) : null}
           <ImportSummary>
             <span>Total rows: {rows.length}</span>
+            <span>Outgoing: {rows.filter((row) => row.flow === 'out').length}</span>
+            <span>Incoming: {rows.filter((row) => row.flow === 'in').length}</span>
             <span>Selected: {rows.filter((row) => row.selected).length}</span>
             <span>High confidence: {rows.filter((row) => row.confidence === 'high').length}</span>
             <span>Duplicates: {duplicateStats.total}</span>
           </ImportSummary>
+          <RulePanel>
+            <Actions>
+              <MutedText style={{ margin: 0 }}>Merchant rules: {merchantRules.length}</MutedText>
+              <InlineInput
+                as="select"
+                value={newRuleMatchType}
+                onChange={(event) => setNewRuleMatchType(event.target.value as 'exact' | 'contains')}
+                title="Choose rule type for 'Save rule' buttons in table rows."
+              >
+                <option value="exact">Save as Exact</option>
+                <option value="contains">Save as Contains</option>
+              </InlineInput>
+            </Actions>
+            {merchantRules.length === 0 ? (
+              <MutedText style={{ margin: 0 }}>
+                No custom rules yet. Use “Save rule” in a row to remember mapping automatically.
+              </MutedText>
+            ) : (
+              merchantRules
+                .slice()
+                .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+                .slice(0, 12)
+                .map((rule) => {
+                  const isOutgoingRule = rule.flow === 'out';
+                  const splitValue: SplitType = isOutgoingRule ? rule.split ?? 'Personal' : 'Personal';
+                  const groupId = isOutgoingRule ? rule.groupId ?? '' : '';
+                  const groupOptions = groupId ? expenseGroupByHousehold.get(groupId) ?? [] : [];
+                  const categoryOpts = isOutgoingRule ? categoryOptions : incomingCategoryOptions;
+                  return (
+                    <RuleRow key={rule.id}>
+                      <MutedText style={{ margin: 0 }}>{isOutgoingRule ? 'Outgoing' : 'Incoming'}</MutedText>
+                      <InlineInput
+                        as="select"
+                        value={rule.matchType}
+                        onChange={(event) =>
+                          updateMerchantRule(rule.id, { matchType: event.target.value as 'exact' | 'contains' })
+                        }
+                      >
+                        <option value="exact">Exact</option>
+                        <option value="contains">Contains</option>
+                      </InlineInput>
+                      <InlineInput
+                        value={rule.pattern}
+                        onChange={(event) => updateMerchantRule(rule.id, { pattern: event.target.value })}
+                      />
+                      <InlineInput
+                        as="select"
+                        value={rule.category}
+                        onChange={(event) => updateMerchantRule(rule.id, { category: event.target.value })}
+                      >
+                        {categoryOpts.map((option) => (
+                          <option key={`${rule.id}-cat-${option}`} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </InlineInput>
+                      <InlineInput
+                        as="select"
+                        value={splitValue}
+                        disabled={!isOutgoingRule}
+                        onChange={(event) => {
+                          const nextSplit = event.target.value as SplitType;
+                          updateMerchantRule(rule.id, {
+                            split: nextSplit,
+                            groupId: nextSplit === 'Shared' ? rule.groupId : '',
+                            expenseGroup: nextSplit === 'Shared' ? rule.expenseGroup : '',
+                          });
+                        }}
+                      >
+                        <option value="Personal">Personal</option>
+                        <option value="Shared">Shared</option>
+                      </InlineInput>
+                      <InlineInput
+                        as="select"
+                        value={groupId}
+                        disabled={!isOutgoingRule || splitValue !== 'Shared'}
+                        onChange={(event) =>
+                          updateMerchantRule(rule.id, { groupId: event.target.value, expenseGroup: '' })
+                        }
+                      >
+                        <option value="">Household</option>
+                        {groups.map((group) => (
+                          <option key={`${rule.id}-group-${group.id}`} value={group.id}>
+                            {group.name}
+                          </option>
+                        ))}
+                      </InlineInput>
+                      <InlineInput
+                        as="select"
+                        value={isOutgoingRule ? rule.expenseGroup ?? '' : ''}
+                        disabled={!isOutgoingRule || splitValue !== 'Shared' || !groupId}
+                        onChange={(event) => updateMerchantRule(rule.id, { expenseGroup: event.target.value })}
+                      >
+                        <option value="">Expense Group</option>
+                        {groupOptions.map((option) => (
+                          <option key={`${rule.id}-eg-${option}`} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </InlineInput>
+                      <Button type="button" $variant="secondary" onClick={() => deleteMerchantRule(rule.id)}>
+                        Delete
+                      </Button>
+                    </RuleRow>
+                  );
+                })
+            )}
+          </RulePanel>
+          {rows.some((row) => row.flow === 'in') ? (
+            <DuplicateNotice $severity="info">
+              <MutedText>
+                Incoming (credit) rows are selected like outgoing rows; deselect any you do not want. They are stored
+                as income and count toward Budget YTD income; outgoing rows remain expense records.
+              </MutedText>
+            </DuplicateNotice>
+          ) : null}
           {importError ? (
             <DuplicateNotice $severity="warning">
               <ErrorText>{importError}</ErrorText>
@@ -1030,15 +2321,6 @@ export const ImportPage = (): JSX.Element => {
                   transaction, or remove those rows from the selection.
                 </MutedText>
               ) : null}
-            </DuplicateNotice>
-          ) : isExactFileReupload ? (
-            <DuplicateNotice $severity="warning">
-              <ErrorText>
-                This exact statement file was already uploaded before for this user.
-              </ErrorText>
-              <MutedText>
-                Detected {duplicateStats.existing} matching existing row(s) and {duplicateStats.inFile} repeated row(s) within this file.
-              </MutedText>
             </DuplicateNotice>
           ) : duplicateStats.total > 0 ? (
             <DuplicateNotice $severity="warning">
@@ -1084,23 +2366,29 @@ export const ImportPage = (): JSX.Element => {
             <Table>
               <Thead>
                 <Tr>
-                  <Th>Import</Th>
-                  <Th>Date</Th>
-                  <Th>Merchant</Th>
-                  <Th>Amount</Th>
-                  <Th>Category</Th>
-                  <Th>Split</Th>
-                  <Th>Household</Th>
-                  <Th>Expense Group</Th>
-                  <Th>Confidence</Th>
-                  <Th>Duplicate</Th>
+                  <Th style={{ textAlign: 'center' }}>Import</Th>
+                  <Th style={{ textAlign: 'center' }}>Date</Th>
+                  <Th style={{ textAlign: 'center' }}>Merchant</Th>
+                  <Th style={{ textAlign: 'center' }}>Description</Th>
+                  <Th style={{ textAlign: 'center' }}>Flow</Th>
+                  <Th style={{ textAlign: 'center' }}>Amount</Th>
+                  <Th style={{ width: 100, textAlign: 'center' }}>Currency</Th>
+                  <Th style={{ textAlign: 'center' }}>Category</Th>
+                  <Th style={{ textAlign: 'center' }}>Split</Th>
+                  <Th style={{ textAlign: 'center' }}>Household</Th>
+                  <Th style={{ textAlign: 'center' }}>Expense Group</Th>
+                  <Th style={{ textAlign: 'center' }}>Confidence</Th>
+                  <Th style={{ textAlign: 'center' }}>Duplicate</Th>
+                  <Th style={{ textAlign: 'center' }}>Rule</Th>
                 </Tr>
               </Thead>
               <Tbody>
                 {rows.map((row) => {
+                  const isIncoming = row.flow === 'in';
+                  const selectableCategoryOptions = isIncoming ? incomingCategoryOptions : categoryOptions;
                   const expenseGroupOptions = row.groupId ? expenseGroupByHousehold.get(row.groupId) ?? [] : [];
                   return (
-                    <Tr key={row.id}>
+                    <Tr key={row.id} style={{ background: isIncoming ? '#f0fdf4' : '#fff7ed' }}>
                       <Td>
                         <input
                           type="checkbox"
@@ -1120,6 +2408,21 @@ export const ImportPage = (): JSX.Element => {
                       </Td>
                       <Td>
                         <InlineInput
+                          value={row.description}
+                          onChange={(event) => updateRow(row.id, { description: event.target.value })}
+                        />
+                      </Td>
+                      <Td>
+                        <MutedText
+                          as="span"
+                          style={{ color: isIncoming ? '#166534' : '#9a3412', fontWeight: 600 }}
+                          title="Outgoing = expense/debit; incoming = credit/deposit."
+                        >
+                          {row.flow === 'out' ? 'Outgoing' : 'Incoming'}
+                        </MutedText>
+                      </Td>
+                      <Td>
+                        <AmountInput
                           type="number"
                           min="0"
                           step="0.01"
@@ -1128,60 +2431,91 @@ export const ImportPage = (): JSX.Element => {
                         />
                       </Td>
                       <Td>
-                        <InlineInput
+                        <CurrencyInput
+                          value={row.currency}
+                          placeholder={APP_CURRENCY_CODE}
+                          onChange={(event) =>
+                            updateRow(row.id, { currency: normalizeStatementCurrency(event.target.value) })
+                          }
+                          title="ISO currency from statement; must be DKK to import."
+                        />
+                      </Td>
+                      <Td>
+                        <CategorySelect
                           as="select"
                           value={row.category}
                           onChange={(event) => updateRow(row.id, { category: event.target.value })}
                         >
-                          {categoryOptions.map((option) => (
+                          {selectableCategoryOptions.map((option) => (
                             <option key={option} value={option}>
                               {option}
                             </option>
                           ))}
-                        </InlineInput>
+                        </CategorySelect>
                       </Td>
                       <Td>
-                        <InlineInput
-                          as="select"
-                          value={row.split}
-                          onChange={(event) => updateRow(row.id, { split: event.target.value as SplitType })}
-                        >
-                          <option value="Personal">Personal</option>
-                          <option value="Shared">Shared</option>
-                        </InlineInput>
+                        {isIncoming ? (
+                          <MutedText as="span">-</MutedText>
+                        ) : (
+                          <InlineInput
+                            as="select"
+                            value={row.split}
+                            onChange={(event) => updateRow(row.id, { split: event.target.value as SplitType })}
+                          >
+                            <option value="Personal">Personal</option>
+                            <option value="Shared">Shared</option>
+                          </InlineInput>
+                        )}
                       </Td>
                       <Td>
-                        <InlineInput
-                          as="select"
-                          value={row.groupId}
-                          disabled={row.split !== 'Shared'}
-                          onChange={(event) => updateRow(row.id, { groupId: event.target.value })}
-                        >
-                          <option value="">Select household</option>
-                          {groups.map((group) => (
-                            <option key={group.id} value={group.id}>
-                              {group.name}
-                            </option>
-                          ))}
-                        </InlineInput>
+                        {isIncoming ? (
+                          <MutedText as="span">-</MutedText>
+                        ) : (
+                          <InlineInput
+                            as="select"
+                            value={row.groupId}
+                            disabled={row.split !== 'Shared'}
+                            onChange={(event) => updateRow(row.id, { groupId: event.target.value })}
+                          >
+                            <option value="">Select household</option>
+                            {groups.map((group) => (
+                              <option key={group.id} value={group.id}>
+                                {group.name}
+                              </option>
+                            ))}
+                          </InlineInput>
+                        )}
                       </Td>
                       <Td>
-                        <InlineInput
-                          as="select"
-                          value={row.expenseGroup}
-                          disabled={row.split !== 'Shared' || !row.groupId}
-                          onChange={(event) => updateRow(row.id, { expenseGroup: event.target.value })}
-                        >
-                          <option value="">Select expense group</option>
-                          {expenseGroupOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </InlineInput>
+                        {isIncoming ? (
+                          <MutedText as="span">-</MutedText>
+                        ) : (
+                          <InlineInput
+                            as="select"
+                            value={row.expenseGroup}
+                            disabled={row.split !== 'Shared' || !row.groupId}
+                            onChange={(event) => updateRow(row.id, { expenseGroup: event.target.value })}
+                          >
+                            <option value="">Select expense group</option>
+                            {expenseGroupOptions.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </InlineInput>
+                        )}
                       </Td>
                       <Td>{row.confidence}</Td>
                       <Td>{row.duplicateType === 'none' ? '-' : row.duplicateType}</Td>
+                      <Td>
+                        <Button
+                          type="button"
+                          $variant="secondary"
+                          onClick={() => upsertRuleFromRow(row, newRuleMatchType)}
+                        >
+                          Save rule
+                        </Button>
+                      </Td>
                     </Tr>
                   );
                 })}
