@@ -13,6 +13,7 @@ export type GroupExpense = {
   total: number;
   yourShare: number;
   isPrivate: boolean;
+  currency: string;
 };
 
 export type Group = {
@@ -23,6 +24,8 @@ export type Group = {
   totalSpent: number;
   yourShare: number;
   expenses: GroupExpense[];
+  /** Categories from `group_split_templates` for this household. */
+  expenseGroupLabels: string[];
 };
 
 export type CreateGroupInput = {

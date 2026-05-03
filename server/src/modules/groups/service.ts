@@ -47,6 +47,7 @@ type GroupExpenseRow = {
   expenseGroup: string | null;
   category: string;
   amount: string;
+  currency: string | null;
   transactionDate: Date | string;
   paidByName: string | null;
   isPrivate: number;
@@ -97,6 +98,36 @@ const normalizeMembers = (members: GroupMember[]): GroupMember[] => {
     email: member.email.trim().toLowerCase(),
     ratio: Number(member.ratio.toFixed(2)),
   }));
+};
+
+const listExpenseGroupLabelsByGroupId = async (groupIds: number[]): Promise<Map<number, string[]>> => {
+  const map = new Map<number, string[]>();
+  if (groupIds.length === 0) {
+    return map;
+  }
+  const [rows] = await db.query<Array<{ groupId: number; category: string } & RowDataPacket>>(
+    `
+      SELECT group_id AS groupId, category
+      FROM group_split_templates
+      WHERE group_id IN (?)
+    `,
+    [groupIds],
+  );
+  for (const row of rows) {
+    const cat = row.category?.trim();
+    if (!cat) {
+      continue;
+    }
+    const list = map.get(row.groupId) ?? [];
+    if (!list.some((existing) => existing.toLowerCase() === cat.toLowerCase())) {
+      list.push(cat);
+    }
+    map.set(row.groupId, list);
+  }
+  for (const [, list] of map) {
+    list.sort((left, right) => left.localeCompare(right));
+  }
+  return map;
 };
 
 const normalizeTemplateSplitDetails = (
@@ -328,6 +359,7 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
         e.expense_group AS expenseGroup,
         e.category,
         e.amount,
+        e.currency,
         e.transaction_date AS transactionDate,
         u.full_name AS paidByName,
         COALESCE(e.is_private, 0) AS isPrivate,
@@ -335,6 +367,7 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
       FROM expenses e
       LEFT JOIN users u ON u.id = e.paid_by_user_id
       WHERE e.group_id IN (?)
+        AND COALESCE(e.expense_flow, 'Outgoing') = 'Outgoing'
       ORDER BY e.transaction_date DESC, e.id DESC
     `,
     [groupRows.map((group) => group.id)],
@@ -367,6 +400,7 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
       total: amount,
       yourShare,
       isPrivate,
+      currency: row.currency && row.currency.trim() ? row.currency.trim().toUpperCase() : 'DKK',
     });
     expensesByGroupId.set(row.groupId, groupExpenses);
 
@@ -378,6 +412,8 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
     totalsByGroupId.set(row.groupId, runningTotals);
   }
 
+  const templateLabelsByGroupId = await listExpenseGroupLabelsByGroupId(groupRows.map((group) => group.id));
+
   return groupRows.map((row) => ({
     ...(totalsByGroupId.get(row.id) ?? { totalSpent: 0, yourShare: 0 }),
     id: String(row.id),
@@ -385,6 +421,7 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
     description: row.description ?? undefined,
     members: membersByGroupId.get(row.id) ?? [],
     expenses: expensesByGroupId.get(row.id) ?? [],
+    expenseGroupLabels: templateLabelsByGroupId.get(row.id) ?? [],
   }));
 };
 
@@ -497,6 +534,7 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
     totalSpent: 0,
     yourShare: 0,
     expenses: [],
+    expenseGroupLabels: [],
   };
 };
 
@@ -688,6 +726,8 @@ export const updateGroup = async (
     },
   });
 
+  const templateLabelsByGroupId = await listExpenseGroupLabelsByGroupId([numericGroupId]);
+
   return {
     id: String(groupRow.id),
     name: groupRow.name,
@@ -696,6 +736,7 @@ export const updateGroup = async (
     totalSpent: 0,
     yourShare: 0,
     expenses: [],
+    expenseGroupLabels: templateLabelsByGroupId.get(numericGroupId) ?? [],
   };
 };
 
@@ -871,6 +912,7 @@ export const listHouseholdSettlements = async (
       LEFT JOIN users payer ON payer.id = e.paid_by_user_id
       WHERE e.group_id IN (?)
         AND COALESCE(e.is_private, 0) = 0
+        AND COALESCE(e.expense_flow, 'Outgoing') = 'Outgoing'
       ORDER BY e.transaction_date DESC, e.id DESC
     `,
     [groupIds],
