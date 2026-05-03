@@ -1,6 +1,6 @@
 import { useQuery } from '@apollo/client/react';
-import { ChangeEvent, DragEvent, useMemo, useRef, useState } from 'react';
-import { Upload } from 'lucide-react';
+import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Upload } from 'lucide-react';
 import styled from 'styled-components';
 import { Sidebar } from '../components/sections';
 import {
@@ -61,19 +61,6 @@ const Actions = styled.div`
   display: flex;
   gap: ${spacing.sm};
   flex-wrap: wrap;
-`;
-
-const UploadSectionTitle = styled.h3`
-  margin: 0;
-  color: ${colors.textPrimary};
-  font-size: 30px;
-  line-height: 1.1;
-`;
-
-const UploadSectionSubtitle = styled.p`
-  margin: 4px 0 0;
-  color: ${colors.textMuted};
-  font-size: 14px;
 `;
 
 const UploadBox = styled.div<{ $isDragActive: boolean }>`
@@ -201,6 +188,10 @@ type ImportedRow = {
   confidence: 'high' | 'medium' | 'low';
   duplicateType: 'none' | 'existing' | 'file';
 };
+
+/** Payee text for merchant rules: merchant column, or description when the statement only fills that. */
+const importRuleMatchText = (row: Pick<ImportedRow, 'title' | 'description'>): string =>
+  (row.title.trim() || row.description.trim()).trim();
 
 type ParsedStatementData = {
   header: string[];
@@ -490,6 +481,89 @@ const findMatchingMerchantRule = (
   return null;
 };
 
+const findRuleByRowPattern = (
+  rules: ImportMerchantRule[],
+  row: ImportedRow,
+  matchType: 'exact' | 'contains',
+): ImportMerchantRule | null => {
+  const pattern = importRuleMatchText(row).toLowerCase();
+  if (!pattern) {
+    return null;
+  }
+  return (
+    rules.find(
+      (rule) =>
+        rule.flow === row.flow &&
+        rule.matchType === matchType &&
+        rule.pattern.trim().toLowerCase() === pattern,
+    ) ?? null
+  );
+};
+
+const isSavedRuleSyncedWithRow = (rule: ImportMerchantRule, row: ImportedRow): boolean => {
+  if (rule.category !== row.category) {
+    return false;
+  }
+  if (row.flow === 'in') {
+    return true;
+  }
+  const ruleSplit = rule.split ?? 'Personal';
+  if (ruleSplit !== row.split) {
+    return false;
+  }
+  if (row.split !== 'Shared') {
+    return true;
+  }
+  return (rule.groupId ?? '') === (row.groupId ?? '') && (rule.expenseGroup ?? '') === (row.expenseGroup ?? '');
+};
+
+type ImportRuleSaveButtonState = {
+  label: string;
+  disabled: boolean;
+  title: string;
+  synced: boolean;
+};
+
+const getImportRuleSaveButtonState = (
+  rules: ImportMerchantRule[],
+  row: ImportedRow,
+  matchType: 'exact' | 'contains',
+): ImportRuleSaveButtonState => {
+  const pattern = importRuleMatchText(row).toLowerCase();
+  if (!pattern) {
+    return {
+      label: 'Save rule',
+      disabled: true,
+      title: 'Add a merchant or description to save a rule.',
+      synced: false,
+    };
+  }
+  const existing = findRuleByRowPattern(rules, row, matchType);
+  if (existing && isSavedRuleSyncedWithRow(existing, row)) {
+    return {
+      label: 'Saved',
+      disabled: true,
+      title:
+        'This mapping is already saved for this merchant with the selected rule type (exact vs contains).',
+      synced: true,
+    };
+  }
+  if (existing) {
+    return {
+      label: 'Update rule',
+      disabled: false,
+      title: 'Update the saved rule to match this row.',
+      synced: false,
+    };
+  }
+  return {
+    label: 'Save rule',
+    disabled: false,
+    title: 'Save this row as a reusable rule.',
+    synced: false,
+  };
+};
+
 const applyMerchantRuleToRow = (
   row: ImportedRow,
   rule: ImportMerchantRule | null,
@@ -517,6 +591,15 @@ const applyMerchantRuleToRow = (
     confidence: 'high',
   };
 };
+
+const reapplyMerchantRulesToRows = (
+  rows: ImportedRow[],
+  rules: ImportMerchantRule[],
+): ImportedRow[] =>
+  rows.map((row) => {
+    const rule = findMatchingMerchantRule(rules, importRuleMatchText(row), row.flow);
+    return applyMerchantRuleToRow(row, rule);
+  });
 
 const resolveSavedMapping = (
   mapping: SavedColumnMapping | undefined,
@@ -1182,7 +1265,7 @@ const buildImportedRows = (
         confidence: history ? 'high' : hasLabel ? 'medium' : 'low',
         duplicateType: 'none',
       };
-    const rule = findMatchingMerchantRule(merchantRules, title, flow);
+    const rule = findMatchingMerchantRule(merchantRules, importRuleMatchText({ title, description }), flow);
     const rowWithRule = applyMerchantRuleToRow(baseRow, rule);
     return [rowWithRule];
   });
@@ -1210,6 +1293,15 @@ export const ImportPage = (): JSX.Element => {
   const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  useEffect(() => {
+    setRows((previous) => {
+      if (previous.length === 0) {
+        return previous;
+      }
+      return reapplyMerchantRulesToRows(previous, merchantRules);
+    });
+  }, [merchantRules]);
+
   const groups = useMemo(() => groupsData?.groups ?? [], [groupsData?.groups]);
   const categoryOptions = useMemo(() => {
     const existingOutgoingCategories = (expensesData?.expenses ?? [])
@@ -1228,13 +1320,13 @@ export const ImportPage = (): JSX.Element => {
   const expenseGroupByHousehold = useMemo(() => {
     const map = new Map<string, string[]>();
     groups.forEach((group) => {
-      const options = Array.from(
-        new Set(
-          group.expenses
-            .map((expense) => (expense.expenseGroup ?? '').trim())
-            .filter(Boolean),
-        ),
-      ).sort((left, right) => left.localeCompare(right));
+      const fromExpenses = group.expenses
+        .map((expense) => (expense.expenseGroup ?? '').trim())
+        .filter(Boolean);
+      const fromTemplates = (group.expenseGroupLabels ?? []).map((label) => label.trim()).filter(Boolean);
+      const options = Array.from(new Set([...fromExpenses, ...fromTemplates])).sort((left, right) =>
+        left.localeCompare(right),
+      );
       map.set(group.id, options);
     });
     return map;
@@ -1857,7 +1949,7 @@ export const ImportPage = (): JSX.Element => {
     setMerchantRules((previous) => {
       const next = [...previous];
       importedRows.forEach((row) => {
-        const pattern = row.title.trim().toLowerCase();
+        const pattern = importRuleMatchText(row).toLowerCase();
         if (!pattern) {
           return;
         }
@@ -1888,7 +1980,7 @@ export const ImportPage = (): JSX.Element => {
   };
 
   const upsertRuleFromRow = (row: ImportedRow, matchType: 'exact' | 'contains') => {
-    const pattern = row.title.trim().toLowerCase();
+    const pattern = importRuleMatchText(row).toLowerCase();
     if (!pattern) {
       return;
     }
@@ -1916,7 +2008,7 @@ export const ImportPage = (): JSX.Element => {
       saveMerchantRules(next);
       return next;
     });
-    setImportInfo(`Saved ${matchType} rule for "${row.title}".`);
+    setImportInfo(`Saved ${matchType} rule for "${importRuleMatchText(row)}".`);
   };
 
   const updateMerchantRule = (id: string, patch: Partial<ImportMerchantRule>) => {
@@ -2074,12 +2166,6 @@ export const ImportPage = (): JSX.Element => {
         </HeaderRow>
 
         <Panel>
-          <div>
-            <UploadSectionTitle>Import Bank Statement</UploadSectionTitle>
-            <UploadSectionSubtitle>
-              Upload your bank statement and automatically categorize your transactions.
-            </UploadSectionSubtitle>
-          </div>
           <UploadBox
             $isDragActive={isDragActive}
             onDragOver={(event) => {
@@ -2508,13 +2594,29 @@ export const ImportPage = (): JSX.Element => {
                       <Td>{row.confidence}</Td>
                       <Td>{row.duplicateType === 'none' ? '-' : row.duplicateType}</Td>
                       <Td>
-                        <Button
-                          type="button"
-                          $variant="secondary"
-                          onClick={() => upsertRuleFromRow(row, newRuleMatchType)}
-                        >
-                          Save rule
-                        </Button>
+                        {(() => {
+                          const saveState = getImportRuleSaveButtonState(merchantRules, row, newRuleMatchType);
+                          return (
+                            <Button
+                              type="button"
+                              $variant="secondary"
+                              disabled={saveState.disabled}
+                              title={saveState.title}
+                              onClick={() => upsertRuleFromRow(row, newRuleMatchType)}
+                            >
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                }}
+                              >
+                                {saveState.synced ? <Check size={16} strokeWidth={2.5} aria-hidden /> : null}
+                                {saveState.label}
+                              </span>
+                            </Button>
+                          );
+                        })()}
                       </Td>
                     </Tr>
                   );
