@@ -2,6 +2,7 @@ import type { FormEvent, KeyboardEvent } from 'react';
 import styled from 'styled-components';
 import { X } from 'lucide-react';
 import { Button, Card, ErrorText, HeaderRow, HeaderText, Input, MutedText, SectionSubtitle, SectionTitle } from '../../components/ui';
+import { APP_CURRENCY_CODE } from '../../format/currency';
 import { colors, spacing } from '../../styles/tokens';
 
 const ModalOverlay = styled.div`
@@ -177,7 +178,7 @@ export const AddExpenseModal = ({
             <RatioRow>
               <SectionBlock>
                 <FieldLabel>
-                  Amount <RequiredMark>*</RequiredMark>
+                  Amount ({APP_CURRENCY_CODE}) <RequiredMark>*</RequiredMark>
                 </FieldLabel>
                 <Input
                   type="number"

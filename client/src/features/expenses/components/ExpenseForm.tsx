@@ -14,6 +14,7 @@ import type {
   SplitAllocationInput,
   SplitType,
 } from '../types';
+import { APP_CURRENCY_CODE, formatAppCurrency } from '../../../format/currency';
 import { spacing } from '../../../styles/tokens';
 
 const Form = styled.form`
@@ -255,14 +256,14 @@ export const ExpenseForm = ({
         </FieldGroup>
         <FieldGroup>
           <LabelText>
-            Amount
+            Amount ({APP_CURRENCY_CODE})
             <RequiredMark>*</RequiredMark>
           </LabelText>
           <Input
             name="amount"
             value={amount}
             onChange={onInputChange}
-            placeholder="Amount"
+            placeholder={`Amount in ${APP_CURRENCY_CODE}`}
             type="number"
             step="0.01"
           />
@@ -404,7 +405,7 @@ export const ExpenseForm = ({
             <thead>
               <tr>
                 <QueuedHeadCell>Merchant</QueuedHeadCell>
-                <QueuedHeadCell>Amount</QueuedHeadCell>
+                <QueuedHeadCell>Amount ({APP_CURRENCY_CODE})</QueuedHeadCell>
                 <QueuedHeadCell>Date</QueuedHeadCell>
                 <QueuedHeadCell>Category</QueuedHeadCell>
                 <QueuedHeadCell>Split</QueuedHeadCell>
@@ -438,7 +439,7 @@ export const ExpenseForm = ({
               ))}
             </tbody>
           </QueuedTable>
-          <MutedText>Queued total: {queuedTotalAmount.toFixed(2)}</MutedText>
+          <MutedText>Queued total: {formatAppCurrency(queuedTotalAmount)}</MutedText>
         </>
       ) : null}
       <Actions>
