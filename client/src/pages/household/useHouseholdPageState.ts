@@ -18,6 +18,7 @@ import {
   type GroupSummary,
   type SplitTemplate,
 } from '../../features/groups';
+import { APP_CURRENCY_CODE } from '../../format/currency';
 
 type GroupsQueryData = {
   groups: GroupSummary[];
@@ -88,7 +89,10 @@ export const useHouseholdPageState = () => {
     refetchQueries: [{ query: GET_GROUPS }],
     awaitRefetchQueries: true,
   });
-  const [upsertTemplateMutation, { loading: savingTemplate }] = useMutation(UPSERT_GROUP_SPLIT_TEMPLATE);
+  const [upsertTemplateMutation, { loading: savingTemplate }] = useMutation(UPSERT_GROUP_SPLIT_TEMPLATE, {
+    refetchQueries: [{ query: GET_GROUPS }],
+    awaitRefetchQueries: true,
+  });
   const groups = useMemo(() => data?.groups ?? [], [data?.groups]);
   const [activeGroupId, setActiveGroupId] = useState('');
   const [isModalOpen, setModalOpen] = useState(false);
@@ -707,6 +711,7 @@ export const useHouseholdPageState = () => {
         splitDetails,
         groupId: activeGroup.id,
         isPrivate: expenseIsPrivate,
+        currency: APP_CURRENCY_CODE,
       });
       closeExpenseModal();
     } catch (mutationError) {
