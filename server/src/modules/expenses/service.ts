@@ -1,6 +1,7 @@
 import type {
   CreateExpenseInput,
   Expense,
+  ExpenseFlow,
   SplitAllocation,
   SplitType,
   UpdateExpenseInput,
@@ -13,10 +14,13 @@ import {
 } from './transactionDedup.js';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
+const APP_CURRENCY = 'DKK';
+
 type ExpenseRow = {
   id: number;
   title: string;
   amount: string;
+  currency?: string | null;
   created_at: Date | string;
   transaction_date: Date | string;
   category: string;
@@ -28,6 +32,7 @@ type ExpenseRow = {
   paid_by_user_id: number | null;
   transaction_dedup_hash: string | null;
   is_private?: number;
+  expense_flow?: string | null;
 } & RowDataPacket;
 
 const rowIsPrivate = (row: { is_private?: number | boolean | null }): boolean => {
@@ -66,6 +71,32 @@ const normalizeSplit = (split: string): SplitType => {
   }
 
   return DEFAULT_SPLIT;
+};
+
+const normalizeExpenseFlow = (raw: string | null | undefined): ExpenseFlow => {
+  if (raw === 'Incoming') {
+    return 'Incoming';
+  }
+  return 'Outgoing';
+};
+
+const normalizeExpenseCurrency = (input?: string | null): string => {
+  const raw = (input ?? APP_CURRENCY).trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(raw)) {
+    throw new Error('Currency must be a 3-letter ISO code.');
+  }
+  if (raw !== APP_CURRENCY) {
+    throw new Error(`Only ${APP_CURRENCY} expenses are supported.`);
+  }
+  return raw;
+};
+
+const rowCurrency = (row: { currency?: string | null }): string => {
+  const c = row.currency;
+  if (typeof c === 'string' && c.trim().length > 0) {
+    return c.trim().toUpperCase();
+  }
+  return APP_CURRENCY;
 };
 
 const roundToCents = (value: number): number => {
@@ -198,7 +229,7 @@ const canAccessExpense = async (row: ExpenseRow, userId: string, userEmail: stri
 
 export const listExpenses = async (userId: string, userEmail: string): Promise<Expense[]> => {
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private FROM expenses ORDER BY transaction_date DESC, id DESC',
+    'SELECT id, title, amount, currency, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private, expense_flow FROM expenses ORDER BY transaction_date DESC, id DESC',
   );
 
   const visible: Expense[] = [];
@@ -217,6 +248,7 @@ export const listExpenses = async (userId: string, userEmail: string): Promise<E
       id: String(row.id),
       title: row.title,
       amount: Number(row.amount),
+      currency: rowCurrency(row),
       createdAt: toIsoString(row.created_at),
       transactionDate: toIsoString(row.transaction_date),
       category: row.category,
@@ -227,6 +259,7 @@ export const listExpenses = async (userId: string, userEmail: string): Promise<E
       createdByUserId: row.created_by_user_id === null ? undefined : String(row.created_by_user_id),
       paidByUserId: row.paid_by_user_id === null ? undefined : String(row.paid_by_user_id),
       isPrivate: rowIsPrivate(row),
+      flow: normalizeExpenseFlow(row.expense_flow),
     });
   }
   return visible;
@@ -237,11 +270,16 @@ export const createExpense = async (
   actor: { userId: string; email: string },
 ): Promise<Expense> => {
   validateAmount(input.amount);
+  const flow = normalizeExpenseFlow(input.flow);
+  if (flow === 'Incoming' && input.groupId) {
+    throw new Error('Income entries cannot be assigned to a household.');
+  }
+
   const category = normalizeCategory(input.category);
-  const expenseGroup = normalizeExpenseGroup(input.expenseGroup);
-  let split = normalizeSplit(input.split);
-  const groupId = input.groupId ? Number(input.groupId) : null;
-  let sourceSplitDetails = input.splitDetails;
+  let expenseGroup = flow === 'Incoming' ? null : normalizeExpenseGroup(input.expenseGroup);
+  let split: SplitType = flow === 'Incoming' ? 'Personal' : normalizeSplit(input.split);
+  let groupId = flow === 'Incoming' ? null : input.groupId ? Number(input.groupId) : null;
+  let sourceSplitDetails = flow === 'Incoming' ? undefined : input.splitDetails;
   if (groupId !== null && !expenseGroup) {
     throw new Error('Expense group is required for household expenses.');
   }
@@ -277,17 +315,19 @@ export const createExpense = async (
     throw new Error('You are not a member of this group.');
   }
   const paidByUserId = input.paidByUserId ? Number(input.paidByUserId) : Number(actor.userId);
-  const isPrivate = groupId !== null && Boolean(input.isPrivate);
+  const isPrivate = flow === 'Incoming' ? false : groupId !== null && Boolean(input.isPrivate);
+  const currency = normalizeExpenseCurrency(input.currency);
   const transactionDedupHash = computeTransactionDedupHash(
     input.transactionDate,
     input.amount,
     input.title,
+    flow,
   );
 
   let result: ResultSetHeader;
   try {
     [result] = await db.execute<ResultSetHeader>(
-      'INSERT INTO expenses (title, amount, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO expenses (title, amount, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private, currency, expense_flow) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         input.title,
         input.amount,
@@ -301,6 +341,8 @@ export const createExpense = async (
         paidByUserId,
         transactionDedupHash,
         isPrivate ? 1 : 0,
+        currency,
+        flow,
       ],
     );
   } catch (error) {
@@ -311,7 +353,7 @@ export const createExpense = async (
   }
 
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, currency, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private, expense_flow FROM expenses WHERE id = ? LIMIT 1',
     [result.insertId],
   );
 
@@ -322,6 +364,7 @@ export const createExpense = async (
       id: String(result.insertId),
       title: input.title,
       amount: input.amount,
+      currency,
       createdAt: new Date().toISOString(),
       transactionDate: new Date(input.transactionDate).toISOString(),
       category,
@@ -332,6 +375,7 @@ export const createExpense = async (
       createdByUserId: actor.userId,
       paidByUserId: String(paidByUserId),
       isPrivate,
+      flow,
     };
   }
 
@@ -339,6 +383,7 @@ export const createExpense = async (
     id: String(row.id),
     title: row.title,
     amount: Number(row.amount),
+    currency: rowCurrency(row),
     createdAt: toIsoString(row.created_at),
     transactionDate: toIsoString(row.transaction_date),
     category: row.category,
@@ -349,12 +394,13 @@ export const createExpense = async (
     createdByUserId: row.created_by_user_id === null ? undefined : String(row.created_by_user_id),
     paidByUserId: row.paid_by_user_id === null ? undefined : String(row.paid_by_user_id),
     isPrivate: rowIsPrivate(row),
+    flow: normalizeExpenseFlow(row.expense_flow),
   };
 };
 
 export const deleteExpense = async (id: string, actor: { userId: string; email: string }): Promise<boolean> => {
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, group_id, created_by_user_id, paid_by_user_id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, transaction_dedup_hash, is_private FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, group_id, created_by_user_id, paid_by_user_id, title, amount, currency, created_at, transaction_date, category, expense_group, split_type, split_details, transaction_dedup_hash, is_private FROM expenses WHERE id = ? LIMIT 1',
     [id],
   );
   const row = rows[0];
@@ -395,6 +441,7 @@ export const deleteExpense = async (id: string, actor: { userId: string; email: 
         groupId: row.group_id,
         createdByUserId: row.created_by_user_id,
         paidByUserId: row.paid_by_user_id,
+        currency: rowCurrency(row),
         isPrivate: rowIsPrivate(row),
       },
       afterState: null,
@@ -409,16 +456,9 @@ export const updateExpense = async (
   actor: { userId: string; email: string },
 ): Promise<Expense | null> => {
   validateAmount(input.amount);
-  const category = normalizeCategory(input.category);
-  const expenseGroup = normalizeExpenseGroup(input.expenseGroup);
-  const split = normalizeSplit(input.split);
-  const splitDetails =
-    input.splitDetails === undefined ? null : toStoredSplitDetails(input.amount, input.splitDetails);
-  validateSplitConsistency(split, splitDetails, false);
-  const splitDetailsJson = splitDetails === null ? null : JSON.stringify(splitDetails);
 
   const [existingRows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, currency, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private, expense_flow FROM expenses WHERE id = ? LIMIT 1',
     [input.id],
   );
   const existing = existingRows[0];
@@ -442,25 +482,65 @@ export const updateExpense = async (
     throw new Error('Not authorized to update this private expense.');
   }
 
-  const nextGroupId = input.groupId ? Number(input.groupId) : existingGroupId;
-  if (nextGroupId !== null && !expenseGroup) {
-    throw new Error('Expense group is required for household expenses.');
+  const nextFlow = normalizeExpenseFlow(input.flow !== undefined ? input.flow : existing.expense_flow);
+  if (nextFlow === 'Incoming' && input.groupId) {
+    throw new Error('Income entries cannot be assigned to a household.');
   }
+
+  const category = normalizeCategory(input.category);
+  let expenseGroup: string | null;
+  let split: SplitType;
+  let splitDetailsJson: string | null;
+  let nextGroupId: number | null;
+
+  if (nextFlow === 'Incoming') {
+    expenseGroup = null;
+    split = 'Personal';
+    nextGroupId = null;
+    const splitDetails = toStoredSplitDetails(input.amount, undefined);
+    validateSplitConsistency(split, splitDetails, false);
+    splitDetailsJson = splitDetails.length > 0 ? JSON.stringify(splitDetails) : null;
+  } else {
+    expenseGroup = normalizeExpenseGroup(input.expenseGroup);
+    split = normalizeSplit(input.split);
+    nextGroupId = input.groupId ? Number(input.groupId) : existingGroupId;
+    if (nextGroupId !== null && !expenseGroup) {
+      throw new Error('Expense group is required for household expenses.');
+    }
+    if (input.splitDetails === undefined) {
+      validateSplitConsistency(split, parseSplitDetails(existing.split_details), false);
+      splitDetailsJson = null;
+    } else {
+      const splitDetails = toStoredSplitDetails(input.amount, input.splitDetails);
+      validateSplitConsistency(split, splitDetails, false);
+      splitDetailsJson = JSON.stringify(splitDetails);
+    }
+  }
+
   if (nextGroupId !== null && !(await isGroupMember(nextGroupId, actor.email))) {
     throw new Error('You are not a member of this group.');
   }
   const nextPaidByUserId = input.paidByUserId ? Number(input.paidByUserId) : existing.paid_by_user_id;
   const nextIsPrivate =
-    nextGroupId === null ? false : input.isPrivate !== undefined ? Boolean(input.isPrivate) : rowIsPrivate(existing);
+    nextFlow === 'Incoming'
+      ? false
+      : nextGroupId === null
+        ? false
+        : input.isPrivate !== undefined
+          ? Boolean(input.isPrivate)
+          : rowIsPrivate(existing);
   const nextDedupHash =
     existing.created_by_user_id === null
       ? null
-      : computeTransactionDedupHash(input.transactionDate, input.amount, input.title);
+      : computeTransactionDedupHash(input.transactionDate, input.amount, input.title, nextFlow);
+  const nextCurrency = normalizeExpenseCurrency(
+    input.currency !== undefined && input.currency !== null ? input.currency : rowCurrency(existing),
+  );
 
   let updateResult: ResultSetHeader;
   try {
     [updateResult] = await db.execute<ResultSetHeader>(
-      'UPDATE expenses SET title = ?, amount = ?, transaction_date = ?, category = ?, expense_group = ?, split_type = ?, split_details = COALESCE(?, split_details), group_id = ?, paid_by_user_id = ?, transaction_dedup_hash = ?, is_private = ? WHERE id = ?',
+      'UPDATE expenses SET title = ?, amount = ?, transaction_date = ?, category = ?, expense_group = ?, split_type = ?, split_details = COALESCE(?, split_details), group_id = ?, paid_by_user_id = ?, transaction_dedup_hash = ?, is_private = ?, currency = ?, expense_flow = ? WHERE id = ?',
       [
         input.title,
         input.amount,
@@ -473,6 +553,8 @@ export const updateExpense = async (
         nextPaidByUserId,
         nextDedupHash,
         nextIsPrivate ? 1 : 0,
+        nextCurrency,
+        nextFlow,
         input.id,
       ],
     );
@@ -488,7 +570,7 @@ export const updateExpense = async (
   }
 
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private FROM expenses WHERE id = ? LIMIT 1',
+    'SELECT id, title, amount, currency, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private, expense_flow FROM expenses WHERE id = ? LIMIT 1',
     [input.id],
   );
 
@@ -517,6 +599,7 @@ export const updateExpense = async (
       createdByUserId: existing.created_by_user_id,
       paidByUserId: existing.paid_by_user_id,
       isPrivate: rowIsPrivate(existing),
+      currency: rowCurrency(existing),
     },
     afterState: {
       id: row.id,
@@ -530,6 +613,7 @@ export const updateExpense = async (
       groupId: row.group_id,
       createdByUserId: row.created_by_user_id,
       paidByUserId: row.paid_by_user_id,
+      currency: rowCurrency(row),
       isPrivate: rowIsPrivate(row),
     },
   });
@@ -538,6 +622,7 @@ export const updateExpense = async (
     id: String(row.id),
     title: row.title,
     amount: Number(row.amount),
+    currency: rowCurrency(row),
     createdAt: toIsoString(row.created_at),
     transactionDate: toIsoString(row.transaction_date),
     category: row.category,
@@ -548,5 +633,6 @@ export const updateExpense = async (
     createdByUserId: row.created_by_user_id === null ? undefined : String(row.created_by_user_id),
     paidByUserId: row.paid_by_user_id === null ? undefined : String(row.paid_by_user_id),
     isPrivate: rowIsPrivate(row),
+    flow: normalizeExpenseFlow(row.expense_flow),
   };
 };
