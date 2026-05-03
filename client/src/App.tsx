@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './features/auth';
 import { HouseholdPage } from './pages/HouseholdPage';
+import { BudgetPage } from './pages/BudgetPage';
 import { HomePage } from './pages/HomePage';
 import { ImportPage } from './pages/ImportPage';
 import { LoginPage } from './pages/LoginPage';
@@ -56,6 +57,14 @@ const App = (): JSX.Element => {
         element={
           <RequireAuth>
             <HomePage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/budget"
+        element={
+          <RequireAuth>
+            <BudgetPage />
           </RequireAuth>
         }
       />
