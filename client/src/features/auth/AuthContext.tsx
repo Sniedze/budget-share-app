@@ -112,6 +112,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
+/** Hook for consumers; co-located with provider for a single auth module. */
+// eslint-disable-next-line react-refresh/only-export-components -- useAuth must live beside AuthProvider
 export const useAuth = (): AuthContextValue => {
   const context = useContext(AuthContext);
   if (!context) {
