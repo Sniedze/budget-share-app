@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
 import styled from 'styled-components';
 import type { MonthlyOverviewPoint } from '../../features/expenses';
+import { formatAppCurrency } from '../../format/currency';
 import { colors, spacing } from '../../styles/tokens';
 import { Card, MutedText } from '../ui';
 
@@ -59,7 +60,6 @@ const CategoryList = styled.div`
   gap: 4px;
 `;
 
-const formatCurrency = (value: number): string => `$${value.toFixed(2)}`;
 export const MonthlyOverviewSection = ({ rows }: MonthlyOverviewSectionProps): JSX.Element => {
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
   const toggleExpanded = (month: string) => {
@@ -86,9 +86,9 @@ export const MonthlyOverviewSection = ({ rows }: MonthlyOverviewSectionProps): J
               <Fragment key={row.month}>
                 <SummaryRow onClick={() => toggleExpanded(row.month)}>
                   <Cell>{row.month}</Cell>
-                  <Cell>{formatCurrency(row.total)}</Cell>
-                  <Cell>{formatCurrency(row.personal)}</Cell>
-                  <Cell>{formatCurrency(row.shared)}</Cell>
+                  <Cell>{formatAppCurrency(row.total)}</Cell>
+                  <Cell>{formatAppCurrency(row.personal)}</Cell>
+                  <Cell>{formatAppCurrency(row.shared)}</Cell>
                 </SummaryRow>
                 {expandedMonth === row.month ? (
                   <tr>
@@ -96,7 +96,7 @@ export const MonthlyOverviewSection = ({ rows }: MonthlyOverviewSectionProps): J
                       <CategoryList>
                         {row.categories.map((entry) => (
                           <MutedText key={`${row.month}-${entry.name}`}>
-                            {entry.name}: {formatCurrency(entry.total)}
+                            {entry.name}: {formatAppCurrency(entry.total)}
                           </MutedText>
                         ))}
                       </CategoryList>

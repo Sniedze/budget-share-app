@@ -28,6 +28,7 @@ import {
   RECORD_SETTLEMENT_PAYMENT,
   type GetHouseholdSettlementsResponse,
 } from '../features/settlements';
+import { formatAppCurrency } from '../format/currency';
 import { spacing } from '../styles/tokens';
 
 const Grid = styled.div`
@@ -72,7 +73,7 @@ export const SettlementsPage = (): JSX.Element => {
     refetchQueries: [{ query: GET_HOUSEHOLD_SETTLEMENTS }],
     awaitRefetchQueries: true,
   });
-  const households = data?.householdSettlements ?? [];
+  const households = useMemo(() => data?.householdSettlements ?? [], [data?.householdSettlements]);
   const [activeGroupId, setActiveGroupId] = useState('');
   const [scope, setScope] = useState('__household__');
   const [fromMember, setFromMember] = useState('');
@@ -246,7 +247,7 @@ export const SettlementsPage = (): JSX.Element => {
                   {balances.map((entry) => (
                     <Tr key={`balance-${entry.memberName}`}>
                       <Td>{entry.memberName}</Td>
-                      <Td>${Math.abs(entry.amount).toFixed(2)}</Td>
+                      <Td>{formatAppCurrency(Math.abs(entry.amount))}</Td>
                       <Td>{entry.amount > 0.01 ? 'Is owed' : entry.amount < -0.01 ? 'Owes' : 'Settled'}</Td>
                     </Tr>
                   ))}
@@ -269,7 +270,7 @@ export const SettlementsPage = (): JSX.Element => {
                     <Tr key={`transfer-${transfer.fromMember}-${transfer.toMember}-${index}`}>
                       <Td>{transfer.fromMember}</Td>
                       <Td>{transfer.toMember}</Td>
-                      <Td>${transfer.amount.toFixed(2)}</Td>
+                      <Td>{formatAppCurrency(transfer.amount)}</Td>
                     </Tr>
                   ))}
                   {transfers.length === 0 ? (
@@ -301,7 +302,7 @@ export const SettlementsPage = (): JSX.Element => {
                       <Td>{payment.expenseGroup ?? 'Total household'}</Td>
                       <Td>{payment.fromMember}</Td>
                       <Td>{payment.toMember}</Td>
-                      <Td>${payment.amount.toFixed(2)}</Td>
+                      <Td>{formatAppCurrency(payment.amount)}</Td>
                       <Td>{payment.note ?? '-'}</Td>
                     </Tr>
                   ))}

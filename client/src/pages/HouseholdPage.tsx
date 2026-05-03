@@ -6,6 +6,8 @@ import { AddExpenseModal } from './household/AddExpenseModal';
 import { CreateExpenseGroupModal } from './household/CreateExpenseGroupModal';
 import { CreateHouseholdModal } from './household/CreateHouseholdModal';
 import { useHouseholdPageState } from './household/useHouseholdPageState';
+import { formatAppCurrency } from '../format/currency';
+import { splitExpenseTitleForDisplay } from '../format/expenseTitle';
 import { colors, spacing } from '../styles/tokens';
 
 const GroupsGrid = styled.div`
@@ -243,11 +245,11 @@ export const HouseholdPage = (): JSX.Element => {
             <StatGrid>
               <StatCard>
                 <MutedText>Total Spent</MutedText>
-                <strong>${activeGroup.totalSpent.toFixed(2)}</strong>
+                <strong>{formatAppCurrency(activeGroup.totalSpent)}</strong>
               </StatCard>
               <StatCard>
                 <MutedText>Your Share</MutedText>
-                <strong>${activeGroup.yourShare.toFixed(2)}</strong>
+                <strong>{formatAppCurrency(activeGroup.yourShare)}</strong>
               </StatCard>
               <StatCard>
                 <MutedText>Members</MutedText>
@@ -334,8 +336,12 @@ export const HouseholdPage = (): JSX.Element => {
                     <ExpenseGroupCard>
                       <strong>Summary</strong>
                       <MutedText style={{ margin: 0 }}>Expenses: {activeExpenseGroupExpenses.length}</MutedText>
-                      <MutedText style={{ margin: 0 }}>Total spent: ${activeExpenseGroupTotals.total.toFixed(2)}</MutedText>
-                      <MutedText style={{ margin: 0 }}>Your share: ${activeExpenseGroupTotals.yourShare.toFixed(2)}</MutedText>
+                      <MutedText style={{ margin: 0 }}>
+                        Total spent: {formatAppCurrency(activeExpenseGroupTotals.total)}
+                      </MutedText>
+                      <MutedText style={{ margin: 0 }}>
+                        Your share: {formatAppCurrency(activeExpenseGroupTotals.yourShare)}
+                      </MutedText>
                     </ExpenseGroupCard>
                   </ExpenseGroupsGrid>
                   <SectionSubtitle>Expense Group Expenses</SectionSubtitle>
@@ -344,6 +350,7 @@ export const HouseholdPage = (): JSX.Element => {
                       <Thead>
                         <Tr>
                           <Th>Date</Th>
+                          <Th>Merchant</Th>
                           <Th>Description</Th>
                           <Th>Category</Th>
                           <Th>Paid By</Th>
@@ -354,21 +361,25 @@ export const HouseholdPage = (): JSX.Element => {
                         </Tr>
                       </Thead>
                       <Tbody>
-                        {activeExpenseGroupExpenses.map((expense) => (
+                        {activeExpenseGroupExpenses.map((expense) => {
+                          const { merchant, description } = splitExpenseTitleForDisplay(expense.description);
+                          return (
                           <Tr key={`${expense.date}-${expense.description}-${expense.total}`}>
                             <Td>{expense.date}</Td>
-                            <Td>{expense.description}</Td>
+                            <Td>{merchant}</Td>
+                            <Td>{description || '—'}</Td>
                             <Td>{expense.category}</Td>
                             <Td>{expense.paidBy}</Td>
-                            <Td>${expense.total.toFixed(2)}</Td>
+                            <Td>{formatAppCurrency(expense.total)}</Td>
                             <Td>{getExpenseRatioLabel(expense.total, expense.yourShare)}</Td>
-                            <Td>${expense.yourShare.toFixed(2)}</Td>
+                            <Td>{formatAppCurrency(expense.yourShare)}</Td>
                             <Td>{expense.isPrivate ? 'Yes' : '—'}</Td>
                           </Tr>
-                        ))}
+                          );
+                        })}
                         {activeExpenseGroupExpenses.length === 0 ? (
                           <Tr key="no-expense-group-expenses">
-                            <Td colSpan={8}>No expenses for this expense group yet.</Td>
+                            <Td colSpan={9}>No expenses for this expense group yet.</Td>
                           </Tr>
                         ) : null}
                       </Tbody>

@@ -3,16 +3,27 @@ import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { ChartsSection, MonthlyOverviewSection, RecentExpensesSection, Sidebar, StatsSection } from '../components/sections';
 import { AppLayout, HeaderRow, HeaderText, MutedText, PageSurface, SectionSubtitle, SectionTitle, UserMenu } from '../components/ui';
-import { GET_EXPENSES, buildMerchantSuggestions, getBreakdownData, getDashboardStats, getTotalAmount, getTrendData, ExpenseForm, useExpenseActions } from '../features/expenses';
+import { APP_CURRENCY_CODE } from '../format/currency';
+import {
+  DEFAULT_EXPENSE_CATEGORIES,
+  GET_EXPENSES,
+  buildMerchantSuggestions,
+  getBreakdownData,
+  getDashboardStats,
+  getTotalAmount,
+  getTrendData,
+  ExpenseForm,
+  outgoingExpensesOnly,
+  useExpenseActions,
+} from '../features/expenses';
 import { getMonthlyOverview } from '../features/expenses/selectors/expenseAnalytics';
 import type { Expense, GetExpensesResponse, SplitAllocationInput, SplitType } from '../features/expenses';
 import { GET_GROUPS, GET_GROUP_SPLIT_TEMPLATES } from '../features/groups';
 import type { GroupSummary, SplitTemplate } from '../features/groups';
 import { colors, radii, spacing } from '../styles/tokens';
 
-const DEFAULT_CATEGORY = 'General';
+const DEFAULT_CATEGORY = DEFAULT_EXPENSE_CATEGORIES[0];
 const DEFAULT_SPLIT: SplitType = 'Personal';
-const DEFAULT_CATEGORY_OPTIONS = ['General', 'Groceries', 'Utilities', 'Rent', 'Transport', 'Entertainment', 'Health', 'Other'];
 const DEFAULT_CUSTOM_SPLIT_DETAILS: SplitAllocationInput[] = [
   { participant: 'You', ratio: 50 },
   { participant: 'Partner', ratio: 50 },
@@ -112,14 +123,15 @@ export const HomePage = (): JSX.Element => {
   });
 
   const expenses = useMemo(() => data?.expenses ?? [], [data]);
-  const totalAmount = useMemo(() => getTotalAmount(expenses), [expenses]);
+  const outgoingExpenses = useMemo(() => outgoingExpensesOnly(expenses), [expenses]);
+  const totalAmount = useMemo(() => getTotalAmount(outgoingExpenses), [outgoingExpenses]);
   const stats = useMemo(() => getDashboardStats(totalAmount), [totalAmount]);
-  const trendData = useMemo(() => getTrendData(expenses), [expenses]);
-  const breakdownData = useMemo(() => getBreakdownData(expenses), [expenses]);
-  const monthlyOverview = useMemo(() => getMonthlyOverview(expenses), [expenses]);
+  const trendData = useMemo(() => getTrendData(outgoingExpenses), [outgoingExpenses]);
+  const breakdownData = useMemo(() => getBreakdownData(outgoingExpenses), [outgoingExpenses]);
+  const monthlyOverview = useMemo(() => getMonthlyOverview(outgoingExpenses), [outgoingExpenses]);
   const householdOptions = useMemo(() => groupsData?.groups ?? [], [groupsData?.groups]);
   const sortedCategoryOptions = useMemo(
-    () => [...DEFAULT_CATEGORY_OPTIONS].sort((left, right) => left.localeCompare(right)),
+    () => [...DEFAULT_EXPENSE_CATEGORIES].sort((left, right) => left.localeCompare(right)),
     [],
   );
   const merchantCategoryLookup = useMemo(() => {
@@ -176,6 +188,8 @@ export const HomePage = (): JSX.Element => {
         splitDetails: values.split === 'Custom' ? normalizedSplitDetails : undefined,
         groupId: values.split === 'Shared' ? values.groupId : undefined,
         isPrivate: values.split === 'Shared' && Boolean(values.groupId) ? values.isPrivate : false,
+        currency: APP_CURRENCY_CODE,
+        flow: 'Outgoing' as const,
       };
     };
 
@@ -184,9 +198,12 @@ export const HomePage = (): JSX.Element => {
         return;
       }
       const payload = toAddPayload(formValues);
+      const existing = expenses.find((item) => item.id === editingId);
       await updateExpense({
         id: editingId,
         ...payload,
+        currency: existing?.currency ?? APP_CURRENCY_CODE,
+        flow: existing?.flow ?? 'Outgoing',
       });
     } else {
       const expensesToCreate = [...queuedExpenses];
@@ -348,7 +365,7 @@ export const HomePage = (): JSX.Element => {
         {error ? <MutedText>Error: {error.message}</MutedText> : null}
         {!loading && !error ? (
           <RecentExpensesSection
-            expenses={expenses}
+            expenses={outgoingExpenses}
             isMutating={isMutating}
             onEdit={handleEdit}
             onDelete={handleDelete}
