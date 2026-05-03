@@ -1,7 +1,12 @@
 import type { Request } from 'express';
 import { rateLimit } from 'express-rate-limit';
 
-const isAuthGraphqlOperation = (req: Request): boolean => {
+/**
+ * Strict cap: login/register brute-force protection only.
+ * RefreshSession is excluded — it shares the generous default budget so token
+ * refresh + many API calls do not burn the same small bucket as credential tries.
+ */
+const isStrictAuthGraphqlOperation = (req: Request): boolean => {
   if (req.method === 'OPTIONS') {
     return false;
   }
@@ -10,13 +15,13 @@ const isAuthGraphqlOperation = (req: Request): boolean => {
     return false;
   }
   if (typeof body.operationName === 'string') {
-    if (/^(Login|Register|RefreshSession)$/i.test(body.operationName.trim())) {
+    if (/^(Login|Register)$/i.test(body.operationName.trim())) {
       return true;
     }
   }
   if (typeof body.query === 'string') {
     const q = body.query;
-    if (/\bmutation\b/i.test(q) && /\b(login|register|refreshSession)\s*\(/i.test(q)) {
+    if (/\bmutation\b/i.test(q) && /\b(login|register)\s*\(/i.test(q)) {
       return true;
     }
   }
@@ -24,12 +29,13 @@ const isAuthGraphqlOperation = (req: Request): boolean => {
 };
 
 /**
- * Limits abuse of the single GraphQL HTTP endpoint. Auth mutations get a
- * tighter per-IP budget; other operations get a higher cap for normal SPA usage.
+ * Limits abuse of the single GraphQL HTTP endpoint. Login/register get a
+ * tighter per-IP budget; everything else (including refreshSession) uses a
+ * higher cap for normal SPA usage.
  */
 export const graphqlRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: (req) => (isAuthGraphqlOperation(req) ? 40 : 800),
+  limit: (req) => (isStrictAuthGraphqlOperation(req) ? 100 : 800),
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS',
