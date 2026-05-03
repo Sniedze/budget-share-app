@@ -8,6 +8,7 @@ export const GET_GROUPS = gql`
       description
       totalSpent
       yourShare
+      expenseGroupLabels
       members {
         name
         email
@@ -22,6 +23,7 @@ export const GET_GROUPS = gql`
         total
         yourShare
         isPrivate
+        currency
       }
     }
   }
@@ -50,6 +52,7 @@ export const CREATE_GROUP = gql`
       description
       totalSpent
       yourShare
+      expenseGroupLabels
       members {
         name
         email
@@ -64,6 +67,7 @@ export const CREATE_GROUP = gql`
         total
         yourShare
         isPrivate
+        currency
       }
     }
   }
@@ -77,6 +81,7 @@ export const UPDATE_GROUP = gql`
       description
       totalSpent
       yourShare
+      expenseGroupLabels
       members {
         name
         email
@@ -91,6 +96,7 @@ export const UPDATE_GROUP = gql`
         total
         yourShare
         isPrivate
+        currency
       }
     }
   }
