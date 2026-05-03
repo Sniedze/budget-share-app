@@ -6,10 +6,17 @@ export const GET_EXPENSES = gql`
       id
       title
       amount
+      currency
       createdAt
       transactionDate
       category
+      expenseGroup
       split
+      groupId
+      createdByUserId
+      paidByUserId
+      isPrivate
+      flow
       splitDetails {
         participant
         ratio
@@ -25,10 +32,17 @@ export const ADD_EXPENSE = gql`
       id
       title
       amount
+      currency
       createdAt
       transactionDate
       category
+      expenseGroup
       split
+      groupId
+      createdByUserId
+      paidByUserId
+      isPrivate
+      flow
       splitDetails {
         participant
         ratio
@@ -44,10 +58,17 @@ export const UPDATE_EXPENSE = gql`
       id
       title
       amount
+      currency
       createdAt
       transactionDate
       category
+      expenseGroup
       split
+      groupId
+      createdByUserId
+      paidByUserId
+      isPrivate
+      flow
       splitDetails {
         participant
         ratio

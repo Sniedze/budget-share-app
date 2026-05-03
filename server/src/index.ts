@@ -4,7 +4,9 @@ import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express5';
 import { typeDefs } from './graphql/schema.js';
 import { resolvers } from './graphql/resolvers.js';
+import { createGraphqlContext, type GraphqlContext } from './graphql/context.js';
 import { checkDbConnection, ensureSchema, migrateSchema } from './db/mysql.js';
+import { graphqlRateLimiter } from './middleware/graphqlRateLimit.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -16,13 +18,22 @@ const start = async () => {
   });
 
   await apollo.start();
+  if (process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true') {
+    app.set('trust proxy', 1);
+  }
   app.use(cors());
   app.use(express.json());
 
   app.get('/health', (_req, res) => {
     res.status(200).json({ ok: true, service: 'server' });
   });
-  app.use('/graphql', expressMiddleware(apollo));
+  app.use(
+    '/graphql',
+    graphqlRateLimiter,
+    expressMiddleware(apollo, {
+      context: async ({ req }): Promise<GraphqlContext> => createGraphqlContext(req),
+    }),
+  );
   await checkDbConnection();
   console.log('MySQL connection established');
 

@@ -16,3 +16,9 @@ export const SectionSubtitle = styled.p`
 export const MutedText = styled.p`
   color: ${colors.textMuted};
 `;
+
+export const ErrorText = styled.p`
+  margin: 0;
+  color: ${colors.danger};
+  font-size: 13px;
+`;

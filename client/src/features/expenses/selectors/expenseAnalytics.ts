@@ -1,3 +1,4 @@
+import { formatAppCurrency } from '../../../format/currency';
 import type { Expense } from '../types';
 
 export type TrendPoint = {
@@ -8,6 +9,17 @@ export type TrendPoint = {
 export type BreakdownPoint = {
   name: string;
   value: number;
+};
+
+export type MonthlyOverviewPoint = {
+  month: string;
+  total: number;
+  personal: number;
+  shared: number;
+  categories: Array<{
+    name: string;
+    total: number;
+  }>;
 };
 
 export type DashboardStat = {
@@ -27,17 +39,17 @@ export const getDashboardStats = (totalAmount: number): DashboardStat[] => {
   return [
     {
       label: 'Total This Month',
-      value: `$${totalAmount.toFixed(2)}`,
+      value: formatAppCurrency(totalAmount),
       hint: 'All tracked expenses',
     },
     {
       label: 'Personal Expenses',
-      value: `$${personalAmount.toFixed(2)}`,
+      value: formatAppCurrency(personalAmount),
       hint: '65% of total',
     },
     {
       label: 'Shared Expenses',
-      value: `$${sharedAmount.toFixed(2)}`,
+      value: formatAppCurrency(sharedAmount),
       hint: '35% of total',
     },
     {
@@ -89,4 +101,44 @@ export const getBreakdownData = (expenses: Expense[]): BreakdownPoint[] => {
   const otherValue = sorted.slice(5).reduce((sum, item) => sum + item.value, 0);
 
   return [...top, { name: 'Other', value: Number(otherValue.toFixed(2)) }];
+};
+
+export const getMonthlyOverview = (expenses: Expense[]): MonthlyOverviewPoint[] => {
+  const byMonth = new Map<
+    string,
+    { total: number; personal: number; shared: number; categories: Map<string, number> }
+  >();
+
+  for (const expense of expenses) {
+    const date = new Date(expense.transactionDate);
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const current = byMonth.get(monthKey) ?? { total: 0, personal: 0, shared: 0, categories: new Map<string, number>() };
+
+    current.total += expense.amount;
+    if (expense.groupId) {
+      current.shared += expense.amount;
+    } else {
+      current.personal += expense.amount;
+    }
+    const categoryName = expense.category.trim() || 'Other';
+    current.categories.set(categoryName, (current.categories.get(categoryName) ?? 0) + expense.amount);
+    byMonth.set(monthKey, current);
+  }
+
+  return Array.from(byMonth.entries())
+    .sort(([a], [b]) => b.localeCompare(a))
+    .slice(0, 6)
+    .map(([monthKey, values]) => {
+      const [year, month] = monthKey.split('-');
+      const date = new Date(Number(year), Number(month) - 1, 1);
+      return {
+        month: date.toLocaleString('en-US', { month: 'short', year: 'numeric' }),
+        total: Number(values.total.toFixed(2)),
+        personal: Number(values.personal.toFixed(2)),
+        shared: Number(values.shared.toFixed(2)),
+        categories: Array.from(values.categories.entries())
+          .map(([name, total]) => ({ name, total: Number(total.toFixed(2)) }))
+          .sort((left, right) => right.total - left.total),
+      };
+    });
 };

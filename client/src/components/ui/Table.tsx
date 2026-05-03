@@ -17,6 +17,8 @@ export const Thead = styled.thead`
   background: #f9fafb;
 `;
 
+export const Tbody = styled.tbody``;
+
 export const Th = styled.th`
   text-align: left;
   padding: 10px 12px;

@@ -1,9 +1,9 @@
 import styled from 'styled-components';
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
-  Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { BreakdownPoint, TrendPoint } from '../../features/expenses';
+import { formatAppCurrency } from '../../format/currency';
 import { colors, spacing } from '../../styles/tokens';
 import { Card, SectionSubtitle } from '../ui';
 
@@ -81,8 +82,6 @@ const Dot = styled.span<{ $color: string }>`
 
 const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#6b7280'];
 
-const formatAmount = (value: number): string => `$${value.toFixed(2)}`;
-
 export const ChartsSection = ({ trendData, breakdownData }: ChartsSectionProps): JSX.Element => {
   return (
     <Row>
@@ -90,19 +89,19 @@ export const ChartsSection = ({ trendData, breakdownData }: ChartsSectionProps):
         <CardTitle>Monthly Spending Trend</CardTitle>
         <ChartFrame>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+            <BarChart data={trendData} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
               <CartesianGrid stroke="#eef2f7" vertical={false} />
               <XAxis dataKey="month" tick={{ fill: colors.textMuted, fontSize: 12 }} axisLine={false} tickLine={false} />
               <YAxis
                 tick={{ fill: colors.textMuted, fontSize: 12 }}
-                tickFormatter={(value: number) => `$${Math.round(value)}`}
+                tickFormatter={(value: number) => formatAppCurrency(Math.round(value))}
                 axisLine={false}
                 tickLine={false}
-                width={42}
+                width={68}
               />
-              <Tooltip formatter={(value) => formatAmount(Number(value ?? 0))} />
-              <Line type="monotone" dataKey="amount" stroke={colors.accent} strokeWidth={2.5} dot={false} />
-            </LineChart>
+              <Tooltip formatter={(value) => formatAppCurrency(Number(value ?? 0))} />
+              <Bar dataKey="amount" fill={colors.accent} radius={[6, 6, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </ChartFrame>
       </TrendCard>
@@ -112,7 +111,7 @@ export const ChartsSection = ({ trendData, breakdownData }: ChartsSectionProps):
         <PieFrame>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Tooltip formatter={(value) => formatAmount(Number(value ?? 0))} />
+              <Tooltip formatter={(value) => formatAppCurrency(Number(value ?? 0))} />
               <Pie data={breakdownData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={62} paddingAngle={1}>
                 {breakdownData.map((entry, index) => (
                   <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
