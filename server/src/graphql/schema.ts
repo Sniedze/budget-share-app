@@ -5,10 +5,16 @@ export const typeDefs = `#graphql
     Custom
   }
 
+  enum ExpenseFlow {
+    Outgoing
+    Incoming
+  }
+
   type Expense {
     id: ID!
     title: String!
     amount: Float!
+    currency: String!
     createdAt: String!
     transactionDate: String!
     category: String!
@@ -19,6 +25,7 @@ export const typeDefs = `#graphql
     createdByUserId: ID
     paidByUserId: ID
     isPrivate: Boolean!
+    flow: ExpenseFlow!
   }
 
   type SplitAllocation {
@@ -42,6 +49,7 @@ export const typeDefs = `#graphql
     total: Float!
     yourShare: Float!
     isPrivate: Boolean!
+    currency: String!
   }
 
   type Group {
@@ -52,6 +60,8 @@ export const typeDefs = `#graphql
     totalSpent: Float!
     yourShare: Float!
     expenses: [GroupExpense!]!
+    """Expense group names from split templates (may exist before any expense is posted)."""
+    expenseGroupLabels: [String!]!
   }
 
   enum GroupInvitationStatus {
@@ -185,6 +195,8 @@ export const typeDefs = `#graphql
     groupId: ID
     paidByUserId: ID
     isPrivate: Boolean
+    currency: String
+    flow: ExpenseFlow
   }
 
   input RecordSettlementPaymentInput {
@@ -213,6 +225,8 @@ export const typeDefs = `#graphql
     groupId: ID
     paidByUserId: ID
     isPrivate: Boolean
+    currency: String
+    flow: ExpenseFlow
   }
 
   type Query {
