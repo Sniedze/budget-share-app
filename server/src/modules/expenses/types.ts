@@ -6,10 +6,13 @@ export type SplitAllocation = {
 
 export type SplitType = 'Personal' | 'Shared' | 'Custom';
 
+export type ExpenseFlow = 'Outgoing' | 'Incoming';
+
 export type Expense = {
   id: string;
   title: string;
   amount: number;
+  currency: string;
   createdAt: string;
   transactionDate: string;
   category: string;
@@ -20,6 +23,7 @@ export type Expense = {
   createdByUserId?: string;
   paidByUserId?: string;
   isPrivate: boolean;
+  flow: ExpenseFlow;
 };
 
 export type CreateExpenseInput = {
@@ -36,6 +40,9 @@ export type CreateExpenseInput = {
   groupId?: string;
   paidByUserId?: string;
   isPrivate?: boolean;
+  /** ISO 4217 code; only DKK is accepted. */
+  currency?: string;
+  flow?: ExpenseFlow;
 };
 
 export type DeleteExpenseInput = {
@@ -57,4 +64,6 @@ export type UpdateExpenseInput = {
   groupId?: string;
   paidByUserId?: string;
   isPrivate?: boolean;
+  currency?: string;
+  flow?: ExpenseFlow;
 };

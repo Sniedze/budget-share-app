@@ -24,15 +24,20 @@ export const transactionDateKeyForDedup = (transactionDate: string): string => {
  * Per-user duplicate fingerprint: date + amount (cents) + normalized description.
  * SHA-256 hex, 64 chars.
  */
+/** Outgoing uses the legacy fingerprint so existing rows keep stable dedup; incoming appends a suffix. */
 export const computeTransactionDedupHash = (
   transactionDate: string,
   amount: number,
   title: string,
+  flow: 'Outgoing' | 'Incoming' = 'Outgoing',
 ): string => {
   const dateKey = transactionDateKeyForDedup(transactionDate);
   const amountKey = roundToCents(amount).toFixed(2);
   const desc = normalizeTransactionDescriptionForDedup(title);
-  const payload = `${dateKey}|${amountKey}|${desc}`;
+  let payload = `${dateKey}|${amountKey}|${desc}`;
+  if (flow === 'Incoming') {
+    payload = `${payload}|incoming`;
+  }
   return createHash('sha256').update(payload, 'utf8').digest('hex');
 };
 

@@ -35,6 +35,8 @@ export const ensureSchema = async (): Promise<void> => {
     paid_by_user_id INT NULL,
     transaction_dedup_hash CHAR(64) NULL,
     is_private TINYINT(1) NOT NULL DEFAULT 0,
+    currency VARCHAR(8) NOT NULL DEFAULT 'DKK',
+    expense_flow VARCHAR(16) NOT NULL DEFAULT 'Outgoing',
     UNIQUE KEY uniq_expense_creator_dedup (created_by_user_id, transaction_dedup_hash)
   )
     `);
@@ -148,7 +150,7 @@ export const migrateSchema = async (): Promise<void> => {
         FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
           AND TABLE_NAME = 'expenses'
-          AND COLUMN_NAME IN ('created_at', 'transaction_date', 'category', 'expense_group', 'split_type', 'split_details', 'group_id', 'created_by_user_id', 'paid_by_user_id', 'transaction_dedup_hash', 'is_private')
+          AND COLUMN_NAME IN ('created_at', 'transaction_date', 'category', 'expense_group', 'split_type', 'split_details', 'group_id', 'created_by_user_id', 'paid_by_user_id', 'transaction_dedup_hash', 'is_private', 'currency', 'expense_flow')
       `,
   );
 
@@ -278,6 +280,20 @@ export const migrateSchema = async (): Promise<void> => {
     await db.execute(`
         ALTER TABLE expenses
         ADD COLUMN is_private TINYINT(1) NOT NULL DEFAULT 0
+      `);
+  }
+
+  if (!existingColumns.has('currency')) {
+    await db.execute(`
+        ALTER TABLE expenses
+        ADD COLUMN currency VARCHAR(8) NOT NULL DEFAULT 'DKK'
+      `);
+  }
+
+  if (!existingColumns.has('expense_flow')) {
+    await db.execute(`
+        ALTER TABLE expenses
+        ADD COLUMN expense_flow VARCHAR(16) NOT NULL DEFAULT 'Outgoing'
       `);
   }
 };
