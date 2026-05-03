@@ -1,3 +1,4 @@
+import { formatAppCurrency } from '../../../format/currency';
 import type { Expense } from '../types';
 
 export type TrendPoint = {
@@ -38,17 +39,17 @@ export const getDashboardStats = (totalAmount: number): DashboardStat[] => {
   return [
     {
       label: 'Total This Month',
-      value: `$${totalAmount.toFixed(2)}`,
+      value: formatAppCurrency(totalAmount),
       hint: 'All tracked expenses',
     },
     {
       label: 'Personal Expenses',
-      value: `$${personalAmount.toFixed(2)}`,
+      value: formatAppCurrency(personalAmount),
       hint: '65% of total',
     },
     {
       label: 'Shared Expenses',
-      value: `$${sharedAmount.toFixed(2)}`,
+      value: formatAppCurrency(sharedAmount),
       hint: '35% of total',
     },
     {

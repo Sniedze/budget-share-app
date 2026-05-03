@@ -1,3 +1,4 @@
+import { isOutgoingExpense } from '../flow';
 import type { Expense } from '../types';
 
 export type MerchantSuggestion = {
@@ -9,6 +10,7 @@ export type MerchantSuggestion = {
 export const buildMerchantSuggestions = (expenses: Expense[]): Map<string, MerchantSuggestion> => {
   const lookup = new Map<string, MerchantSuggestion>();
   [...expenses]
+    .filter(isOutgoingExpense)
     .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate))
     .forEach((expense) => {
       const merchant = expense.title.trim();
