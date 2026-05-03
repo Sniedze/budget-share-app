@@ -16,6 +16,18 @@ export {
 } from './selectors/expenseAnalytics';
 export { buildMerchantSuggestions } from './selectors/merchantSuggestions';
 export type { MerchantSuggestion } from './selectors/merchantSuggestions';
+export {
+  BUDGET_TOP_LEVEL_CATEGORIES,
+  DEFAULT_EXPENSE_CATEGORIES,
+  DEFAULT_INCOME_CATEGORIES,
+  toBudgetTopLevelCategory,
+} from './categories';
+export {
+  incomingExpensesOnly,
+  isOutgoingExpense,
+  normalizeExpenseFlow,
+  outgoingExpensesOnly,
+} from './flow';
 export type {
   BreakdownPoint,
   DashboardStat,
@@ -25,6 +37,7 @@ export type {
 export type {
   AddExpenseInput,
   Expense,
+  ExpenseFlow,
   GetExpensesResponse,
   SplitAllocation,
   SplitAllocationInput,
