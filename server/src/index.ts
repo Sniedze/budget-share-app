@@ -8,6 +8,8 @@ import { createGraphqlContext, type GraphqlContext } from './graphql/context.js'
 import { checkDbConnection, ensureSchema, migrateSchema } from './db/mysql.js';
 import { graphqlRateLimiter } from './middleware/graphqlRateLimit.js';
 import { graphqlCsrfGuard } from './middleware/graphqlCsrfGuard.js';
+import { assignRequestContext } from './middleware/requestContext.js';
+import { errorHandler } from './middleware/errorHandler.js';
 import { createCorsOptions } from './config/corsOptions.js';
 
 const app = express();
@@ -36,6 +38,7 @@ const start = async () => {
   if (process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true') {
     app.set('trust proxy', 1);
   }
+  app.use(assignRequestContext);
   app.use(cors(createCorsOptions()));
   const jsonBodyLimit = process.env.JSON_BODY_LIMIT ?? '512kb';
   app.use(express.json({ limit: jsonBodyLimit }));
@@ -51,6 +54,7 @@ const start = async () => {
       context: async ({ req, res }): Promise<GraphqlContext> => createGraphqlContext(req, res),
     }),
   );
+  app.use(errorHandler);
   await checkDbConnection();
   console.log('MySQL connection established');
 

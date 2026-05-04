@@ -6,6 +6,7 @@ export const requireAuth = (context: GraphqlContext): User => {
   if (!context.currentUser) {
     logAuthzDenied('authentication_required', {
       operationName: context.graphqlOperationName,
+      requestId: context.requestId,
     });
     throw new Error('Authentication required.');
   }
