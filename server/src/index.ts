@@ -12,10 +12,23 @@ import { createCorsOptions } from './config/corsOptions.js';
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
 
+const parseMaxRecursiveSelections = (): number | false => {
+  const raw = process.env.GRAPHQL_MAX_RECURSIVE_SELECTIONS;
+  if (!raw || raw.trim().length == 0) {
+    return 30;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 30;
+  }
+  return Math.floor(parsed);
+};
+
 const start = async () => {
   const apollo = new ApolloServer({
     typeDefs,
     resolvers,
+    maxRecursiveSelections: parseMaxRecursiveSelections(),
   });
 
   await apollo.start();
