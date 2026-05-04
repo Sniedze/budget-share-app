@@ -9,6 +9,7 @@ export type GraphqlContext = {
   res: Response;
   currentUser: User | null;
   graphqlOperationName: string | null;
+  requestId: string;
 };
 
 const extractBearerToken = (req: Request): string | null => {
@@ -32,18 +33,24 @@ const readGraphqlOperationName = (req: Request): string | null => {
   return name.length > 0 ? name : null;
 };
 
+const readRequestId = (res: Response): string => {
+  const raw = res.locals.requestId;
+  return typeof raw === 'string' && raw.length > 0 ? raw : 'unknown';
+};
+
 export const createGraphqlContext = async (req: Request, res: Response): Promise<GraphqlContext> => {
   const graphqlOperationName = readGraphqlOperationName(req);
+  const requestId = readRequestId(res);
   const token = extractBearerToken(req) ?? getAccessTokenFromCookies(req);
   if (!token) {
-    return { req, res, currentUser: null, graphqlOperationName };
+    return { req, res, currentUser: null, graphqlOperationName, requestId };
   }
 
   const claims = verifyAccessToken(token);
   if (!claims) {
-    return { req, res, currentUser: null, graphqlOperationName };
+    return { req, res, currentUser: null, graphqlOperationName, requestId };
   }
 
   const currentUser = await getUserById(claims.userId);
-  return { req, res, currentUser, graphqlOperationName };
+  return { req, res, currentUser, graphqlOperationName, requestId };
 };
