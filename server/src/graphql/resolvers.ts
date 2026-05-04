@@ -27,6 +27,7 @@ import type {
   UpdateExpenseInput,
 } from '../modules/expenses/types.js';
 import type { GraphqlContext } from './context.js';
+import { requireAuth } from './authz.js';
 import type {
   CreateGroupInput,
   RecordSettlementPaymentInput,
@@ -34,13 +35,6 @@ import type {
   UpsertSplitTemplateInput,
 } from '../modules/groups/types.js';
 import type { LoginInput, RegisterInput } from '../modules/auth/types.js';
-
-const requireAuth = (context: GraphqlContext) => {
-  if (!context.currentUser) {
-    throw new Error('Authentication required.');
-  }
-  return context.currentUser;
-};
 
 export const resolvers = {
   Query: {

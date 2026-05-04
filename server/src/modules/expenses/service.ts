@@ -8,6 +8,7 @@ import type {
 } from './types.js';
 import { db } from '../../db/mysql.js';
 import { logAuditEvent } from '../audit/service.js';
+import { logAuthzDenied } from '../../logger.js';
 import {
   DUPLICATE_TRANSACTION_MESSAGE,
   computeTransactionDedupHash,
@@ -148,6 +149,19 @@ const validateAmount = (amount: number): void => {
   }
 };
 
+const TITLE_MAX_LENGTH = 255;
+
+const validateExpenseTitle = (title: string): string => {
+  const trimmed = title.trim();
+  if (trimmed.length === 0) {
+    throw new Error('Expense title is required.');
+  }
+  if (trimmed.length > TITLE_MAX_LENGTH) {
+    throw new Error('Expense title is too long.');
+  }
+  return trimmed;
+};
+
 const validateSplitConsistency = (
   split: string,
   splitDetails: SplitAllocation[] | null,
@@ -270,6 +284,7 @@ export const createExpense = async (
   actor: { userId: string; email: string },
 ): Promise<Expense> => {
   validateAmount(input.amount);
+  const title = validateExpenseTitle(input.title);
   const flow = normalizeExpenseFlow(input.flow);
   if (flow === 'Incoming' && input.groupId) {
     throw new Error('Income entries cannot be assigned to a household.');
@@ -320,7 +335,7 @@ export const createExpense = async (
   const transactionDedupHash = computeTransactionDedupHash(
     input.transactionDate,
     input.amount,
-    input.title,
+    title,
     flow,
   );
 
@@ -329,7 +344,7 @@ export const createExpense = async (
     [result] = await db.execute<ResultSetHeader>(
       'INSERT INTO expenses (title, amount, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private, currency, expense_flow) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
-        input.title,
+        title,
         input.amount,
         input.transactionDate,
         category,
@@ -362,7 +377,7 @@ export const createExpense = async (
   if (!row) {
     return {
       id: String(result.insertId),
-      title: input.title,
+      title,
       amount: input.amount,
       currency,
       createdAt: new Date().toISOString(),
@@ -410,13 +425,16 @@ export const deleteExpense = async (id: string, actor: { userId: string; email: 
 
   if (row.group_id === null) {
     if (row.created_by_user_id === null || String(row.created_by_user_id) !== actor.userId) {
+      logAuthzDenied('expense_delete_denied', { expenseId: id, userId: actor.userId, reason: 'personal_owner' });
       throw new Error('Not authorized to delete this expense.');
     }
   } else {
     if (!(await isGroupMember(row.group_id, actor.email))) {
+      logAuthzDenied('expense_delete_denied', { expenseId: id, userId: actor.userId, reason: 'not_group_member' });
       throw new Error('Not authorized to delete this expense.');
     }
     if (rowIsPrivate(row) && String(row.created_by_user_id) !== actor.userId) {
+      logAuthzDenied('expense_delete_denied', { expenseId: id, userId: actor.userId, reason: 'private_not_owner' });
       throw new Error('Not authorized to delete this private expense.');
     }
   }
@@ -456,6 +474,7 @@ export const updateExpense = async (
   actor: { userId: string; email: string },
 ): Promise<Expense | null> => {
   validateAmount(input.amount);
+  const title = validateExpenseTitle(input.title);
 
   const [existingRows] = await db.query<ExpenseRow[]>(
     'SELECT id, title, amount, currency, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private, expense_flow FROM expenses WHERE id = ? LIMIT 1',
@@ -472,6 +491,7 @@ export const updateExpense = async (
       ? existing.created_by_user_id !== null && String(existing.created_by_user_id) === actor.userId
       : await isGroupMember(existingGroupId, actor.email);
   if (!canEdit) {
+    logAuthzDenied('expense_update_denied', { expenseId: input.id, userId: actor.userId, reason: 'no_edit_access' });
     throw new Error('Not authorized to update this expense.');
   }
   if (
@@ -479,6 +499,7 @@ export const updateExpense = async (
     rowIsPrivate(existing) &&
     String(existing.created_by_user_id) !== actor.userId
   ) {
+    logAuthzDenied('expense_update_denied', { expenseId: input.id, userId: actor.userId, reason: 'private_not_owner' });
     throw new Error('Not authorized to update this private expense.');
   }
 
@@ -532,7 +553,7 @@ export const updateExpense = async (
   const nextDedupHash =
     existing.created_by_user_id === null
       ? null
-      : computeTransactionDedupHash(input.transactionDate, input.amount, input.title, nextFlow);
+      : computeTransactionDedupHash(input.transactionDate, input.amount, title, nextFlow);
   const nextCurrency = normalizeExpenseCurrency(
     input.currency !== undefined && input.currency !== null ? input.currency : rowCurrency(existing),
   );
@@ -542,7 +563,7 @@ export const updateExpense = async (
     [updateResult] = await db.execute<ResultSetHeader>(
       'UPDATE expenses SET title = ?, amount = ?, transaction_date = ?, category = ?, expense_group = ?, split_type = ?, split_details = COALESCE(?, split_details), group_id = ?, paid_by_user_id = ?, transaction_dedup_hash = ?, is_private = ?, currency = ?, expense_flow = ? WHERE id = ?',
       [
-        input.title,
+        title,
         input.amount,
         input.transactionDate,
         category,

@@ -8,6 +8,7 @@ export type GraphqlContext = {
   req: Request;
   res: Response;
   currentUser: User | null;
+  graphqlOperationName: string | null;
 };
 
 const extractBearerToken = (req: Request): string | null => {
@@ -22,17 +23,27 @@ const extractBearerToken = (req: Request): string | null => {
   return token.trim();
 };
 
+const readGraphqlOperationName = (req: Request): string | null => {
+  const body = req.body as { operationName?: unknown } | undefined;
+  if (!body || typeof body.operationName !== 'string') {
+    return null;
+  }
+  const name = body.operationName.trim();
+  return name.length > 0 ? name : null;
+};
+
 export const createGraphqlContext = async (req: Request, res: Response): Promise<GraphqlContext> => {
+  const graphqlOperationName = readGraphqlOperationName(req);
   const token = extractBearerToken(req) ?? getAccessTokenFromCookies(req);
   if (!token) {
-    return { req, res, currentUser: null };
+    return { req, res, currentUser: null, graphqlOperationName };
   }
 
   const claims = verifyAccessToken(token);
   if (!claims) {
-    return { req, res, currentUser: null };
+    return { req, res, currentUser: null, graphqlOperationName };
   }
 
   const currentUser = await getUserById(claims.userId);
-  return { req, res, currentUser };
+  return { req, res, currentUser, graphqlOperationName };
 };

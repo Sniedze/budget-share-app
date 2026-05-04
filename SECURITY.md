@@ -24,6 +24,7 @@
   - `JWT_REFRESH_SECRET`
 - **Sessions:** Access and refresh JWTs are issued as **httpOnly** cookies on the `/graphql` path (`SameSite=Lax`, `Secure` in production). The browser must send `credentials: 'include'` on API requests (the SPA does this). **Logout** increments `users.refresh_token_version` so existing refresh JWTs stop working; access JWTs remain valid until they expire (short TTL by default).
 - **CORS:** The API uses an allowlist (`ALLOWED_ORIGINS`, comma-separated). If unset, only common **local** dev origins are allowed. Production deployments **must** set `ALLOWED_ORIGINS` to the real web app URL(s) and use HTTPS. `credentials: true` is enabled for cookie-based auth; keep origins explicit.
+- **Request size:** JSON bodies are capped via `JSON_BODY_LIMIT` (default `512kb`) to limit oversized GraphQL payloads.
 
 ## Environment template
 
