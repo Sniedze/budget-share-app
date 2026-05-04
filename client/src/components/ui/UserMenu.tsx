@@ -20,7 +20,7 @@ export const UserMenu = (): JSX.Element => {
     <Wrapper>
       <CircleUserRound size={16} color={colors.textMuted} />
       <MutedText>{user.fullName}</MutedText>
-      <Button type="button" $variant="secondary" $size="sm" onClick={logout}>
+      <Button type="button" $variant="secondary" $size="sm" onClick={() => void logout()}>
         Log out
       </Button>
     </Wrapper>

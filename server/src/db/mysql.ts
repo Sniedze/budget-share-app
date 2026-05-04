@@ -56,7 +56,8 @@ export const ensureSchema = async (): Promise<void> => {
     email VARCHAR(255) NOT NULL UNIQUE,
     full_name VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    refresh_token_version INT NOT NULL DEFAULT 0
   )
     `);
 
@@ -294,6 +295,23 @@ export const migrateSchema = async (): Promise<void> => {
     await db.execute(`
         ALTER TABLE expenses
         ADD COLUMN expense_flow VARCHAR(16) NOT NULL DEFAULT 'Outgoing'
+      `);
+  }
+
+  const [userCols] = await db.query<ColumnCheckRow[]>(
+    `
+        SELECT COLUMN_NAME AS columnName
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'users'
+          AND COLUMN_NAME IN ('refresh_token_version')
+      `,
+  );
+  const userColumnSet = new Set(userCols.map((row) => row.columnName));
+  if (!userColumnSet.has('refresh_token_version')) {
+    await db.execute(`
+        ALTER TABLE users
+        ADD COLUMN refresh_token_version INT NOT NULL DEFAULT 0
       `);
   }
 };

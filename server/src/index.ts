@@ -7,6 +7,7 @@ import { resolvers } from './graphql/resolvers.js';
 import { createGraphqlContext, type GraphqlContext } from './graphql/context.js';
 import { checkDbConnection, ensureSchema, migrateSchema } from './db/mysql.js';
 import { graphqlRateLimiter } from './middleware/graphqlRateLimit.js';
+import { createCorsOptions } from './config/corsOptions.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -21,7 +22,7 @@ const start = async () => {
   if (process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true') {
     app.set('trust proxy', 1);
   }
-  app.use(cors());
+  app.use(cors(createCorsOptions()));
   app.use(express.json());
 
   app.get('/health', (_req, res) => {
@@ -31,7 +32,7 @@ const start = async () => {
     '/graphql',
     graphqlRateLimiter,
     expressMiddleware(apollo, {
-      context: async ({ req }): Promise<GraphqlContext> => createGraphqlContext(req),
+      context: async ({ req, res }): Promise<GraphqlContext> => createGraphqlContext(req, res),
     }),
   );
   await checkDbConnection();

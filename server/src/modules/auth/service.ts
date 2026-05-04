@@ -12,6 +12,7 @@ type UserRow = {
   full_name: string;
   password_hash: string;
   created_at: string;
+  refresh_token_version: number;
 } & RowDataPacket;
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
@@ -25,9 +26,10 @@ const toUser = (row: UserRow): User => ({
 
 const toAuthPayload = (row: UserRow): AuthPayload => {
   const user = toUser(row);
+  const version = Number(row.refresh_token_version) || 0;
   return {
     accessToken: signAccessToken(user.id, user.email),
-    refreshToken: signRefreshToken(user.id, user.email),
+    refreshToken: signRefreshToken(user.id, user.email, version),
     user,
   };
 };
@@ -35,7 +37,7 @@ const toAuthPayload = (row: UserRow): AuthPayload => {
 const getUserByEmail = async (email: string): Promise<UserRow | null> => {
   const [rows] = await db.query<UserRow[]>(
     `
-      SELECT id, email, full_name, password_hash, created_at
+      SELECT id, email, full_name, password_hash, created_at, refresh_token_version
       FROM users
       WHERE email = ?
       LIMIT 1
@@ -76,7 +78,7 @@ export const register = async (input: RegisterInput): Promise<AuthPayload> => {
 
   const [rows] = await db.query<UserRow[]>(
     `
-      SELECT id, email, full_name, password_hash, created_at
+      SELECT id, email, full_name, password_hash, created_at, refresh_token_version
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -123,7 +125,7 @@ export const refreshSession = async (refreshToken: string): Promise<AuthPayload>
 
   const [rows] = await db.query<UserRow[]>(
     `
-      SELECT id, email, full_name, password_hash, created_at
+      SELECT id, email, full_name, password_hash, created_at, refresh_token_version
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -135,13 +137,29 @@ export const refreshSession = async (refreshToken: string): Promise<AuthPayload>
     throw new Error('User not found.');
   }
 
+  const version = Number(user.refresh_token_version) || 0;
+  if (claims.rtv !== version) {
+    throw new Error('Invalid refresh token.');
+  }
+
   return toAuthPayload(user);
+};
+
+export const revokeRefreshTokens = async (userId: string): Promise<void> => {
+  await db.execute(
+    `
+      UPDATE users
+      SET refresh_token_version = refresh_token_version + 1
+      WHERE id = ?
+    `,
+    [userId],
+  );
 };
 
 export const getUserById = async (userId: string): Promise<User | null> => {
   const [rows] = await db.query<UserRow[]>(
     `
-      SELECT id, email, full_name, password_hash, created_at
+      SELECT id, email, full_name, password_hash, created_at, refresh_token_version
       FROM users
       WHERE id = ?
       LIMIT 1

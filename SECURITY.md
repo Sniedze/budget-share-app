@@ -22,6 +22,8 @@
 - JWT secrets must be explicitly set outside development:
   - `JWT_ACCESS_SECRET`
   - `JWT_REFRESH_SECRET`
+- **Sessions:** Access and refresh JWTs are issued as **httpOnly** cookies on the `/graphql` path (`SameSite=Lax`, `Secure` in production). The browser must send `credentials: 'include'` on API requests (the SPA does this). **Logout** increments `users.refresh_token_version` so existing refresh JWTs stop working; access JWTs remain valid until they expire (short TTL by default).
+- **CORS:** Set `ALLOWED_ORIGINS` in production to your real app origins (HTTPS). See `.env.example`.
 
 ## CI Gate Recommendation
 

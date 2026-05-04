@@ -133,8 +133,6 @@ export const typeDefs = `#graphql
   }
 
   type AuthPayload {
-    accessToken: String!
-    refreshToken: String!
     user: User!
   }
 
@@ -171,10 +169,11 @@ export const typeDefs = `#graphql
   input LoginInput {
     email: String!
     password: String!
+    rememberMe: Boolean
   }
 
   input RefreshSessionInput {
-    refreshToken: String!
+    refreshToken: String
   }
 
   input UpsertSplitTemplateInput {
@@ -248,6 +247,7 @@ export const typeDefs = `#graphql
     register(input: RegisterInput!): AuthPayload!
     login(input: LoginInput!): AuthPayload!
     refreshSession(input: RefreshSessionInput!): AuthPayload!
+    logout: Boolean!
     upsertGroupSplitTemplate(input: UpsertSplitTemplateInput!): SplitTemplate!
     recordSettlementPayment(input: RecordSettlementPaymentInput!): SettlementPayment!
   }
