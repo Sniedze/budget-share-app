@@ -14,7 +14,13 @@ import {
   updateGroup,
   upsertSplitTemplate,
 } from '../modules/groups/service.js';
-import { login, refreshSession, register } from '../modules/auth/service.js';
+import {
+  login,
+  refreshSession,
+  register,
+  revokeRefreshTokens,
+} from '../modules/auth/service.js';
+import { clearSessionCookies, getRefreshTokenFromCookies, setSessionCookies } from '../modules/auth/cookies.js';
 import type {
   CreateExpenseInput,
   DeleteExpenseInput,
@@ -86,14 +92,38 @@ export const resolvers = {
       const user = requireAuth(context);
       return updateGroup(args.input, { userId: user.id, email: user.email });
     },
-    register: async (_parent: unknown, args: { input: RegisterInput }) => {
-      return register(args.input);
+    register: async (_parent: unknown, args: { input: RegisterInput }, context: GraphqlContext) => {
+      const payload = await register(args.input);
+      setSessionCookies(context.res, payload.accessToken, payload.refreshToken, { remember: true });
+      return { user: payload.user };
     },
-    login: async (_parent: unknown, args: { input: LoginInput }) => {
-      return login(args.input);
+    login: async (_parent: unknown, args: { input: LoginInput }, context: GraphqlContext) => {
+      const payload = await login(args.input);
+      const remember = args.input.rememberMe !== false;
+      setSessionCookies(context.res, payload.accessToken, payload.refreshToken, { remember });
+      return { user: payload.user };
     },
-    refreshSession: async (_parent: unknown, args: { input: { refreshToken: string } }) => {
-      return refreshSession(args.input.refreshToken);
+    refreshSession: async (
+      _parent: unknown,
+      args: { input: { refreshToken?: string | null } },
+      context: GraphqlContext,
+    ) => {
+      const fromBody = args.input.refreshToken?.trim();
+      const fromCookie = getRefreshTokenFromCookies(context.req);
+      const token = (fromBody && fromBody.length > 0 ? fromBody : null) ?? fromCookie;
+      if (!token) {
+        throw new Error('Refresh token required.');
+      }
+      const payload = await refreshSession(token);
+      setSessionCookies(context.res, payload.accessToken, payload.refreshToken, { remember: true });
+      return { user: payload.user };
+    },
+    logout: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
+      if (context.currentUser) {
+        await revokeRefreshTokens(context.currentUser.id);
+      }
+      clearSessionCookies(context.res);
+      return true;
     },
     upsertGroupSplitTemplate: async (
       _parent: unknown,

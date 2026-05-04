@@ -1,9 +1,16 @@
 import jwt from 'jsonwebtoken';
 
-type TokenClaims = {
+type AccessTokenClaims = {
   userId: string;
   email: string;
-  type: 'access' | 'refresh';
+  type: 'access';
+};
+
+export type RefreshTokenClaims = {
+  userId: string;
+  email: string;
+  type: 'refresh';
+  rtv: number;
 };
 
 const isDevelopment = (process.env.NODE_ENV ?? 'development') === 'development';
@@ -25,25 +32,28 @@ const parseTtlSeconds = (rawValue: string | undefined, fallbackSeconds: number):
   const parsed = Number(rawValue);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackSeconds;
 };
-const ACCESS_TOKEN_TTL_SECONDS = parseTtlSeconds(process.env.JWT_ACCESS_TTL_SECONDS, 15 * 60);
-const REFRESH_TOKEN_TTL_SECONDS = parseTtlSeconds(process.env.JWT_REFRESH_TTL_SECONDS, 7 * 24 * 60 * 60);
+
+export const ACCESS_TOKEN_TTL_SECONDS = parseTtlSeconds(process.env.JWT_ACCESS_TTL_SECONDS, 15 * 60);
+export const REFRESH_TOKEN_TTL_SECONDS = parseTtlSeconds(process.env.JWT_REFRESH_TTL_SECONDS, 7 * 24 * 60 * 60);
 
 export const signAccessToken = (userId: string, email: string): string => {
-  return jwt.sign({ userId, email, type: 'access' }, ACCESS_TOKEN_SECRET, { expiresIn: ACCESS_TOKEN_TTL_SECONDS });
+  const payload: AccessTokenClaims = { userId, email, type: 'access' };
+  return jwt.sign(payload, ACCESS_TOKEN_SECRET, { expiresIn: ACCESS_TOKEN_TTL_SECONDS });
 };
 
-export const signRefreshToken = (userId: string, email: string): string => {
-  return jwt.sign({ userId, email, type: 'refresh' }, REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_TTL_SECONDS });
+export const signRefreshToken = (userId: string, email: string, refreshTokenVersion: number): string => {
+  const payload: RefreshTokenClaims = { userId, email, type: 'refresh', rtv: refreshTokenVersion };
+  return jwt.sign(payload, REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_TTL_SECONDS });
 };
 
-const verifyWithSecret = (token: string, secret: string): TokenClaims | null => {
+const verifyAccessWithSecret = (token: string, secret: string): AccessTokenClaims | null => {
   try {
     const decoded = jwt.verify(token, secret);
     if (typeof decoded !== 'object' || !decoded || !('userId' in decoded) || !('email' in decoded) || !('type' in decoded)) {
       return null;
     }
-    const claims = decoded as TokenClaims;
-    if (claims.type !== 'access' && claims.type !== 'refresh') {
+    const claims = decoded as AccessTokenClaims;
+    if (claims.type !== 'access') {
       return null;
     }
     return claims;
@@ -52,18 +62,29 @@ const verifyWithSecret = (token: string, secret: string): TokenClaims | null => 
   }
 };
 
-export const verifyAccessToken = (token: string): TokenClaims | null => {
-  const claims = verifyWithSecret(token, ACCESS_TOKEN_SECRET);
-  if (!claims || claims.type !== 'access') {
+const verifyRefreshWithSecret = (token: string, secret: string): RefreshTokenClaims | null => {
+  try {
+    const decoded = jwt.verify(token, secret);
+    if (typeof decoded !== 'object' || !decoded || !('userId' in decoded) || !('email' in decoded) || !('type' in decoded)) {
+      return null;
+    }
+    const claims = decoded as RefreshTokenClaims;
+    if (claims.type !== 'refresh') {
+      return null;
+    }
+    if (typeof claims.rtv !== 'number' || !Number.isFinite(claims.rtv) || claims.rtv < 0) {
+      return null;
+    }
+    return claims;
+  } catch {
     return null;
   }
-  return claims;
 };
 
-export const verifyRefreshToken = (token: string): TokenClaims | null => {
-  const claims = verifyWithSecret(token, REFRESH_TOKEN_SECRET);
-  if (!claims || claims.type !== 'refresh') {
-    return null;
-  }
-  return claims;
+export const verifyAccessToken = (token: string): AccessTokenClaims | null => {
+  return verifyAccessWithSecret(token, ACCESS_TOKEN_SECRET);
+};
+
+export const verifyRefreshToken = (token: string): RefreshTokenClaims | null => {
+  return verifyRefreshWithSecret(token, REFRESH_TOKEN_SECRET);
 };

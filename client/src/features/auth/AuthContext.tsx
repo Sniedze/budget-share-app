@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
 import {
   createContext,
   useCallback,
@@ -8,9 +8,9 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { LOGIN, ME, REGISTER } from './graphql';
-import { clearStoredTokens, getStoredTokens, setStoredTokens } from './storage';
-import type { AuthPayload, AuthUser } from './types';
+import { LOGIN, LOGOUT, ME, REGISTER } from './graphql';
+import { clearStoredTokens } from './storage';
+import type { AuthUser } from './types';
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -19,7 +19,7 @@ type AuthContextValue = {
   isAuthenticating: boolean;
   login: (email: string, password: string, remember?: boolean) => Promise<void>;
   register: (fullName: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 };
 
 type MeQueryData = {
@@ -27,25 +27,24 @@ type MeQueryData = {
 };
 
 type AuthMutationData = {
-  login?: AuthPayload;
-  register?: AuthPayload;
+  login?: { user: AuthUser };
+  register?: { user: AuthUser };
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const getAuthPayloadFromMutation = (data: AuthMutationData): AuthPayload | null => {
-  return data.login ?? data.register ?? null;
+const getUserFromAuthMutation = (data: AuthMutationData): AuthUser | null => {
+  return data.login?.user ?? data.register?.user ?? null;
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element => {
+  const client = useApolloClient();
   const [user, setUser] = useState<AuthUser | null>(null);
-  const hasStoredToken = Boolean(getStoredTokens());
   const {
     data: meData,
     loading: meLoading,
     error: meError,
   } = useQuery<MeQueryData>(ME, {
-    skip: !hasStoredToken,
     fetchPolicy: 'network-only',
     errorPolicy: 'all',
   });
@@ -65,36 +64,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
   const [registerMutation, { loading: registerLoading }] = useMutation<AuthMutationData>(REGISTER, {
     errorPolicy: 'all',
   });
+  const [logoutMutation] = useMutation(LOGOUT, { errorPolicy: 'all' });
 
-  const login = useCallback(async (email: string, password: string, remember = true): Promise<void> => {
-    const result = await loginMutation({ variables: { input: { email, password } } });
-    const payload = result.data ? getAuthPayloadFromMutation(result.data) : null;
-    if (!payload) {
-      throw new Error(result.error?.message ?? 'Login failed.');
+  const login = useCallback(
+    async (email: string, password: string, remember = true): Promise<void> => {
+      const result = await loginMutation({
+        variables: { input: { email, password, rememberMe: remember } },
+      });
+      const nextUser = result.data ? getUserFromAuthMutation(result.data) : null;
+      if (!nextUser) {
+        throw new Error(result.error?.message ?? 'Login failed.');
+      }
+      setUser(nextUser);
+    },
+    [loginMutation],
+  );
+
+  const register = useCallback(
+    async (fullName: string, email: string, password: string): Promise<void> => {
+      const result = await registerMutation({ variables: { input: { fullName, email, password } } });
+      const nextUser = result.data ? getUserFromAuthMutation(result.data) : null;
+      if (!nextUser) {
+        throw new Error(result.error?.message ?? 'Registration failed.');
+      }
+      setUser(nextUser);
+    },
+    [registerMutation],
+  );
+
+  const logout = useCallback(async (): Promise<void> => {
+    try {
+      await logoutMutation();
+    } catch {
+      // Still clear local state if the network fails
+    } finally {
+      clearStoredTokens();
+      setUser(null);
+      await client.resetStore();
     }
-    setStoredTokens(
-      { accessToken: payload.accessToken, refreshToken: payload.refreshToken },
-      { remember },
-    );
-    setUser(payload.user);
-  }, [loginMutation]);
+  }, [client, logoutMutation]);
 
-  const register = useCallback(async (fullName: string, email: string, password: string): Promise<void> => {
-    const result = await registerMutation({ variables: { input: { fullName, email, password } } });
-    const payload = result.data ? getAuthPayloadFromMutation(result.data) : null;
-    if (!payload) {
-      throw new Error(result.error?.message ?? 'Registration failed.');
-    }
-    setStoredTokens({ accessToken: payload.accessToken, refreshToken: payload.refreshToken });
-    setUser(payload.user);
-  }, [registerMutation]);
-
-  const logout = useCallback((): void => {
-    clearStoredTokens();
-    setUser(null);
-  }, []);
-
-  const isInitializing = hasStoredToken && meLoading && user === null;
+  const isInitializing = meLoading && user === null && !meError;
 
   const value = useMemo<AuthContextValue>(
     () => ({

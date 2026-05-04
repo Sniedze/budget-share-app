@@ -32,7 +32,7 @@ const start = async () => {
     '/graphql',
     graphqlRateLimiter,
     expressMiddleware(apollo, {
-      context: async ({ req }): Promise<GraphqlContext> => createGraphqlContext(req),
+      context: async ({ req, res }): Promise<GraphqlContext> => createGraphqlContext(req, res),
     }),
   );
   await checkDbConnection();

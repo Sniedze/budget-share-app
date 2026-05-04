@@ -14,8 +14,6 @@ export const ME = gql`
 export const LOGIN = gql`
   mutation Login($input: LoginInput!) {
     login(input: $input) {
-      accessToken
-      refreshToken
       user {
         id
         email
@@ -29,8 +27,6 @@ export const LOGIN = gql`
 export const REGISTER = gql`
   mutation Register($input: RegisterInput!) {
     register(input: $input) {
-      accessToken
-      refreshToken
       user {
         id
         email
@@ -38,5 +34,11 @@ export const REGISTER = gql`
         createdAt
       }
     }
+  }
+`;
+
+export const LOGOUT = gql`
+  mutation Logout {
+    logout
   }
 `;

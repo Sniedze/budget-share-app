@@ -1,11 +1,4 @@
 import { ApolloClient, HttpLink, InMemoryCache } from '@apollo/client';
-import {
-  clearStoredTokens,
-  getAccessToken,
-  getRememberMe,
-  getRefreshToken,
-  setStoredTokens,
-} from '../features/auth/storage';
 
 const DEFAULT_GRAPHQL_URL = 'http://localhost:4000/graphql';
 const GRAPHQL_URL = import.meta.env.VITE_GRAPHQL_URL?.trim() || DEFAULT_GRAPHQL_URL;
@@ -18,7 +11,7 @@ type GraphqlResponseBody = {
   errors?: GraphqlError[];
 };
 
-let refreshInFlight: Promise<string | null> | null = null;
+let refreshInFlight: Promise<boolean> | null = null;
 
 const isAuthErrorResponse = async (response: Response): Promise<boolean> => {
   if (response.status === 401) {
@@ -32,48 +25,26 @@ const isAuthErrorResponse = async (response: Response): Promise<boolean> => {
   }
 };
 
-const refreshAccessToken = async (): Promise<string | null> => {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) {
-    clearStoredTokens();
-    return null;
-  }
-
+const refreshSessionViaCookie = async (): Promise<boolean> => {
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
       const response = await fetch(GRAPHQL_URL, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query:
-            'mutation RefreshSession($input: RefreshSessionInput!) { refreshSession(input: $input) { accessToken refreshToken user { id } } }',
-          variables: { input: { refreshToken } },
+          query: 'mutation RefreshSession { refreshSession(input: {}) { user { id } } }',
         }),
       });
 
       if (!response.ok) {
-        clearStoredTokens();
-        return null;
+        return false;
       }
-
-      const payload = (await response.json()) as {
-        data?: {
-          refreshSession?: {
-            accessToken: string;
-            refreshToken: string;
-          };
-        };
-      };
-      const session = payload.data?.refreshSession;
-      if (!session?.accessToken || !session.refreshToken) {
-        clearStoredTokens();
-        return null;
+      const payload = (await response.json()) as { errors?: GraphqlError[]; data?: unknown };
+      if (payload.errors?.length) {
+        return false;
       }
-      setStoredTokens({
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
-      }, { remember: getRememberMe() });
-      return session.accessToken;
+      return Boolean(payload.data);
     })().finally(() => {
       refreshInFlight = null;
     });
@@ -84,30 +55,26 @@ const refreshAccessToken = async (): Promise<string | null> => {
 
 const authAwareFetch: typeof fetch = async (input, init) => {
   const originalHeaders = new Headers(init?.headers ?? {});
-  const accessToken = getAccessToken();
-  if (accessToken) {
-    originalHeaders.set('Authorization', `Bearer ${accessToken}`);
-  }
 
   const requestInit: RequestInit = {
     ...init,
+    credentials: 'include',
     headers: originalHeaders,
   };
   const initialResponse = await fetch(input, requestInit);
 
-  const isRefreshRequest = typeof requestInit.body === 'string' && requestInit.body.includes('refreshSession');
+  const isRefreshRequest =
+    typeof requestInit.body === 'string' && requestInit.body.includes('refreshSession');
   if (isRefreshRequest || !(await isAuthErrorResponse(initialResponse))) {
     return initialResponse;
   }
 
-  const refreshedAccessToken = await refreshAccessToken();
-  if (!refreshedAccessToken) {
+  const refreshed = await refreshSessionViaCookie();
+  if (!refreshed) {
     return initialResponse;
   }
 
-  const retryHeaders = new Headers(init?.headers ?? {});
-  retryHeaders.set('Authorization', `Bearer ${refreshedAccessToken}`);
-  return fetch(input, { ...init, headers: retryHeaders });
+  return fetch(input, { ...init, credentials: 'include', headers: originalHeaders });
 };
 
 export const apolloClient = new ApolloClient({

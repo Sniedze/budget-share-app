@@ -14,8 +14,10 @@ export type RegisterInput = {
 export type LoginInput = {
   email: string;
   password: string;
+  rememberMe?: boolean | null;
 };
 
+/** Tokens are also set as httpOnly cookies; fields exist for testing/tools only. */
 export type AuthPayload = {
   accessToken: string;
   refreshToken: string;

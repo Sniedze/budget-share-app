@@ -22,12 +22,12 @@
 - JWT secrets must be explicitly set outside development:
   - `JWT_ACCESS_SECRET`
   - `JWT_REFRESH_SECRET`
-- **CORS:** The API uses an allowlist (`ALLOWED_ORIGINS`, comma-separated). If unset, only common **local** dev origins are allowed. Production deployments **must** set `ALLOWED_ORIGINS` to the real web app URL(s) and use HTTPS. `credentials: true` is enabled for future cookie-based auth; keep origins explicit.
+- **Sessions:** Access and refresh JWTs are issued as **httpOnly** cookies on the `/graphql` path (`SameSite=Lax`, `Secure` in production). The browser must send `credentials: 'include'` on API requests (the SPA does this). **Logout** increments `users.refresh_token_version` so existing refresh JWTs stop working; access JWTs remain valid until they expire (short TTL by default).
+- **CORS:** The API uses an allowlist (`ALLOWED_ORIGINS`, comma-separated). If unset, only common **local** dev origins are allowed. Production deployments **must** set `ALLOWED_ORIGINS` to the real web app URL(s) and use HTTPS. `credentials: true` is enabled for cookie-based auth; keep origins explicit.
 
 ## Environment template
 
 - See **`.env.example`** at the repo root for variable names used by Docker Compose, the server, and the Vite client (`VITE_GRAPHQL_URL`).
-
 
 ## CI Gate Recommendation
 
