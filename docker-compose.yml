@@ -6,10 +6,10 @@ services:
     container_name: budget-share-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root_password
-      MYSQL_DATABASE: budget_app
-      MYSQL_USER: budget_user
-      MYSQL_PASSWORD: budget_password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-budget_app}
+      MYSQL_USER: ${MYSQL_USER:-budget_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-budget_password}
     ports:
       - '3306:3306'
     volumes:
