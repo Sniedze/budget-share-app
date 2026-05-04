@@ -23,7 +23,8 @@ const start = async () => {
     app.set('trust proxy', 1);
   }
   app.use(cors(createCorsOptions()));
-  app.use(express.json());
+  const jsonBodyLimit = process.env.JSON_BODY_LIMIT ?? '512kb';
+  app.use(express.json({ limit: jsonBodyLimit }));
 
   app.get('/health', (_req, res) => {
     res.status(200).json({ ok: true, service: 'server' });

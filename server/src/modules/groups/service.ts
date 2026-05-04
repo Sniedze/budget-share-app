@@ -16,6 +16,7 @@ import type {
   UpsertSplitTemplateInput,
 } from './types.js';
 import { logAuditEvent } from '../audit/service.js';
+import { logAuthzDenied } from '../../logger.js';
 
 type GroupRow = {
   id: number;
@@ -606,6 +607,11 @@ export const updateGroup = async (
     [numericGroupId, normalizedActorEmail],
   );
   if (membershipRows.length === 0) {
+    logAuthzDenied('group_access_denied', {
+      groupId: String(numericGroupId),
+      email: normalizedActorEmail,
+      action: 'updateGroup',
+    });
     throw new Error('Not authorized for this group.');
   }
 
@@ -787,6 +793,11 @@ export const listSplitTemplates = async (groupId: string, userEmail: string): Pr
     [numericGroupId, userEmail.trim().toLowerCase()],
   );
   if (isMember[0].length === 0) {
+    logAuthzDenied('group_access_denied', {
+      groupId: String(numericGroupId),
+      email: userEmail.trim().toLowerCase(),
+      action: 'listSplitTemplates',
+    });
     throw new Error('Not authorized for this group.');
   }
 
@@ -834,6 +845,11 @@ export const upsertSplitTemplate = async (
     [numericGroupId, normalizedEmail],
   );
   if (membershipRows.length === 0) {
+    logAuthzDenied('group_access_denied', {
+      groupId: String(numericGroupId),
+      email: normalizedEmail,
+      action: 'upsertSplitTemplate',
+    });
     throw new Error('Not authorized for this group.');
   }
 
@@ -1017,6 +1033,11 @@ export const recordSettlementPayment = async (
     [groupId, normalizedEmail],
   );
   if (membershipRows.length === 0) {
+    logAuthzDenied('group_access_denied', {
+      groupId: String(groupId),
+      email: normalizedEmail,
+      action: 'recordSettlementPayment',
+    });
     throw new Error('Not authorized for this group.');
   }
 
