@@ -9,7 +9,7 @@ const DEFAULT_DEV_ORIGINS = [
 
 /**
  * Parses ALLOWED_ORIGINS (comma-separated). When unset, uses local Vite/SPA dev URLs.
- * Requests without an Origin header (e.g. curl) are allowed.
+ * Requests without an Origin header (e.g. curl, server-to-server) are allowed so tooling still works.
  */
 export const createCorsOptions = (): CorsOptions => {
   const raw = process.env.ALLOWED_ORIGINS;

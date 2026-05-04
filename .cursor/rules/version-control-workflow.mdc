@@ -1,0 +1,28 @@
+---
+description: Git branching, commits, and merging for this repo
+alwaysApply: true
+---
+
+# Version control flow
+
+Follow this workflow for multi-step or feature work unless the user explicitly overrides it.
+
+## Branch
+
+1. Start from up-to-date `main`: `git checkout main && git pull origin main`
+2. Create a **new branch** for one coherent chunk of work: `git checkout -b short-descriptive-name`
+
+## Commits
+
+- Prefer **small, focused commits** with clear messages (logical slices, not one huge commit at the end).
+- Stage intentionally: `git add` specific paths or `git add -p` when useful.
+
+## Push and integrate
+
+1. `git push -u origin <branch>`
+2. Finish via **PR merge to `main` on GitHub** (preferred), or merge locally after pulling latest `main` if the user asks for that flow.
+3. If `main` moves during the branch lifetime, update the branch (merge or rebase from `main`) before the final merge.
+
+## Scope
+
+- **One branch ≈ one theme**; if scope grows, split follow-up work into a new branch from `main` after the first chunk merges.
