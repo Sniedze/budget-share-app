@@ -18,6 +18,7 @@
 
 ## Runtime Security Requirements
 
+- **Observability:** Every HTTP request gets an `x-request-id` (incoming value is preserved if provided, otherwise generated). Request and error logs include this id to correlate failures across layers.
 - Node.js version: `>=20` (enforced via `engines` and `.nvmrc`)
 - JWT secrets must be explicitly set outside development:
   - `JWT_ACCESS_SECRET`
