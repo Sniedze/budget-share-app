@@ -7,6 +7,7 @@ import { resolvers } from './graphql/resolvers.js';
 import { createGraphqlContext, type GraphqlContext } from './graphql/context.js';
 import { checkDbConnection, ensureSchema, migrateSchema } from './db/mysql.js';
 import { graphqlRateLimiter } from './middleware/graphqlRateLimit.js';
+import { graphqlCsrfGuard } from './middleware/graphqlCsrfGuard.js';
 import { createCorsOptions } from './config/corsOptions.js';
 
 const app = express();
@@ -44,6 +45,7 @@ const start = async () => {
   });
   app.use(
     '/graphql',
+    graphqlCsrfGuard,
     graphqlRateLimiter,
     expressMiddleware(apollo, {
       context: async ({ req, res }): Promise<GraphqlContext> => createGraphqlContext(req, res),
