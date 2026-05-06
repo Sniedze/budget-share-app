@@ -131,6 +131,39 @@ const listExpenseGroupLabelsByGroupId = async (groupIds: number[]): Promise<Map<
   return map;
 };
 
+const listTemplateSplitDetailsByGroupAndCategory = async (
+  groupIds: number[],
+): Promise<Map<string, Array<{ participant: string; ratio: number }>>> => {
+  const map = new Map<string, Array<{ participant: string; ratio: number }>>();
+  if (groupIds.length === 0) {
+    return map;
+  }
+
+  const [rows] = await db.query<SplitTemplateRow[]>(
+    `
+      SELECT
+        id,
+        group_id AS groupId,
+        category,
+        template_name AS templateName,
+        split_details AS splitDetails
+      FROM group_split_templates
+      WHERE group_id IN (?)
+    `,
+    [groupIds],
+  );
+
+  for (const row of rows) {
+    const categoryKey = row.category.trim().toLowerCase();
+    if (!categoryKey) {
+      continue;
+    }
+    map.set(`${row.groupId}:${categoryKey}`, parseTemplateSplitDetails(row.splitDetails));
+  }
+
+  return map;
+};
+
 const normalizeTemplateSplitDetails = (
   splitDetails: UpsertSplitTemplateInput['splitDetails'],
 ): Array<{ participant: string; ratio: number }> => {
@@ -361,6 +394,7 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
         e.category,
         e.amount,
         e.currency,
+        e.split_details AS splitDetails,
         e.transaction_date AS transactionDate,
         u.full_name AS paidByName,
         COALESCE(e.is_private, 0) AS isPrivate,
@@ -376,6 +410,8 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
 
   const expensesByGroupId = new Map<number, Group['expenses']>();
   const totalsByGroupId = new Map<number, { totalSpent: number; yourShare: number }>();
+  const templateSplitByKey = await listTemplateSplitDetailsByGroupAndCategory(groupRows.map((group) => group.id));
+
   for (const row of expenseRows) {
     const isPrivate = expenseRowIsPrivate(row);
     if (isPrivate && String(row.createdByUserId ?? '') !== viewerUserId) {
@@ -384,12 +420,30 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
     const groupMembers = membersByGroupId.get(row.groupId) ?? [];
     const viewerMember = groupMembers.find((member) => member.email.trim().toLowerCase() === normalizedEmail);
     const amount = Number(row.amount);
-    const yourShare =
-      isPrivate && String(row.createdByUserId ?? '') === viewerUserId
-        ? amount
-        : viewerMember
-          ? Number(((amount * viewerMember.ratio) / 100).toFixed(2))
-          : 0;
+    const splitDetails = parseExpenseSplitDetails(typeof row.splitDetails === 'string' ? row.splitDetails : null);
+
+    let yourShare = 0;
+    if (isPrivate && String(row.createdByUserId ?? '') === viewerUserId) {
+      yourShare = amount;
+    } else if (viewerMember) {
+      const viewerNameKey = viewerMember.name.trim().toLowerCase();
+      const shareFromDetails = splitDetails.find(
+        (share) => share.participant.trim().toLowerCase() === viewerNameKey,
+      );
+
+      if (shareFromDetails) {
+        yourShare = Number(shareFromDetails.amount.toFixed(2));
+      } else {
+        const expenseGroupKey = (row.expenseGroup ?? row.category).trim().toLowerCase();
+        const templateSplit = templateSplitByKey.get(`${row.groupId}:${expenseGroupKey}`) ?? [];
+        const templateAllocation = templateSplit.find(
+          (allocation) => allocation.participant.trim().toLowerCase() === viewerNameKey,
+        );
+        yourShare = templateAllocation
+          ? Number(((amount * templateAllocation.ratio) / 100).toFixed(2))
+          : Number(((amount * viewerMember.ratio) / 100).toFixed(2));
+      }
+    }
 
     const groupExpenses = expensesByGroupId.get(row.groupId) ?? [];
     groupExpenses.push({

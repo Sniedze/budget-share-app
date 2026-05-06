@@ -1,8 +1,12 @@
+import { AsyncLocalStorage } from 'async_hooks';
 import { randomUUID } from 'crypto';
 import type { NextFunction, Request, Response } from 'express';
 import { logRequestCompleted } from '../logger.js';
 
 export const REQUEST_ID_HEADER = 'x-request-id';
+
+const requestIdStorage = new AsyncLocalStorage<string>();
+
 
 export const assignRequestContext = (req: Request, res: Response, next: NextFunction): void => {
   const incoming = req.headers[REQUEST_ID_HEADER];
@@ -23,7 +27,9 @@ export const assignRequestContext = (req: Request, res: Response, next: NextFunc
     });
   });
 
-  next();
+  requestIdStorage.run(requestId, () => {
+    next();
+  });
 };
 
 export const getRequestId = (res: Response): string => {
@@ -33,3 +39,5 @@ export const getRequestId = (res: Response): string => {
   }
   return 'unknown';
 };
+
+export const getCurrentRequestId = (): string | undefined => requestIdStorage.getStore();

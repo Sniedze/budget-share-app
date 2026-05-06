@@ -806,6 +806,7 @@ export const useHouseholdPageState = () => {
   };
 
   return {
+    currentUserName: user?.fullName ?? null,
     PREDEFINED_EXPENSE_GROUPS,
     loading,
     error,
