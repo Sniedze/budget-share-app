@@ -114,6 +114,7 @@ const ExpenseGroupMemberCard = styled(Card)`
 
 export const HouseholdPage = (): JSX.Element => {
   const {
+    currentUserName,
     PREDEFINED_EXPENSE_GROUPS,
     loading,
     error,
@@ -192,7 +193,14 @@ export const HouseholdPage = (): JSX.Element => {
     editingTemplateCategory,
   } = useHouseholdPageState();
 
-  const getExpenseRatioLabel = (total: number, yourShare: number): string => {
+  const getExpenseRatioLabel = (
+    total: number,
+    yourShare: number,
+    explicitRatio?: number,
+  ): string => {
+    if (Number.isFinite(explicitRatio) && (explicitRatio ?? 0) > 0) {
+      return `${Number(explicitRatio).toFixed(2)}%`;
+    }
     if (!Number.isFinite(total) || total <= 0) {
       return '-';
     }
@@ -371,7 +379,16 @@ export const HouseholdPage = (): JSX.Element => {
                             <Td>{expense.category}</Td>
                             <Td>{expense.paidBy}</Td>
                             <Td>{formatAppCurrency(expense.total)}</Td>
-                            <Td>{getExpenseRatioLabel(expense.total, expense.yourShare)}</Td>
+                            <Td>{getExpenseRatioLabel(
+                              expense.total,
+                              expense.yourShare,
+                              activeExpenseGroup?.splitDetails.find(
+                                (allocation) =>
+                                  currentUserName !== null &&
+                                  allocation.participant.trim().toLowerCase() ===
+                                    currentUserName.trim().toLowerCase(),
+                              )?.ratio,
+                            )}</Td>
                             <Td>{formatAppCurrency(expense.yourShare)}</Td>
                             <Td>{expense.isPrivate ? 'Yes' : '—'}</Td>
                           </Tr>
