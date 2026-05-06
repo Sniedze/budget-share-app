@@ -8,7 +8,7 @@ import { createGraphqlContext, type GraphqlContext } from './graphql/context.js'
 import { checkDbConnection, ensureSchema, migrateSchema } from './db/mysql.js';
 import { graphqlRateLimiter } from './middleware/graphqlRateLimit.js';
 import { graphqlCsrfGuard } from './middleware/graphqlCsrfGuard.js';
-import { assignRequestContext } from './middleware/requestContext.js';
+import { assignRequestContext, getCurrentRequestId } from './middleware/requestContext.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { createCorsOptions } from './config/corsOptions.js';
 
@@ -28,10 +28,19 @@ const parseMaxRecursiveSelections = (): number | false => {
 };
 
 const start = async () => {
-  const apollo = new ApolloServer({
+  const apollo = new ApolloServer<GraphqlContext>({
     typeDefs,
     resolvers,
     maxRecursiveSelections: parseMaxRecursiveSelections(),
+    formatError(formattedError) {
+      return {
+        ...formattedError,
+        extensions: {
+          ...formattedError.extensions,
+          requestId: getCurrentRequestId() ?? 'unknown',
+        },
+      };
+    },
   });
 
   await apollo.start();

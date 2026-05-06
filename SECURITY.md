@@ -19,6 +19,7 @@
 ## Runtime Security Requirements
 
 - **Observability:** Every HTTP request gets an `x-request-id` (incoming value is preserved if provided, otherwise generated). Request and error logs include this id for incident correlation.
+- **GraphQL error correlation:** GraphQL errors include `extensions.requestId`, matching the `x-request-id` response header and server logs.
 - Node.js version: `>=20` (enforced via `engines` and `.nvmrc`)
 - JWT secrets must be explicitly set outside development:
   - `JWT_ACCESS_SECRET`
