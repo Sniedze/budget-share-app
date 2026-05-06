@@ -1,6 +1,21 @@
 import type { Request } from 'express';
 import { rateLimit } from 'express-rate-limit';
 
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const DEFAULT_AUTH_RATE_LIMIT = 100;
+const DEFAULT_GENERAL_RATE_LIMIT = 800;
+
+const parsePositiveInteger = (raw: string | undefined, fallback: number): number => {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+};
+
+const AUTH_RATE_LIMIT = parsePositiveInteger(process.env.GRAPHQL_RATE_LIMIT_AUTH, DEFAULT_AUTH_RATE_LIMIT);
+const GENERAL_RATE_LIMIT = parsePositiveInteger(process.env.GRAPHQL_RATE_LIMIT_GENERAL, DEFAULT_GENERAL_RATE_LIMIT);
+
 /**
  * Strict cap: login/register brute-force protection only.
  * RefreshSession is excluded — it shares the generous default budget so token
@@ -34,8 +49,8 @@ const isStrictAuthGraphqlOperation = (req: Request): boolean => {
  * higher cap for normal SPA usage.
  */
 export const graphqlRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: (req) => (isStrictAuthGraphqlOperation(req) ? 100 : 800),
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  limit: (req) => (isStrictAuthGraphqlOperation(req) ? AUTH_RATE_LIMIT : GENERAL_RATE_LIMIT),
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS',
