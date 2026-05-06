@@ -361,6 +361,7 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
         e.category,
         e.amount,
         e.currency,
+        e.split_details AS splitDetails,
         e.transaction_date AS transactionDate,
         u.full_name AS paidByName,
         COALESCE(e.is_private, 0) AS isPrivate,
@@ -384,12 +385,20 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
     const groupMembers = membersByGroupId.get(row.groupId) ?? [];
     const viewerMember = groupMembers.find((member) => member.email.trim().toLowerCase() === normalizedEmail);
     const amount = Number(row.amount);
-    const yourShare =
-      isPrivate && String(row.createdByUserId ?? '') === viewerUserId
-        ? amount
-        : viewerMember
-          ? Number(((amount * viewerMember.ratio) / 100).toFixed(2))
-          : 0;
+    const splitDetails = parseExpenseSplitDetails(typeof row.splitDetails === 'string' ? row.splitDetails : null);
+
+    let yourShare = 0;
+    if (isPrivate && String(row.createdByUserId ?? '') === viewerUserId) {
+      yourShare = amount;
+    } else if (viewerMember) {
+      const viewerNameKey = viewerMember.name.trim().toLowerCase();
+      const shareFromDetails = splitDetails.find(
+        (share) => share.participant.trim().toLowerCase() === viewerNameKey,
+      );
+      yourShare = shareFromDetails
+        ? Number(shareFromDetails.amount.toFixed(2))
+        : Number(((amount * viewerMember.ratio) / 100).toFixed(2));
+    }
 
     const groupExpenses = expensesByGroupId.get(row.groupId) ?? [];
     groupExpenses.push({
