@@ -29,6 +29,7 @@
 - **CSRF:** Cookie-authenticated GraphQL **mutations** require an allowed `Origin` header (or `Referer` origin fallback). Requests with session cookies from non-allowlisted origins are rejected with HTTP 403.
 - **Request size:** JSON bodies are capped via `JSON_BODY_LIMIT` (default `512kb`) to limit oversized GraphQL payloads.
 - **Query abuse guard:** Apollo `maxRecursiveSelections` is enabled via `GRAPHQL_MAX_RECURSIVE_SELECTIONS` (default `30`) to curb deeply-recursive GraphQL operations.
+- **Rate limiting:** GraphQL uses a 15-minute window with separate caps for auth operations (`GRAPHQL_RATE_LIMIT_AUTH`, default `100`) and general operations (`GRAPHQL_RATE_LIMIT_GENERAL`, default `800`).
 
 ## Environment template
 
