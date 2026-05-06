@@ -49,6 +49,7 @@ type GroupExpenseRow = {
   category: string;
   amount: string;
   currency: string | null;
+  splitType: string | null;
   transactionDate: Date | string;
   paidByName: string | null;
   isPrivate: number;
@@ -394,6 +395,7 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
         e.category,
         e.amount,
         e.currency,
+        e.split_type AS splitType,
         e.split_details AS splitDetails,
         e.transaction_date AS transactionDate,
         u.full_name AS paidByName,
@@ -430,18 +432,22 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
       const shareFromDetails = splitDetails.find(
         (share) => share.participant.trim().toLowerCase() === viewerNameKey,
       );
+      const expenseGroupKey = (row.expenseGroup ?? row.category).trim().toLowerCase();
+      const templateSplit = templateSplitByKey.get(`${row.groupId}:${expenseGroupKey}`) ?? [];
+      const templateAllocation = templateSplit.find(
+        (allocation) => allocation.participant.trim().toLowerCase() === viewerNameKey,
+      );
 
-      if (shareFromDetails) {
+      if (row.splitType === 'Custom' && shareFromDetails) {
+        // Preserve explicit one-off custom split allocations.
+        yourShare = Number(shareFromDetails.amount.toFixed(2));
+      } else if (templateAllocation) {
+        // Shared expenses should follow the current expense-group template ratio.
+        yourShare = Number(((amount * templateAllocation.ratio) / 100).toFixed(2));
+      } else if (shareFromDetails) {
         yourShare = Number(shareFromDetails.amount.toFixed(2));
       } else {
-        const expenseGroupKey = (row.expenseGroup ?? row.category).trim().toLowerCase();
-        const templateSplit = templateSplitByKey.get(`${row.groupId}:${expenseGroupKey}`) ?? [];
-        const templateAllocation = templateSplit.find(
-          (allocation) => allocation.participant.trim().toLowerCase() === viewerNameKey,
-        );
-        yourShare = templateAllocation
-          ? Number(((amount * templateAllocation.ratio) / 100).toFixed(2))
-          : Number(((amount * viewerMember.ratio) / 100).toFixed(2));
+        yourShare = Number(((amount * viewerMember.ratio) / 100).toFixed(2));
       }
     }
 
