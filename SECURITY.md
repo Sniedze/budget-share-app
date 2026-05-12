@@ -31,6 +31,13 @@
 - **Query abuse guard:** Apollo `maxRecursiveSelections` is enabled via `GRAPHQL_MAX_RECURSIVE_SELECTIONS` (default `30`) to curb deeply-recursive GraphQL operations.
 - **Rate limiting:** GraphQL uses a 15-minute window with separate caps for auth operations (`GRAPHQL_RATE_LIMIT_AUTH`, default `100`) and general operations (`GRAPHQL_RATE_LIMIT_GENERAL`, default `800`).
 
+## Household invitation email
+
+- When a household (`group`) is created or updated, members whose email is **not** yet a registered user receive rows in `group_invitations` and (if SMTP is configured) an **invitation email** with links to register or log in.
+- **SMTP credentials** (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, optional `SMTP_PORT` / `SMTP_SECURE`) are sensitive: store them only in deployment secrets or a gitignored `.env`, never in the repo.
+- **Link correctness:** set `APP_PUBLIC_URL` to the real SPA origin used in production so invitation links match your deployed client. If unset, the server falls back to the first `ALLOWED_ORIGINS` entry (or localhost for dev).
+- If SMTP is not configured, the API still succeeds; the server logs `invitation_email_skipped` with reason `smtp_not_configured` (no secrets in logs).
+
 ## Environment template
 
 - See **`.env.example`** at the repo root for variable names used by Docker Compose, the server, and the Vite client (`VITE_GRAPHQL_URL`).
