@@ -1,7 +1,8 @@
 import { useQuery } from '@apollo/client/react';
-import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, Suspense, lazy, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { ChartsSection, MonthlyOverviewSection, RecentExpensesSection, Sidebar, StatsSection } from '../components/sections';
+import { MonthlyOverviewSection, RecentExpensesSection, StatsSection } from '../components/sections';
+import { Sidebar } from '../components/sections/Sidebar';
 import { AppLayout, HeaderRow, HeaderText, MutedText, PageSurface, SectionSubtitle, SectionTitle, UserMenu } from '../components/ui';
 import { APP_CURRENCY_CODE } from '../format/currency';
 import {
@@ -21,6 +22,10 @@ import type { Expense, GetExpensesResponse, SplitAllocationInput, SplitType } fr
 import { GET_GROUPS, GET_GROUP_SPLIT_TEMPLATES } from '../features/groups';
 import type { GroupSummary, SplitTemplate } from '../features/groups';
 import { colors, radii, spacing } from '../styles/tokens';
+
+const ChartsSection = lazy(() =>
+  import('../components/sections/ChartsSection').then((module) => ({ default: module.ChartsSection })),
+);
 
 const DEFAULT_CATEGORY = DEFAULT_EXPENSE_CATEGORIES[0];
 const DEFAULT_SPLIT: SplitType = 'Personal';
@@ -388,7 +393,9 @@ export const HomePage = (): JSX.Element => {
         {analyticsView === 'table' ? (
           <MonthlyOverviewSection rows={monthlyOverview} />
         ) : (
-          <ChartsSection trendData={trendData} breakdownData={breakdownData} />
+          <Suspense fallback={<MutedText>Loading charts...</MutedText>}>
+            <ChartsSection trendData={trendData} breakdownData={breakdownData} />
+          </Suspense>
         )}
       </PageSurface>
     </AppLayout>
