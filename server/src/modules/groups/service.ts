@@ -213,6 +213,8 @@ const parseTemplateSplitDetails = (
 };
 
 const roundCents = (value: number): number => Math.round(value * 100) / 100;
+const buildBulkInsertPlaceholders = (rows: number, width: number): string =>
+  Array.from({ length: rows }, () => `(${Array.from({ length: width }, () => '?').join(', ')})`).join(', ');
 
 const parseExpenseSplitDetails = (
   value: string | null,
@@ -534,17 +536,17 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
 
     groupId = insertResult.insertId;
 
-    await Promise.all(
-      members.map((member) =>
-        connection.execute(
-          `
-            INSERT INTO group_members (group_id, name, email, ratio)
-            VALUES (?, ?, ?, ?)
-          `,
-          [groupId, member.name, member.email, member.ratio],
-        ),
-      ),
-    );
+    if (members.length > 0) {
+      const memberPlaceholders = buildBulkInsertPlaceholders(members.length, 4);
+      const memberValues = members.flatMap((member) => [groupId, member.name, member.email, member.ratio]);
+      await connection.execute(
+        `
+          INSERT INTO group_members (group_id, name, email, ratio)
+          VALUES ${memberPlaceholders}
+        `,
+        memberValues,
+      );
+    }
 
     const [existingUsers] = await connection.query<RowDataPacket[]>(
       `
@@ -565,17 +567,15 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
       .filter((email) => !existingUserEmails.has(email));
 
     if (pendingInvitationEmails.length > 0) {
-      await Promise.all(
-        pendingInvitationEmails.map((email) =>
-          connection.execute(
-            `
-              INSERT INTO group_invitations (group_id, email, status)
-              VALUES (?, ?, 'Pending')
-              ON DUPLICATE KEY UPDATE status = VALUES(status), accepted_at = NULL
-            `,
-            [groupId, email],
-          ),
-        ),
+      const invitationPlaceholders = buildBulkInsertPlaceholders(pendingInvitationEmails.length, 2);
+      const invitationValues = pendingInvitationEmails.flatMap((email) => [groupId, email]);
+      await connection.execute(
+        `
+          INSERT INTO group_invitations (group_id, email, status)
+          VALUES ${invitationPlaceholders.replace(/\(\?, \?\)/g, '(?, ?, \'Pending\')')}
+          ON DUPLICATE KEY UPDATE status = VALUES(status), accepted_at = NULL
+        `,
+        invitationValues,
       );
     }
 
@@ -701,17 +701,22 @@ export const updateGroup = async (
       [numericGroupId],
     );
 
-    await Promise.all(
-      members.map((member) =>
-        connection.execute(
-          `
-            INSERT INTO group_members (group_id, name, email, ratio)
-            VALUES (?, ?, ?, ?)
-          `,
-          [numericGroupId, member.name, member.email, member.ratio],
-        ),
-      ),
-    );
+    if (members.length > 0) {
+      const memberPlaceholders = buildBulkInsertPlaceholders(members.length, 4);
+      const memberValues = members.flatMap((member) => [
+        numericGroupId,
+        member.name,
+        member.email,
+        member.ratio,
+      ]);
+      await connection.execute(
+        `
+          INSERT INTO group_members (group_id, name, email, ratio)
+          VALUES ${memberPlaceholders}
+        `,
+        memberValues,
+      );
+    }
 
     const [existingUsers] = await connection.query<RowDataPacket[]>(
       `
@@ -732,17 +737,15 @@ export const updateGroup = async (
       .filter((email) => !existingUserEmails.has(email));
 
     if (pendingInvitationEmails.length > 0) {
-      await Promise.all(
-        pendingInvitationEmails.map((email) =>
-          connection.execute(
-            `
-              INSERT INTO group_invitations (group_id, email, status)
-              VALUES (?, ?, 'Pending')
-              ON DUPLICATE KEY UPDATE status = VALUES(status), accepted_at = NULL
-            `,
-            [numericGroupId, email],
-          ),
-        ),
+      const invitationPlaceholders = buildBulkInsertPlaceholders(pendingInvitationEmails.length, 2);
+      const invitationValues = pendingInvitationEmails.flatMap((email) => [numericGroupId, email]);
+      await connection.execute(
+        `
+          INSERT INTO group_invitations (group_id, email, status)
+          VALUES ${invitationPlaceholders.replace(/\(\?, \?\)/g, '(?, ?, \'Pending\')')}
+          ON DUPLICATE KEY UPDATE status = VALUES(status), accepted_at = NULL
+        `,
+        invitationValues,
       );
     }
 
