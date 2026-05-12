@@ -59,6 +59,7 @@ jobs:
       ALLOWED_ORIGINS: http://localhost:5173
       JSON_BODY_LIMIT: 512kb
       GRAPHQL_MAX_RECURSIVE_SELECTIONS: 30
+      GRAPHQL_INTEGRATION_TESTS: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
