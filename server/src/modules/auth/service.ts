@@ -1,6 +1,7 @@
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import bcrypt from 'bcryptjs';
 import { db } from '../../db/mysql.js';
+import { queryOne } from '../../db/queryHelpers.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from './jwt.js';
 import type { AuthPayload, LoginInput, RegisterInput, User } from './types.js';
 import {
@@ -42,7 +43,7 @@ const toAuthPayload = (row: UserRow): AuthPayload => {
 };
 
 const getUserByEmail = async (email: string): Promise<UserRow | null> => {
-  const [rows] = await db.query<UserRow[]>(
+  return queryOne<UserRow>(
     `
       SELECT id, email, full_name, password_hash, created_at, refresh_token_version
       FROM users
@@ -51,7 +52,6 @@ const getUserByEmail = async (email: string): Promise<UserRow | null> => {
     `,
     [email],
   );
-  return rows[0] ?? null;
 };
 
 export const register = async (input: RegisterInput): Promise<AuthPayload> => {
@@ -75,7 +75,7 @@ export const register = async (input: RegisterInput): Promise<AuthPayload> => {
     [email, fullName, passwordHash],
   );
 
-  const [rows] = await db.query<UserRow[]>(
+  const userRow = await queryOne<UserRow>(
     `
       SELECT id, email, full_name, password_hash, created_at, refresh_token_version
       FROM users
@@ -84,7 +84,6 @@ export const register = async (input: RegisterInput): Promise<AuthPayload> => {
     `,
     [insertResult.insertId],
   );
-  const userRow = rows[0];
   if (!userRow) {
     throw new Error('Failed to load created user.');
   }
@@ -124,7 +123,7 @@ export const refreshSession = async (refreshToken: string): Promise<AuthPayload>
     throw new Error('Invalid refresh token.');
   }
 
-  const [rows] = await db.query<UserRow[]>(
+  const user = await queryOne<UserRow>(
     `
       SELECT id, email, full_name, password_hash, created_at, refresh_token_version
       FROM users
@@ -133,7 +132,6 @@ export const refreshSession = async (refreshToken: string): Promise<AuthPayload>
     `,
     [claims.userId],
   );
-  const user = rows[0];
   if (!user) {
     throw new Error('User not found.');
   }
@@ -158,7 +156,7 @@ export const revokeRefreshTokens = async (userId: string): Promise<void> => {
 };
 
 export const getUserById = async (userId: string): Promise<User | null> => {
-  const [rows] = await db.query<UserRow[]>(
+  const row = await queryOne<UserRow>(
     `
       SELECT id, email, full_name, password_hash, created_at, refresh_token_version
       FROM users
@@ -167,6 +165,5 @@ export const getUserById = async (userId: string): Promise<User | null> => {
     `,
     [userId],
   );
-  const row = rows[0];
   return row ? toUser(row) : null;
 };
