@@ -34,6 +34,7 @@
 ## Household invitation email
 
 - When a household (`group`) is created or updated, members whose email is **not** yet a registered user receive rows in `group_invitations` and (if SMTP is configured) an **invitation email** with links to register or log in.
+- When a **new** household is created, **registered** members other than the creator also receive a short “you’ve been added” email (same SMTP setup).
 - **SMTP credentials** (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, optional `SMTP_PORT` / `SMTP_SECURE`) are sensitive: store them only in deployment secrets or a gitignored `.env`, never in the repo.
 - **Link correctness:** set `APP_PUBLIC_URL` to the real SPA origin used in production so invitation links match your deployed client. If unset, the server falls back to the first `ALLOWED_ORIGINS` entry (or localhost for dev).
 - If SMTP is not configured, the API still succeeds; the server logs `invitation_email_skipped` with reason `smtp_not_configured` (no secrets in logs).

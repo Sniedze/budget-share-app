@@ -17,7 +17,7 @@ import type {
 } from './types.js';
 import { logAuditEvent } from '../audit/service.js';
 import { logAuthzDenied } from '../../logger.js';
-import { queueHouseholdInvitationEmails } from '../email/sendHouseholdInvitations.js';
+import { queueHouseholdInvitationEmails, queueNewGroupCreatedEmails } from '../email/sendHouseholdInvitations.js';
 
 type GroupRow = {
   id: number;
@@ -523,6 +523,7 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
   }
 
   let pendingInvitationEmailsForNotify: string[] = [];
+  let memberEmailsHavingAccounts = new Set<string>();
   const connection = await db.getConnection();
   let groupId = 0;
   try {
@@ -563,6 +564,7 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
         typeof row.email === 'string' ? row.email.trim().toLowerCase() : '',
       ),
     );
+    memberEmailsHavingAccounts = existingUserEmails;
 
     const pendingInvitationEmails = members
       .map((member) => member.email)
@@ -590,15 +592,23 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
     connection.release();
   }
 
-  if (pendingInvitationEmailsForNotify.length > 0) {
-    const pendingSet = new Set(pendingInvitationEmailsForNotify);
-    const invitees = members
-      .filter((member) => pendingSet.has(member.email))
-      .map((member) => ({ email: member.email, name: member.name }));
-    queueHouseholdInvitationEmails({
+  const pendingSet = new Set(pendingInvitationEmailsForNotify);
+  const pendingInvitees = members
+    .filter((member) => pendingSet.has(member.email))
+    .map((member) => ({ email: member.email, name: member.name }));
+  const existingMembersToNotify = members
+    .filter(
+      (member) =>
+        member.email !== normalizedActorEmail && memberEmailsHavingAccounts.has(member.email),
+    )
+    .map((member) => ({ email: member.email, name: member.name }));
+
+  if (pendingInvitees.length > 0 || existingMembersToNotify.length > 0) {
+    queueNewGroupCreatedEmails({
       groupName: name,
       actorEmail: normalizedActorEmail,
-      invitees,
+      pendingInvitees,
+      existingMembersToNotify,
     });
   }
 
