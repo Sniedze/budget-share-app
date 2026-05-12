@@ -25,6 +25,10 @@ export const transactionDateKeyForDedup = (transactionDate: string): string => {
  * SHA-256 hex, 64 chars.
  */
 /** Outgoing uses the legacy fingerprint so existing rows keep stable dedup; incoming appends a suffix. */
+/**
+ * Dedup fingerprints treat `flow` as immutable: if flow semantics ever change, migrate existing
+ * `transaction_dedup_hash` values; otherwise false positives/negatives can occur.
+ */
 export const computeTransactionDedupHash = (
   transactionDate: string,
   amount: number,
