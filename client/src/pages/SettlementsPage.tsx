@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Sidebar } from '../components/sections';
+import { Sidebar } from '../components/sections/Sidebar';
 import {
   AppLayout,
   Button,

@@ -2,7 +2,7 @@ import { useQuery } from '@apollo/client/react';
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Upload } from 'lucide-react';
 import styled from 'styled-components';
-import { Sidebar } from '../components/sections';
+import { Sidebar } from '../components/sections/Sidebar';
 import {
   AppLayout,
   Button,

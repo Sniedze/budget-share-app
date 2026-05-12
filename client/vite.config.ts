@@ -11,6 +11,8 @@ export default defineConfig({
           router: ['react-router-dom'],
           apollo: ['@apollo/client'],
           graphql: ['graphql'],
+          lucide: ['lucide-react'],
+          recharts: ['recharts'],
         },
       },
     },

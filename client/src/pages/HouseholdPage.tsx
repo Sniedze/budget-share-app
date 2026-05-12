@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react';
 import styled from 'styled-components';
-import { Sidebar } from '../components/sections';
+import { Sidebar } from '../components/sections/Sidebar';
 import { AppLayout, Badge, Button, Card, ErrorText, HeaderRow, HeaderText, MutedText, PageSurface, SectionSubtitle, SectionTitle, Table, TableWrapper, Tbody, Td, Th, Thead, Tr, UserMenu } from '../components/ui';
 import { AddExpenseModal } from './household/AddExpenseModal';
 import { CreateExpenseGroupModal } from './household/CreateExpenseGroupModal';
