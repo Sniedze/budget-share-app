@@ -1,0 +1,70 @@
+# Production-style stack for a single VPS: MySQL (no host port), API, nginx (SPA + /graphql proxy).
+# Create `.env` from `.env.example` with MYSQL_*, JWT_*, ALLOWED_ORIGINS, and optional SMTP (same as local API).
+# Then: docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - internal
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD || exit 1',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      PORT: '4000'
+      TRUST_PROXY: '1'
+      DB_HOST: mysql
+      DB_PORT: '3306'
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      DB_NAME: ${MYSQL_DATABASE}
+    networks:
+      - internal
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.nginx
+      args:
+        VITE_GRAPHQL_URL: ${VITE_GRAPHQL_URL:-/graphql}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - '80:80'
+    networks:
+      - internal
+
+networks:
+  internal:
+
+volumes:
+  mysql_data:

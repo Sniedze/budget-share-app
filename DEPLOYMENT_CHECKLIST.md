@@ -8,6 +8,7 @@ Use this when deploying the Budget Share app to production.
   - Frontend: static host (for example Vercel/Netlify/Cloudflare Pages)
   - Server: Node host (for example Render/Railway/Fly)
   - Database: MySQL managed instance
+  - Alternative: one VPS with Docker using `docker-compose.prod.yml` (internal MySQL, nginx serves the SPA and proxies `/graphql` to the API). Put the same secrets in a root `.env` file, set `TRUST_PROXY=1` and `ALLOWED_ORIGINS` to your public HTTPS origin, then run `docker compose -f docker-compose.prod.yml up -d --build`.
 - [ ] Ensure TLS/HTTPS is enabled for both frontend and API.
 - [ ] Decide final URLs:
   - Frontend URL (for example `https://soperfect.dk`)
@@ -54,7 +55,7 @@ Set these in your server host:
 
 Set these in your frontend host build environment:
 
-- [ ] `VITE_GRAPHQL_URL=https://api.soperfect.dk/graphql`
+- [ ] `VITE_GRAPHQL_URL=https://api.soperfect.dk/graphql` (or `/graphql` when the API is same-origin behind nginx, as in `docker-compose.prod.yml`)
 
 ## 3) Database and migrations
 
