@@ -11,6 +11,13 @@ import {
 } from '../../logger.js';
 
 export type HouseholdInvitee = { email: string; name: string };
+type EmailPayload = {
+  from: string;
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+};
 
 const escapeHtml = (value: string): string =>
   value
@@ -18,6 +25,39 @@ const escapeHtml = (value: string): string =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+
+const parsePositiveInt = (raw: string | undefined, fallback: number): number => {
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : fallback;
+};
+
+const SMTP_RETRY_MAX_ATTEMPTS = parsePositiveInt(process.env.SMTP_RETRY_MAX_ATTEMPTS, 3);
+const SMTP_RETRY_BASE_DELAY_MS = parsePositiveInt(process.env.SMTP_RETRY_BASE_DELAY_MS, 300);
+
+const sleep = async (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const sendMailWithRetry = async (
+  transporter: nodemailer.Transporter,
+  payload: EmailPayload,
+): Promise<{ ok: true; attempts: number } | { ok: false; attempts: number; message: string }> => {
+  let lastMessage = 'unknown_smtp_error';
+  for (let attempt = 1; attempt <= SMTP_RETRY_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await transporter.sendMail(payload);
+      return { ok: true, attempts: attempt };
+    } catch (err) {
+      lastMessage = err instanceof Error ? err.message : String(err);
+      if (attempt < SMTP_RETRY_MAX_ATTEMPTS) {
+        // Exponential backoff: base, 2x, 4x...
+        await sleep(SMTP_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+      }
+    }
+  }
+  return { ok: false, attempts: SMTP_RETRY_MAX_ATTEMPTS, message: lastMessage };
+};
 
 /**
  * Sends one email per invitee (non-registered members). Requires SMTP env vars;
@@ -79,20 +119,21 @@ export const sendHouseholdInvitationEmails = async (params: {
 <p>If you already have an account, <a href="${escapeHtml(loginUrl)}">log in</a> with the same email.</p>
 <p>Thanks,<br/>BudgetShare</p>`;
 
-    try {
-      await transporter.sendMail({
-        from: smtp.from,
-        to: invitee.email,
-        subject,
-        text,
-        html,
-      });
-      logInvitationEmailSent({ to: invitee.email, groupName });
-    } catch (err) {
+    const result = await sendMailWithRetry(transporter, {
+      from: smtp.from,
+      to: invitee.email,
+      subject,
+      text,
+      html,
+    });
+    if (result.ok) {
+      logInvitationEmailSent({ to: invitee.email, groupName, attempts: result.attempts });
+    } else {
       logInvitationEmailFailed({
         to: invitee.email,
         groupName,
-        message: err instanceof Error ? err.message : String(err),
+        attempts: result.attempts,
+        message: result.message,
       });
     }
   }
@@ -176,20 +217,26 @@ export const sendNewGroupCreatedEmails = async (params: {
 <p>If you already have an account, <a href="${escapeHtml(loginUrl)}">log in</a> with the same email.</p>
 <p>Thanks,<br/>BudgetShare</p>`;
 
-    try {
-      await transporter.sendMail({
-        from: smtp.from,
+    const result = await sendMailWithRetry(transporter, {
+      from: smtp.from,
+      to: invitee.email,
+      subject,
+      text,
+      html,
+    });
+    if (result.ok) {
+      logInvitationEmailSent({
         to: invitee.email,
-        subject,
-        text,
-        html,
+        groupName,
+        template: 'invite_pending',
+        attempts: result.attempts,
       });
-      logInvitationEmailSent({ to: invitee.email, groupName, template: 'invite_pending' });
-    } catch (err) {
+    } else {
       logInvitationEmailFailed({
         to: invitee.email,
         groupName,
-        message: err instanceof Error ? err.message : String(err),
+        attempts: result.attempts,
+        message: result.message,
       });
     }
   }
@@ -213,20 +260,26 @@ export const sendNewGroupCreatedEmails = async (params: {
 <p><a href="${escapeHtml(loginUrl)}">Open BudgetShare</a></p>
 <p>Thanks,<br/>BudgetShare</p>`;
 
-    try {
-      await transporter.sendMail({
-        from: smtp.from,
+    const result = await sendMailWithRetry(transporter, {
+      from: smtp.from,
+      to: member.email,
+      subject,
+      text,
+      html,
+    });
+    if (result.ok) {
+      logInvitationEmailSent({
         to: member.email,
-        subject,
-        text,
-        html,
+        groupName,
+        template: 'member_existing',
+        attempts: result.attempts,
       });
-      logInvitationEmailSent({ to: member.email, groupName, template: 'member_existing' });
-    } catch (err) {
+    } else {
       logInvitationEmailFailed({
         to: member.email,
         groupName,
-        message: err instanceof Error ? err.message : String(err),
+        attempts: result.attempts,
+        message: result.message,
       });
     }
   }
