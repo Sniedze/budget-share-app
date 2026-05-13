@@ -17,6 +17,7 @@ import type {
 } from './types.js';
 import { logAuditEvent } from '../audit/service.js';
 import { logAuthzDenied } from '../../logger.js';
+import { queueHouseholdInvitationEmails, queueNewGroupCreatedEmails } from '../email/sendHouseholdInvitations.js';
 
 type GroupRow = {
   id: number;
@@ -521,6 +522,8 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
     throw new Error('Group creator must be included in members.');
   }
 
+  let pendingInvitationEmailsForNotify: string[] = [];
+  let memberEmailsHavingAccounts = new Set<string>();
   const connection = await db.getConnection();
   let groupId = 0;
   try {
@@ -561,10 +564,12 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
         typeof row.email === 'string' ? row.email.trim().toLowerCase() : '',
       ),
     );
+    memberEmailsHavingAccounts = existingUserEmails;
 
     const pendingInvitationEmails = members
       .map((member) => member.email)
       .filter((email) => !existingUserEmails.has(email));
+    pendingInvitationEmailsForNotify = pendingInvitationEmails;
 
     if (pendingInvitationEmails.length > 0) {
       const invitationPlaceholders = buildBulkInsertPlaceholders(pendingInvitationEmails.length, 2);
@@ -585,6 +590,26 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
     throw error;
   } finally {
     connection.release();
+  }
+
+  const pendingSet = new Set(pendingInvitationEmailsForNotify);
+  const pendingInvitees = members
+    .filter((member) => pendingSet.has(member.email))
+    .map((member) => ({ email: member.email, name: member.name }));
+  const existingMembersToNotify = members
+    .filter(
+      (member) =>
+        member.email !== normalizedActorEmail && memberEmailsHavingAccounts.has(member.email),
+    )
+    .map((member) => ({ email: member.email, name: member.name }));
+
+  if (pendingInvitees.length > 0 || existingMembersToNotify.length > 0) {
+    queueNewGroupCreatedEmails({
+      groupName: name,
+      actorEmail: normalizedActorEmail,
+      pendingInvitees,
+      existingMembersToNotify,
+    });
   }
 
   return {
@@ -680,6 +705,7 @@ export const updateGroup = async (
     throw new Error('Group editor must remain in members.');
   }
 
+  let pendingInvitationEmailsForNotify: string[] = [];
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
@@ -735,6 +761,7 @@ export const updateGroup = async (
     const pendingInvitationEmails = members
       .map((member) => member.email)
       .filter((email) => !existingUserEmails.has(email));
+    pendingInvitationEmailsForNotify = pendingInvitationEmails;
 
     if (pendingInvitationEmails.length > 0) {
       const invitationPlaceholders = buildBulkInsertPlaceholders(pendingInvitationEmails.length, 2);
@@ -755,6 +782,18 @@ export const updateGroup = async (
     throw error;
   } finally {
     connection.release();
+  }
+
+  if (pendingInvitationEmailsForNotify.length > 0) {
+    const pendingSet = new Set(pendingInvitationEmailsForNotify);
+    const invitees = members
+      .filter((member) => pendingSet.has(member.email))
+      .map((member) => ({ email: member.email, name: member.name }));
+    queueHouseholdInvitationEmails({
+      groupName: name,
+      actorEmail: normalizedActorEmail,
+      invitees,
+    });
   }
 
   const [groupRows] = await db.query<GroupRow[]>(

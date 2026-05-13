@@ -44,3 +44,15 @@ export const logServerError = (fields: {
 export const logAuthzDenied = (reason: string, fields: LogFields = {}): void => {
   write('warn', 'authz_denied', { reason, ...fields });
 };
+
+export const logInvitationEmailSkipped = (fields: LogFields): void => {
+  write('info', 'invitation_email_skipped', fields);
+};
+
+export const logInvitationEmailSent = (fields: LogFields): void => {
+  write('info', 'invitation_email_sent', fields);
+};
+
+export const logInvitationEmailFailed = (fields: LogFields): void => {
+  write('warn', 'invitation_email_failed', fields);
+};
