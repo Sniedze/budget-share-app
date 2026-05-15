@@ -1,0 +1,385 @@
+import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import { db } from '../../db/mysql.js';
+import { appError, ErrorCode } from '../../graphql/appError.js';
+import { logAuthzDenied } from '../../logger.js';
+import type { GroupInvitation, GroupInvitationStatus } from './types.js';
+
+const buildBulkInsertPlaceholders = (rows: number, width: number): string =>
+  Array.from({ length: rows }, () => `(${Array.from({ length: width }, () => '?').join(', ')})`).join(', ');
+
+type InvitationRow = {
+  id: number;
+  groupId: number;
+  groupName: string;
+  email: string;
+  status: string;
+  emailDeliveryStatus: string | null;
+  invitedAt: Date | string;
+  acceptedAt: Date | string | null;
+} & RowDataPacket;
+
+const toIsoString = (value: Date | string): string =>
+  value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+
+export const mapInvitationStatus = (status: string): GroupInvitationStatus => {
+  if (status === 'Accepted') {
+    return 'Accepted';
+  }
+  if (status === 'Declined') {
+    return 'Declined';
+  }
+  return 'Pending';
+};
+
+export const upsertPendingInvitations = async (
+  connection: PoolConnection,
+  groupId: number,
+  emails: string[],
+): Promise<void> => {
+  if (emails.length === 0) {
+    return;
+  }
+  const invitationPlaceholders = buildBulkInsertPlaceholders(emails.length, 2);
+  const invitationValues = emails.flatMap((email) => [groupId, email]);
+  await connection.execute(
+    `
+      INSERT INTO group_invitations (group_id, email, status)
+      VALUES ${invitationPlaceholders.replace(/\(\?, \?\)/g, "(?, ?, 'Pending')")}
+      ON DUPLICATE KEY UPDATE
+        status = 'Pending',
+        accepted_at = NULL,
+        email_delivery_status = NULL
+    `,
+    invitationValues,
+  );
+};
+
+export const deleteInvitationsNotInEmails = async (
+  connection: PoolConnection,
+  groupId: number,
+  memberEmails: string[],
+): Promise<void> => {
+  if (memberEmails.length === 0) {
+    await connection.execute(
+      `
+        DELETE FROM group_invitations
+        WHERE group_id = ?
+      `,
+      [groupId],
+    );
+    return;
+  }
+  const placeholders = buildBulkInsertPlaceholders(memberEmails.length, 1);
+  await connection.execute(
+    `
+      DELETE FROM group_invitations
+      WHERE group_id = ?
+        AND email NOT IN (${placeholders})
+    `,
+    [groupId, ...memberEmails],
+  );
+};
+
+export const assertActiveGroupMembership = async (
+  groupId: number,
+  userEmail: string,
+  action: string,
+): Promise<void> => {
+  const normalizedEmail = userEmail.trim().toLowerCase();
+  const [memberRows] = await db.query<RowDataPacket[]>(
+    `
+      SELECT id
+      FROM group_members
+      WHERE group_id = ? AND email = ?
+      LIMIT 1
+    `,
+    [groupId, normalizedEmail],
+  );
+  if (memberRows.length === 0) {
+    logAuthzDenied('group_access_denied', { groupId: String(groupId), email: normalizedEmail, action });
+    throw appError(ErrorCode.FORBIDDEN, 'Not authorized for this group.');
+  }
+
+  const [invitationRows] = await db.query<Array<{ status: string } & RowDataPacket>>(
+    `
+      SELECT status
+      FROM group_invitations
+      WHERE group_id = ? AND email = ?
+      LIMIT 1
+    `,
+    [groupId, normalizedEmail],
+  );
+  const status = invitationRows[0]?.status;
+  if (status && status !== 'Accepted') {
+    throw appError(ErrorCode.FORBIDDEN, 'Accept the household invitation before accessing this group.');
+  }
+};
+
+export const backfillAcceptedInvitationsForExistingMembers = async (): Promise<void> => {
+  await db.execute(`
+    INSERT INTO group_invitations (group_id, email, status, accepted_at)
+    SELECT gm.group_id, gm.email, 'Accepted', CURRENT_TIMESTAMP
+    FROM group_members gm
+    LEFT JOIN group_invitations gi
+      ON gi.group_id = gm.group_id AND gi.email = gm.email
+    WHERE gi.id IS NULL
+  `);
+};
+
+const getInvitationRowForUser = async (
+  invitationId: number,
+  userEmail: string,
+): Promise<InvitationRow | null> => {
+  const normalizedEmail = userEmail.trim().toLowerCase();
+  const [rows] = await db.query<InvitationRow[]>(
+    `
+      SELECT
+        gi.id,
+        gi.group_id AS groupId,
+        g.name AS groupName,
+        gi.email,
+        gi.status,
+        gi.email_delivery_status AS emailDeliveryStatus,
+        gi.invited_at AS invitedAt,
+        gi.accepted_at AS acceptedAt
+      FROM group_invitations gi
+      INNER JOIN \`groups\` g ON g.id = gi.group_id
+      WHERE gi.id = ?
+        AND gi.email = ?
+      LIMIT 1
+    `,
+    [invitationId, normalizedEmail],
+  );
+  return rows[0] ?? null;
+};
+
+const removeMemberFromHousehold = async (groupId: number, email: string, memberName: string): Promise<void> => {
+  await db.execute(
+    `
+      DELETE FROM group_members
+      WHERE group_id = ? AND email = ?
+    `,
+    [groupId, email],
+  );
+
+  const [templateRows] = await db.query<Array<{ id: number; splitDetails: string } & RowDataPacket>>(
+    `
+      SELECT id, split_details AS splitDetails
+      FROM group_split_templates
+      WHERE group_id = ?
+    `,
+    [groupId],
+  );
+
+  const normalizedName = memberName.trim().toLowerCase();
+  for (const row of templateRows) {
+    let splitDetails: Array<{ participant: string; ratio: number }> = [];
+    try {
+      const parsed = JSON.parse(typeof row.splitDetails === 'string' ? row.splitDetails : '[]');
+      if (Array.isArray(parsed)) {
+        splitDetails = parsed
+          .filter(
+            (entry): entry is { participant: string; ratio: number } =>
+              typeof entry === 'object' &&
+              entry !== null &&
+              typeof entry.participant === 'string' &&
+              typeof entry.ratio === 'number',
+          )
+          .filter((entry) => entry.participant.trim().toLowerCase() !== normalizedName);
+      }
+    } catch {
+      splitDetails = [];
+    }
+    await db.execute(
+      `
+        UPDATE group_split_templates
+        SET split_details = ?
+        WHERE id = ?
+      `,
+      [JSON.stringify(splitDetails), row.id],
+    );
+  }
+};
+
+export const acceptGroupInvitation = async (
+  invitationId: string,
+  userEmail: string,
+): Promise<GroupInvitation> => {
+  const numericId = Number(invitationId);
+  if (!Number.isFinite(numericId) || numericId <= 0) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid invitation id.');
+  }
+
+  const row = await getInvitationRowForUser(numericId, userEmail);
+  if (!row) {
+    throw appError(ErrorCode.NOT_FOUND, 'Invitation not found.');
+  }
+  if (row.status === 'Accepted') {
+    return {
+      id: String(row.id),
+      groupId: String(row.groupId),
+      groupName: row.groupName,
+      email: row.email,
+      status: 'Accepted',
+      emailDeliveryStatus: undefined,
+      invitedAt: toIsoString(row.invitedAt),
+      acceptedAt: row.acceptedAt ? toIsoString(row.acceptedAt) : toIsoString(new Date()),
+    };
+  }
+  if (row.status === 'Declined') {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'This invitation was declined and cannot be accepted.');
+  }
+
+  await db.execute(
+    `
+      UPDATE group_invitations
+      SET status = 'Accepted', accepted_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `,
+    [numericId],
+  );
+
+  return {
+    id: String(row.id),
+    groupId: String(row.groupId),
+    groupName: row.groupName,
+    email: row.email,
+    status: 'Accepted',
+    emailDeliveryStatus: undefined,
+    invitedAt: toIsoString(row.invitedAt),
+    acceptedAt: toIsoString(new Date()),
+  };
+};
+
+export const declineGroupInvitation = async (
+  invitationId: string,
+  userEmail: string,
+): Promise<GroupInvitation> => {
+  const numericId = Number(invitationId);
+  if (!Number.isFinite(numericId) || numericId <= 0) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid invitation id.');
+  }
+
+  const row = await getInvitationRowForUser(numericId, userEmail);
+  if (!row) {
+    throw appError(ErrorCode.NOT_FOUND, 'Invitation not found.');
+  }
+  if (row.status === 'Declined') {
+    return {
+      id: String(row.id),
+      groupId: String(row.groupId),
+      groupName: row.groupName,
+      email: row.email,
+      status: 'Declined',
+      emailDeliveryStatus: undefined,
+      invitedAt: toIsoString(row.invitedAt),
+      acceptedAt: undefined,
+    };
+  }
+
+  const [memberRows] = await db.query<Array<{ name: string } & RowDataPacket>>(
+    `
+      SELECT name
+      FROM group_members
+      WHERE group_id = ? AND email = ?
+      LIMIT 1
+    `,
+    [row.groupId, row.email],
+  );
+  const memberName = memberRows[0]?.name ?? row.email;
+
+  await db.execute(
+    `
+      UPDATE group_invitations
+      SET status = 'Declined', accepted_at = NULL
+      WHERE id = ?
+    `,
+    [numericId],
+  );
+  await removeMemberFromHousehold(row.groupId, row.email, memberName);
+
+  return {
+    id: String(row.id),
+    groupId: String(row.groupId),
+    groupName: row.groupName,
+    email: row.email,
+    status: 'Declined',
+    emailDeliveryStatus: undefined,
+    invitedAt: toIsoString(row.invitedAt),
+    acceptedAt: undefined,
+  };
+};
+
+export const declineExpenseGroupParticipation = async (
+  groupId: string,
+  category: string,
+  userEmail: string,
+): Promise<boolean> => {
+  const numericGroupId = Number(groupId);
+  if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid group id.');
+  }
+  const normalizedCategory = category.trim();
+  if (!normalizedCategory) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Expense group category is required.');
+  }
+
+  const normalizedEmail = userEmail.trim().toLowerCase();
+  const [memberRows] = await db.query<Array<{ name: string } & RowDataPacket>>(
+    `
+      SELECT name
+      FROM group_members
+      WHERE group_id = ? AND email = ?
+      LIMIT 1
+    `,
+    [numericGroupId, normalizedEmail],
+  );
+  const member = memberRows[0];
+  if (!member) {
+    throw appError(ErrorCode.FORBIDDEN, 'Not a member of this household.');
+  }
+
+  const [templateRows] = await db.query<Array<{ id: number; splitDetails: string } & RowDataPacket>>(
+    `
+      SELECT id, split_details AS splitDetails
+      FROM group_split_templates
+      WHERE group_id = ? AND category = ?
+      LIMIT 1
+    `,
+    [numericGroupId, normalizedCategory],
+  );
+  const template = templateRows[0];
+  if (!template) {
+    throw appError(ErrorCode.NOT_FOUND, 'Expense group not found.');
+  }
+
+  const normalizedName = member.name.trim().toLowerCase();
+  let splitDetails: Array<{ participant: string; ratio: number }> = [];
+  try {
+    const parsed = JSON.parse(typeof template.splitDetails === 'string' ? template.splitDetails : '[]');
+    if (Array.isArray(parsed)) {
+      splitDetails = parsed
+        .filter(
+          (entry): entry is { participant: string; ratio: number } =>
+            typeof entry === 'object' &&
+            entry !== null &&
+            typeof entry.participant === 'string' &&
+            typeof entry.ratio === 'number',
+        )
+        .filter((entry) => entry.participant.trim().toLowerCase() !== normalizedName);
+    }
+  } catch {
+    splitDetails = [];
+  }
+
+  const [updateResult] = await db.execute<ResultSetHeader>(
+    `
+      UPDATE group_split_templates
+      SET split_details = ?
+      WHERE id = ?
+    `,
+    [JSON.stringify(splitDetails), template.id],
+  );
+
+  return updateResult.affectedRows > 0;
+};

@@ -32,6 +32,7 @@ export type Group = {
 export type GroupPendingInvitation = {
   email: string;
   name: string;
+  status: GroupInvitationStatus;
   emailDeliveryStatus?: InvitationEmailDeliveryStatus;
 };
 
@@ -48,7 +49,7 @@ export type UpdateGroupInput = {
   members: GroupMember[];
 };
 
-export type GroupInvitationStatus = 'Pending' | 'Accepted';
+export type GroupInvitationStatus = 'Pending' | 'Accepted' | 'Declined';
 
 export type InvitationEmailDeliveryStatus =
   | 'PendingEmail'

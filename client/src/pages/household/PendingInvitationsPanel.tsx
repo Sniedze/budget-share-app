@@ -43,7 +43,7 @@ export const PendingInvitationsPanel = ({ invitations }: PendingInvitationsPanel
 
   return (
     <Panel>
-      <MutedText style={{ margin: 0, fontWeight: 600 }}>Pending invitations (no account yet)</MutedText>
+      <MutedText style={{ margin: 0, fontWeight: 600 }}>Pending household invitations</MutedText>
       {invitations.map((invite) => (
         <InviteRow key={invite.email}>
           <span>

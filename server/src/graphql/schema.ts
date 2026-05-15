@@ -69,12 +69,14 @@ export const typeDefs = `#graphql
   type GroupPendingInvitation {
     email: String!
     name: String!
+    status: GroupInvitationStatus!
     emailDeliveryStatus: InvitationEmailDeliveryStatus
   }
 
   enum GroupInvitationStatus {
     Pending
     Accepted
+    Declined
   }
 
   enum InvitationEmailDeliveryStatus {
@@ -266,5 +268,8 @@ export const typeDefs = `#graphql
     logout: Boolean!
     upsertGroupSplitTemplate(input: UpsertSplitTemplateInput!): SplitTemplate!
     recordSettlementPayment(input: RecordSettlementPaymentInput!): SettlementPayment!
+    acceptGroupInvitation(id: ID!): GroupInvitation!
+    declineGroupInvitation(id: ID!): GroupInvitation!
+    declineExpenseGroupParticipation(groupId: ID!, category: String!): Boolean!
   }
 `;

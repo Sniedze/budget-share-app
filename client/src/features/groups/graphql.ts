@@ -12,6 +12,7 @@ export const GET_GROUPS = gql`
       pendingInvitations {
         email
         name
+        status
         emailDeliveryStatus
       }
       members {
@@ -61,6 +62,7 @@ export const CREATE_GROUP = gql`
       pendingInvitations {
         email
         name
+        status
         emailDeliveryStatus
       }
       members {
@@ -95,6 +97,7 @@ export const UPDATE_GROUP = gql`
       pendingInvitations {
         email
         name
+        status
         emailDeliveryStatus
       }
       members {
@@ -114,6 +117,45 @@ export const UPDATE_GROUP = gql`
         currency
       }
     }
+  }
+`;
+
+export const GET_MY_INVITATIONS = gql`
+  query GetMyInvitations {
+    myInvitations {
+      id
+      groupId
+      groupName
+      email
+      status
+      emailDeliveryStatus
+      invitedAt
+      acceptedAt
+    }
+  }
+`;
+
+export const ACCEPT_GROUP_INVITATION = gql`
+  mutation AcceptGroupInvitation($id: ID!) {
+    acceptGroupInvitation(id: $id) {
+      id
+      status
+    }
+  }
+`;
+
+export const DECLINE_GROUP_INVITATION = gql`
+  mutation DeclineGroupInvitation($id: ID!) {
+    declineGroupInvitation(id: $id) {
+      id
+      status
+    }
+  }
+`;
+
+export const DECLINE_EXPENSE_GROUP_PARTICIPATION = gql`
+  mutation DeclineExpenseGroupParticipation($groupId: ID!, $category: String!) {
+    declineExpenseGroupParticipation(groupId: $groupId, category: $category)
   }
 `;
 

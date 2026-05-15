@@ -130,6 +130,9 @@ export const HouseholdPage = (): JSX.Element => {
     activeExpenseGroupExpenses,
     activeExpenseGroupTotals,
     openEditTemplateModal,
+    isInActiveExpenseGroup,
+    declineActiveExpenseGroup,
+    decliningExpenseGroup,
     isModalOpen,
     editingHouseholdId,
     groupName,
@@ -310,6 +313,17 @@ export const HouseholdPage = (): JSX.Element => {
                 </ExpenseGroupHeading>
                 {activeExpenseGroup ? (
                   <Row>
+                    {isInActiveExpenseGroup ? (
+                      <Button
+                        type="button"
+                        $variant="danger"
+                        $size="sm"
+                        disabled={decliningExpenseGroup}
+                        onClick={() => void declineActiveExpenseGroup()}
+                      >
+                        {decliningExpenseGroup ? 'Opting out...' : 'Opt out of expense group'}
+                      </Button>
+                    ) : null}
                     <Button
                       type="button"
                       $variant="secondary"

@@ -6,10 +6,24 @@ export type GroupMember = {
   ratio: number;
 };
 
+export type GroupInvitationStatus = 'Pending' | 'Accepted' | 'Declined';
+
 export type GroupPendingInvitation = {
   email: string;
   name: string;
+  status: GroupInvitationStatus;
   emailDeliveryStatus?: InvitationEmailDeliveryStatusLabel;
+};
+
+export type GroupInvitation = {
+  id: string;
+  groupId: string;
+  groupName: string;
+  email: string;
+  status: GroupInvitationStatus;
+  emailDeliveryStatus?: InvitationEmailDeliveryStatusLabel;
+  invitedAt: string;
+  acceptedAt?: string;
 };
 
 export type GroupExpense = {

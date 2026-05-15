@@ -10,6 +10,7 @@ import {
 } from '../../features/expenses';
 import {
   CREATE_GROUP,
+  DECLINE_EXPENSE_GROUP_PARTICIPATION,
   GET_GROUPS,
   GET_GROUP_SPLIT_TEMPLATES,
   UPDATE_GROUP,
@@ -95,6 +96,13 @@ export const useHouseholdPageState = () => {
     refetchQueries: [{ query: GET_GROUPS }],
     awaitRefetchQueries: true,
   });
+  const [declineExpenseGroupMutation, { loading: decliningExpenseGroup }] = useMutation(
+    DECLINE_EXPENSE_GROUP_PARTICIPATION,
+    {
+      refetchQueries: [{ query: GET_GROUPS }],
+      awaitRefetchQueries: true,
+    },
+  );
   const groups = useMemo(() => data?.groups ?? [], [data?.groups]);
   const [activeGroupId, setActiveGroupId] = useState('');
   const [isModalOpen, setModalOpen] = useState(false);
@@ -807,6 +815,29 @@ export const useHouseholdPageState = () => {
     setExpenseTitle(pickClosestOption(event.currentTarget.value, merchantOptions));
   };
 
+  const isInActiveExpenseGroup = useMemo(() => {
+    if (!activeExpenseGroup || !user?.fullName) {
+      return false;
+    }
+    const normalizedName = user.fullName.trim().toLowerCase();
+    return activeExpenseGroup.splitDetails.some(
+      (allocation) => allocation.participant.trim().toLowerCase() === normalizedName,
+    );
+  }, [activeExpenseGroup, user?.fullName]);
+
+  const declineActiveExpenseGroup = async (): Promise<void> => {
+    if (!activeGroup || !activeExpenseGroup) {
+      return;
+    }
+    await declineExpenseGroupMutation({
+      variables: {
+        groupId: activeGroup.id,
+        category: activeExpenseGroup.category,
+      },
+    });
+    setActiveExpenseGroupCategory('');
+  };
+
   return {
     currentUserName: user?.fullName ?? null,
     PREDEFINED_EXPENSE_GROUPS,
@@ -885,5 +916,8 @@ export const useHouseholdPageState = () => {
     clearTemplateRatiosForCustom,
     setTemplateMembers,
     editingTemplateCategory,
+    isInActiveExpenseGroup,
+    declineActiveExpenseGroup,
+    decliningExpenseGroup,
   };
 };
