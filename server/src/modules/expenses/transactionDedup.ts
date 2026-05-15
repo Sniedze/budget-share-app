@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { appError, ErrorCode } from '../../graphql/appError.js';
 
 const roundToCents = (value: number): number => Math.round(value * 100) / 100;
 
@@ -15,7 +16,7 @@ export const transactionDateKeyForDedup = (transactionDate: string): string => {
   }
   const d = new Date(t);
   if (Number.isNaN(d.getTime())) {
-    throw new Error('Invalid transaction date.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid transaction date.');
   }
   return d.toISOString().slice(0, 10);
 };

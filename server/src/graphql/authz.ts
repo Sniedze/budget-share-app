@@ -1,5 +1,6 @@
 import { logAuthzDenied } from '../logger.js';
 import type { User } from '../modules/auth/types.js';
+import { appError, ErrorCode } from './appError.js';
 import type { GraphqlContext } from './context.js';
 
 export const requireAuth = (context: GraphqlContext): User => {
@@ -8,7 +9,7 @@ export const requireAuth = (context: GraphqlContext): User => {
       operationName: context.graphqlOperationName,
       requestId: context.requestId,
     });
-    throw new Error('Authentication required.');
+    throw appError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
   }
   return context.currentUser;
 };

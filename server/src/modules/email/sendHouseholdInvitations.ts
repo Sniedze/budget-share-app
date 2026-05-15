@@ -1,4 +1,3 @@
-import nodemailer from 'nodemailer';
 import {
   getPublicAppBaseUrl,
   getResolvedSmtpSettings,
@@ -9,22 +8,23 @@ import {
   logInvitationEmailSent,
   logInvitationEmailSkipped,
 } from '../../logger.js';
+import {
+  buildExistingMemberAddedEmail,
+  buildPendingInviteeEmail,
+  type InvitationEmailPayload,
+} from './invitationEmailTemplates.js';
+import {
+  markInvitationsEmailSkipped,
+  updateInvitationEmailDeliveryStatus,
+} from './invitationEmailStatus.js';
+import { getSmtpTransporter } from './smtpTransporter.js';
 
 export type HouseholdInvitee = { email: string; name: string };
-type EmailPayload = {
+
+type EmailSendPayload = InvitationEmailPayload & {
   from: string;
   to: string;
-  subject: string;
-  text: string;
-  html: string;
 };
-
-const escapeHtml = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 
 const parsePositiveInt = (raw: string | undefined, fallback: number): number => {
   const parsed = Number(raw);
@@ -40,8 +40,8 @@ const sleep = async (ms: number): Promise<void> =>
   });
 
 const sendMailWithRetry = async (
-  transporter: nodemailer.Transporter,
-  payload: EmailPayload,
+  transporter: ReturnType<typeof getSmtpTransporter>,
+  payload: EmailSendPayload,
 ): Promise<{ ok: true; attempts: number } | { ok: false; attempts: number; message: string }> => {
   let lastMessage = 'unknown_smtp_error';
   for (let attempt = 1; attempt <= SMTP_RETRY_MAX_ATTEMPTS; attempt += 1) {
@@ -51,7 +51,6 @@ const sendMailWithRetry = async (
     } catch (err) {
       lastMessage = err instanceof Error ? err.message : String(err);
       if (attempt < SMTP_RETRY_MAX_ATTEMPTS) {
-        // Exponential backoff: base, 2x, 4x...
         await sleep(SMTP_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
       }
     }
@@ -59,16 +58,50 @@ const sendMailWithRetry = async (
   return { ok: false, attempts: SMTP_RETRY_MAX_ATTEMPTS, message: lastMessage };
 };
 
+const deliverInvitationEmail = async (
+  transporter: ReturnType<typeof getSmtpTransporter>,
+  smtpFrom: string,
+  groupId: number,
+  invitee: HouseholdInvitee,
+  groupName: string,
+  emailContent: InvitationEmailPayload,
+  logContext?: { template?: string },
+): Promise<void> => {
+  const result = await sendMailWithRetry(transporter, {
+    from: smtpFrom,
+    to: invitee.email,
+    ...emailContent,
+  });
+  if (result.ok) {
+    await updateInvitationEmailDeliveryStatus(groupId, invitee.email, 'email_sent');
+    logInvitationEmailSent({
+      to: invitee.email,
+      groupName,
+      attempts: result.attempts,
+      template: logContext?.template,
+    });
+    return;
+  }
+  await updateInvitationEmailDeliveryStatus(groupId, invitee.email, 'email_failed');
+  logInvitationEmailFailed({
+    to: invitee.email,
+    groupName,
+    attempts: result.attempts,
+    message: result.message,
+  });
+};
+
 /**
  * Sends one email per invitee (non-registered members). Requires SMTP env vars;
  * if unset, logs once and returns without throwing.
  */
 export const sendHouseholdInvitationEmails = async (params: {
+  groupId: number;
   groupName: string;
   actorEmail: string;
   invitees: HouseholdInvitee[];
 }): Promise<void> => {
-  const { groupName, actorEmail, invitees } = params;
+  const { groupId, groupName, actorEmail, invitees } = params;
   if (invitees.length === 0) {
     return;
   }
@@ -79,68 +112,35 @@ export const sendHouseholdInvitationEmails = async (params: {
       recipientCount: invitees.length,
       groupName,
     });
+    await markInvitationsEmailSkipped(
+      groupId,
+      invitees.map((invitee) => invitee.email),
+    );
     return;
   }
 
   const smtp = getResolvedSmtpSettings()!;
-  const transporter = nodemailer.createTransport({
-    host: smtp.host,
-    port: smtp.port,
-    secure: smtp.secure,
-    auth: { user: smtp.user, pass: smtp.pass },
-  });
-
+  const transporter = getSmtpTransporter(smtp);
   const baseUrl = getPublicAppBaseUrl();
   const registerUrl = `${baseUrl}/register`;
   const loginUrl = `${baseUrl}/login`;
 
   for (const invitee of invitees) {
-    const subject = `You're invited to "${groupName}" on BudgetShare`;
-    const text = [
-      `Hi ${invitee.name},`,
-      '',
-      `You've been added as a member of the household "${groupName}" on BudgetShare.`,
-      `Invited by: ${actorEmail}`,
-      '',
-      `If you don't have an account yet, register with this email address (${invitee.email}) so your invitation is accepted automatically:`,
+    const emailContent = buildPendingInviteeEmail({
+      inviteeName: invitee.name,
+      inviteeEmail: invitee.email,
+      groupName,
+      actorEmail,
       registerUrl,
-      '',
-      `If you already have an account, log in with the same email:`,
       loginUrl,
-      '',
-      'Thanks,',
-      'BudgetShare',
-    ].join('\n');
-
-    const html = `<p>Hi ${escapeHtml(invitee.name)},</p>
-<p>You've been added as a member of the household <strong>${escapeHtml(groupName)}</strong> on BudgetShare.</p>
-<p>Invited by: ${escapeHtml(actorEmail)}</p>
-<p>If you don't have an account yet, <a href="${escapeHtml(registerUrl)}">register</a> with this email address (<strong>${escapeHtml(invitee.email)}</strong>) so your invitation is accepted automatically.</p>
-<p>If you already have an account, <a href="${escapeHtml(loginUrl)}">log in</a> with the same email.</p>
-<p>Thanks,<br/>BudgetShare</p>`;
-
-    const result = await sendMailWithRetry(transporter, {
-      from: smtp.from,
-      to: invitee.email,
-      subject,
-      text,
-      html,
     });
-    if (result.ok) {
-      logInvitationEmailSent({ to: invitee.email, groupName, attempts: result.attempts });
-    } else {
-      logInvitationEmailFailed({
-        to: invitee.email,
-        groupName,
-        attempts: result.attempts,
-        message: result.message,
-      });
-    }
+    await deliverInvitationEmail(transporter, smtp.from, groupId, invitee, groupName, emailContent);
   }
 };
 
 /** Fire-and-forget after DB commit so HTTP latency is not tied to SMTP. */
 export const queueHouseholdInvitationEmails = (params: {
+  groupId: number;
   groupName: string;
   actorEmail: string;
   invitees: HouseholdInvitee[];
@@ -155,16 +155,16 @@ export const queueHouseholdInvitationEmails = (params: {
 
 /**
  * When a **new** household is created: email pending invitees (no account yet) plus existing
- * members other than the creator. Uses one SMTP connection when possible.
+ * members other than the creator.
  */
 export const sendNewGroupCreatedEmails = async (params: {
+  groupId: number;
   groupName: string;
   actorEmail: string;
   pendingInvitees: HouseholdInvitee[];
-  /** Already-registered members to notify (exclude creator). */
   existingMembersToNotify: HouseholdInvitee[];
 }): Promise<void> => {
-  const { groupName, actorEmail, pendingInvitees, existingMembersToNotify } = params;
+  const { groupId, groupName, actorEmail, pendingInvitees, existingMembersToNotify } = params;
   const total = pendingInvitees.length + existingMembersToNotify.length;
   if (total === 0) {
     return;
@@ -177,95 +177,44 @@ export const sendNewGroupCreatedEmails = async (params: {
       groupName,
       context: 'new_group_created',
     });
+    await markInvitationsEmailSkipped(
+      groupId,
+      pendingInvitees.map((invitee) => invitee.email),
+    );
     return;
   }
 
   const smtp = getResolvedSmtpSettings()!;
-  const transporter = nodemailer.createTransport({
-    host: smtp.host,
-    port: smtp.port,
-    secure: smtp.secure,
-    auth: { user: smtp.user, pass: smtp.pass },
-  });
-
+  const transporter = getSmtpTransporter(smtp);
   const baseUrl = getPublicAppBaseUrl();
   const registerUrl = `${baseUrl}/register`;
   const loginUrl = `${baseUrl}/login`;
 
   for (const invitee of pendingInvitees) {
-    const subject = `You're invited to "${groupName}" on BudgetShare`;
-    const text = [
-      `Hi ${invitee.name},`,
-      '',
-      `You've been added as a member of the household "${groupName}" on BudgetShare.`,
-      `Invited by: ${actorEmail}`,
-      '',
-      `If you don't have an account yet, register with this email address (${invitee.email}) so your invitation is accepted automatically:`,
+    const emailContent = buildPendingInviteeEmail({
+      inviteeName: invitee.name,
+      inviteeEmail: invitee.email,
+      groupName,
+      actorEmail,
       registerUrl,
-      '',
-      `If you already have an account, log in with the same email:`,
       loginUrl,
-      '',
-      'Thanks,',
-      'BudgetShare',
-    ].join('\n');
-
-    const html = `<p>Hi ${escapeHtml(invitee.name)},</p>
-<p>You've been added as a member of the household <strong>${escapeHtml(groupName)}</strong> on BudgetShare.</p>
-<p>Invited by: ${escapeHtml(actorEmail)}</p>
-<p>If you don't have an account yet, <a href="${escapeHtml(registerUrl)}">register</a> with this email address (<strong>${escapeHtml(invitee.email)}</strong>) so your invitation is accepted automatically.</p>
-<p>If you already have an account, <a href="${escapeHtml(loginUrl)}">log in</a> with the same email.</p>
-<p>Thanks,<br/>BudgetShare</p>`;
-
-    const result = await sendMailWithRetry(transporter, {
-      from: smtp.from,
-      to: invitee.email,
-      subject,
-      text,
-      html,
     });
-    if (result.ok) {
-      logInvitationEmailSent({
-        to: invitee.email,
-        groupName,
-        template: 'invite_pending',
-        attempts: result.attempts,
-      });
-    } else {
-      logInvitationEmailFailed({
-        to: invitee.email,
-        groupName,
-        attempts: result.attempts,
-        message: result.message,
-      });
-    }
+    await deliverInvitationEmail(transporter, smtp.from, groupId, invitee, groupName, emailContent, {
+      template: 'invite_pending',
+    });
   }
 
   for (const member of existingMembersToNotify) {
-    const subject = `You've been added to "${groupName}" on BudgetShare`;
-    const text = [
-      `Hi ${member.name},`,
-      '',
-      `${actorEmail} created the household "${groupName}" on BudgetShare and added you as a member.`,
-      '',
-      `Open the app to see it:`,
+    const emailContent = buildExistingMemberAddedEmail({
+      memberName: member.name,
+      groupName,
+      actorEmail,
       loginUrl,
-      '',
-      'Thanks,',
-      'BudgetShare',
-    ].join('\n');
-
-    const html = `<p>Hi ${escapeHtml(member.name)},</p>
-<p><strong>${escapeHtml(actorEmail)}</strong> created the household <strong>${escapeHtml(groupName)}</strong> on BudgetShare and added you as a member.</p>
-<p><a href="${escapeHtml(loginUrl)}">Open BudgetShare</a></p>
-<p>Thanks,<br/>BudgetShare</p>`;
-
+    });
     const result = await sendMailWithRetry(transporter, {
       from: smtp.from,
       to: member.email,
-      subject,
-      text,
-      html,
+      ...emailContent,
     });
     if (result.ok) {
       logInvitationEmailSent({
@@ -286,6 +235,7 @@ export const sendNewGroupCreatedEmails = async (params: {
 };
 
 export const queueNewGroupCreatedEmails = (params: {
+  groupId: number;
   groupName: string;
   actorEmail: string;
   pendingInvitees: HouseholdInvitee[];

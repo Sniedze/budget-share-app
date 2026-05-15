@@ -1,14 +1,15 @@
 import { ApolloClient, HttpLink, InMemoryCache } from '@apollo/client';
+import {
+  getGraphqlErrorCode,
+  GraphqlErrorCode,
+  type GraphqlErrorShape,
+} from './graphqlErrorCodes';
 
 const DEFAULT_GRAPHQL_URL = 'http://localhost:4000/graphql';
 const GRAPHQL_URL = import.meta.env.VITE_GRAPHQL_URL?.trim() || DEFAULT_GRAPHQL_URL;
 
-type GraphqlError = {
-  message?: string;
-};
-
 type GraphqlResponseBody = {
-  errors?: GraphqlError[];
+  errors?: GraphqlErrorShape[];
 };
 
 let refreshInFlight: Promise<boolean> | null = null;
@@ -19,7 +20,13 @@ const isAuthErrorResponse = async (response: Response): Promise<boolean> => {
   }
   try {
     const body = (await response.clone().json()) as GraphqlResponseBody;
-    return Boolean(body.errors?.some((error) => error.message?.includes('Authentication required')));
+    return Boolean(
+      body.errors?.some(
+        (error) =>
+          getGraphqlErrorCode(error) === GraphqlErrorCode.UNAUTHENTICATED ||
+          error.message?.includes('Authentication required'),
+      ),
+    );
   } catch {
     return false;
   }
@@ -40,7 +47,7 @@ const refreshSessionViaCookie = async (): Promise<boolean> => {
       if (!response.ok) {
         return false;
       }
-      const payload = (await response.json()) as { errors?: GraphqlError[]; data?: unknown };
+      const payload = (await response.json()) as { errors?: GraphqlErrorShape[]; data?: unknown };
       if (payload.errors?.length) {
         return false;
       }

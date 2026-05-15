@@ -8,11 +8,13 @@ import type {
 } from './types.js';
 import { db } from '../../db/mysql.js';
 import { logAuditEvent } from '../audit/service.js';
+import { appError, ErrorCode } from '../../graphql/appError.js';
 import { logAuthzDenied } from '../../logger.js';
 import {
   DUPLICATE_TRANSACTION_MESSAGE,
   computeTransactionDedupHash,
 } from './transactionDedup.js';
+import { toStoredSplitDetails } from './splitAllocation.js';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 const APP_CURRENCY = 'DKK';
@@ -84,10 +86,10 @@ const normalizeExpenseFlow = (raw: string | null | undefined): ExpenseFlow => {
 const normalizeExpenseCurrency = (input?: string | null): string => {
   const raw = (input ?? APP_CURRENCY).trim().toUpperCase();
   if (!/^[A-Z]{3}$/.test(raw)) {
-    throw new Error('Currency must be a 3-letter ISO code.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Currency must be a 3-letter ISO code.');
   }
   if (raw !== APP_CURRENCY) {
-    throw new Error(`Only ${APP_CURRENCY} expenses are supported.`);
+    throw appError(ErrorCode.BAD_USER_INPUT, `Only ${APP_CURRENCY} expenses are supported.`);
   }
   return raw;
 };
@@ -104,48 +106,9 @@ const roundToCents = (value: number): number => {
   return Math.round(value * 100) / 100;
 };
 
-const toStoredSplitDetails = (
-  amount: number,
-  splitDetails: CreateExpenseInput['splitDetails'],
-): SplitAllocation[] => {
-  if (!splitDetails || splitDetails.length === 0) {
-    return [];
-  }
-
-  const normalized = splitDetails
-    .map((entry) => ({
-      participant: entry.participant.trim(),
-      ratio: Number(entry.ratio),
-    }))
-    .filter((entry) => entry.participant.length > 0 && Number.isFinite(entry.ratio) && entry.ratio > 0);
-
-  if (normalized.length === 0) {
-    return [];
-  }
-
-  const ratioTotal = normalized.reduce((sum, entry) => sum + entry.ratio, 0);
-  if (Math.abs(ratioTotal - 100) > 0.01) {
-    throw new Error('Split ratios must sum to 100.');
-  }
-
-  let allocated = 0;
-  return normalized.map((entry, index) => {
-    const isLast = index === normalized.length - 1;
-    const rawAmount = (amount * entry.ratio) / 100;
-    const shareAmount = isLast ? roundToCents(amount - allocated) : roundToCents(rawAmount);
-    allocated = roundToCents(allocated + shareAmount);
-
-    return {
-      participant: entry.participant,
-      ratio: roundToCents(entry.ratio),
-      amount: shareAmount,
-    };
-  });
-};
-
 const validateAmount = (amount: number): void => {
   if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error('Expense amount must be greater than zero.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Expense amount must be greater than zero.');
   }
 };
 
@@ -154,10 +117,10 @@ const TITLE_MAX_LENGTH = 255;
 const validateExpenseTitle = (title: string): string => {
   const trimmed = title.trim();
   if (trimmed.length === 0) {
-    throw new Error('Expense title is required.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Expense title is required.');
   }
   if (trimmed.length > TITLE_MAX_LENGTH) {
-    throw new Error('Expense title is too long.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Expense title is too long.');
   }
   return trimmed;
 };
@@ -168,7 +131,7 @@ const validateSplitConsistency = (
   isCreate: boolean,
 ): void => {
   if (split === 'Custom' && isCreate && (!splitDetails || splitDetails.length === 0)) {
-    throw new Error('Custom split requires splitDetails.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Custom split requires splitDetails.');
   }
 };
 
@@ -220,6 +183,14 @@ const isMysqlDuplicateKeyError = (error: unknown): boolean => {
   );
 };
 
+const loadMemberGroupIds = async (userEmail: string): Promise<Set<number>> => {
+  const [rows] = await db.query<RowDataPacket[]>(
+    'SELECT group_id FROM group_members WHERE email = ?',
+    [userEmail],
+  );
+  return new Set(rows.map((row) => Number(row.group_id)));
+};
+
 const isGroupMember = async (groupId: number, userEmail: string): Promise<boolean> => {
   const [rows] = await db.query<RowDataPacket[]>(
     `
@@ -234,14 +205,15 @@ const isGroupMember = async (groupId: number, userEmail: string): Promise<boolea
   return rows.length > 0;
 };
 
-const canAccessExpense = async (row: ExpenseRow, userId: string, userEmail: string): Promise<boolean> => {
+const canAccessExpense = (row: ExpenseRow, userId: string, memberGroupIds: Set<number>): boolean => {
   if (row.group_id === null) {
     return row.created_by_user_id !== null && String(row.created_by_user_id) === userId;
   }
-  return isGroupMember(row.group_id, userEmail);
+  return memberGroupIds.has(row.group_id);
 };
 
 export const listExpenses = async (userId: string, userEmail: string): Promise<Expense[]> => {
+  const memberGroupIds = await loadMemberGroupIds(userEmail);
   const [rows] = await db.query<ExpenseRow[]>(
     'SELECT id, title, amount, currency, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private, expense_flow FROM expenses ORDER BY transaction_date DESC, id DESC',
   );
@@ -252,7 +224,7 @@ export const listExpenses = async (userId: string, userEmail: string): Promise<E
     if (row.created_by_user_id === null && row.group_id === null) {
       continue;
     }
-    if (!(await canAccessExpense(row, userId, userEmail))) {
+    if (!canAccessExpense(row, userId, memberGroupIds)) {
       continue;
     }
     if (row.group_id !== null && rowIsPrivate(row) && String(row.created_by_user_id) !== userId) {
@@ -287,7 +259,7 @@ export const createExpense = async (
   const title = validateExpenseTitle(input.title);
   const flow = normalizeExpenseFlow(input.flow);
   if (flow === 'Incoming' && input.groupId) {
-    throw new Error('Income entries cannot be assigned to a household.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Income entries cannot be assigned to a household.');
   }
 
   const category = normalizeCategory(input.category);
@@ -296,7 +268,7 @@ export const createExpense = async (
   let groupId = flow === 'Incoming' ? null : input.groupId ? Number(input.groupId) : null;
   let sourceSplitDetails = flow === 'Incoming' ? undefined : input.splitDetails;
   if (groupId !== null && !expenseGroup) {
-    throw new Error('Expense group is required for household expenses.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Expense group is required for household expenses.');
   }
 
   if (groupId !== null && sourceSplitDetails === undefined) {
@@ -327,7 +299,7 @@ export const createExpense = async (
   validateSplitConsistency(split, splitDetails, true);
   const splitDetailsJson = splitDetails.length > 0 ? JSON.stringify(splitDetails) : null;
   if (groupId !== null && !(await isGroupMember(groupId, actor.email))) {
-    throw new Error('You are not a member of this group.');
+    throw appError(ErrorCode.FORBIDDEN, 'You are not a member of this group.');
   }
   const paidByUserId = input.paidByUserId ? Number(input.paidByUserId) : Number(actor.userId);
   const isPrivate = flow === 'Incoming' ? false : groupId !== null && Boolean(input.isPrivate);
@@ -362,7 +334,7 @@ export const createExpense = async (
     );
   } catch (error) {
     if (isMysqlDuplicateKeyError(error)) {
-      throw new Error(DUPLICATE_TRANSACTION_MESSAGE);
+      throw appError(ErrorCode.DUPLICATE_TRANSACTION, DUPLICATE_TRANSACTION_MESSAGE);
     }
     throw error;
   }
@@ -426,16 +398,16 @@ export const deleteExpense = async (id: string, actor: { userId: string; email: 
   if (row.group_id === null) {
     if (row.created_by_user_id === null || String(row.created_by_user_id) !== actor.userId) {
       logAuthzDenied('expense_delete_denied', { expenseId: id, userId: actor.userId, reason: 'personal_owner' });
-      throw new Error('Not authorized to delete this expense.');
+      throw appError(ErrorCode.FORBIDDEN, 'Not authorized to delete this expense.');
     }
   } else {
     if (!(await isGroupMember(row.group_id, actor.email))) {
       logAuthzDenied('expense_delete_denied', { expenseId: id, userId: actor.userId, reason: 'not_group_member' });
-      throw new Error('Not authorized to delete this expense.');
+      throw appError(ErrorCode.FORBIDDEN, 'Not authorized to delete this expense.');
     }
     if (rowIsPrivate(row) && String(row.created_by_user_id) !== actor.userId) {
       logAuthzDenied('expense_delete_denied', { expenseId: id, userId: actor.userId, reason: 'private_not_owner' });
-      throw new Error('Not authorized to delete this private expense.');
+      throw appError(ErrorCode.FORBIDDEN, 'Not authorized to delete this private expense.');
     }
   }
 
@@ -492,7 +464,7 @@ export const updateExpense = async (
       : await isGroupMember(existingGroupId, actor.email);
   if (!canEdit) {
     logAuthzDenied('expense_update_denied', { expenseId: input.id, userId: actor.userId, reason: 'no_edit_access' });
-    throw new Error('Not authorized to update this expense.');
+    throw appError(ErrorCode.FORBIDDEN, 'Not authorized to update this expense.');
   }
   if (
     existingGroupId !== null &&
@@ -500,12 +472,12 @@ export const updateExpense = async (
     String(existing.created_by_user_id) !== actor.userId
   ) {
     logAuthzDenied('expense_update_denied', { expenseId: input.id, userId: actor.userId, reason: 'private_not_owner' });
-    throw new Error('Not authorized to update this private expense.');
+    throw appError(ErrorCode.FORBIDDEN, 'Not authorized to update this private expense.');
   }
 
   const nextFlow = normalizeExpenseFlow(input.flow !== undefined ? input.flow : existing.expense_flow);
   if (nextFlow === 'Incoming' && input.groupId) {
-    throw new Error('Income entries cannot be assigned to a household.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Income entries cannot be assigned to a household.');
   }
 
   const category = normalizeCategory(input.category);
@@ -526,7 +498,7 @@ export const updateExpense = async (
     split = normalizeSplit(input.split);
     nextGroupId = input.groupId ? Number(input.groupId) : existingGroupId;
     if (nextGroupId !== null && !expenseGroup) {
-      throw new Error('Expense group is required for household expenses.');
+      throw appError(ErrorCode.BAD_USER_INPUT, 'Expense group is required for household expenses.');
     }
     if (input.splitDetails === undefined) {
       validateSplitConsistency(split, parseSplitDetails(existing.split_details), false);
@@ -539,7 +511,7 @@ export const updateExpense = async (
   }
 
   if (nextGroupId !== null && !(await isGroupMember(nextGroupId, actor.email))) {
-    throw new Error('You are not a member of this group.');
+    throw appError(ErrorCode.FORBIDDEN, 'You are not a member of this group.');
   }
   const nextPaidByUserId = input.paidByUserId ? Number(input.paidByUserId) : existing.paid_by_user_id;
   const nextIsPrivate =
@@ -581,7 +553,7 @@ export const updateExpense = async (
     );
   } catch (error) {
     if (isMysqlDuplicateKeyError(error)) {
-      throw new Error(DUPLICATE_TRANSACTION_MESSAGE);
+      throw appError(ErrorCode.DUPLICATE_TRANSACTION, DUPLICATE_TRANSACTION_MESSAGE);
     }
     throw error;
   }

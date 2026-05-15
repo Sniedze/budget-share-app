@@ -4,14 +4,24 @@ import { getRequestId } from './requestContext.js';
 
 type HttpError = Error & { status?: number; statusCode?: number; type?: string };
 
+const clampHttpStatus = (raw: number): number => {
+  if (!Number.isFinite(raw)) {
+    return 500;
+  }
+  const truncated = Math.trunc(raw);
+  if (truncated < 400 || truncated > 599) {
+    return 500;
+  }
+  return truncated;
+};
+
 export const errorHandler = (
   err: HttpError,
   req: Request,
   res: Response,
   _next: NextFunction,
 ): void => {
-  const statusCode = Number(err.statusCode ?? err.status ?? 500);
-  const safeStatus = Number.isFinite(statusCode) && statusCode >= 400 ? statusCode : 500;
+  const safeStatus = clampHttpStatus(Number(err.statusCode ?? err.status ?? 500));
   const requestId = getRequestId(res);
 
   logServerError({

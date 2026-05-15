@@ -1,19 +1,47 @@
 import { useMutation } from '@apollo/client/react';
 import type { DocumentNode } from 'graphql';
+import { addExpenseToCache, removeExpenseFromCache, updateExpenseInCache } from '../expenseCacheUpdates';
 import { ADD_EXPENSE, DELETE_EXPENSE, UPDATE_EXPENSE } from '../graphql';
-import type { AddExpenseInput, UpdateExpenseInput } from '../types';
+import type { AddExpenseInput, Expense, UpdateExpenseInput } from '../types';
 
-export const useExpenseActions = (refetchQuery: DocumentNode) => {
-  const [add, { loading: adding }] = useMutation(ADD_EXPENSE, {
-    refetchQueries: [{ query: refetchQuery }],
+type AddExpenseMutationData = {
+  addExpense: Expense;
+};
+
+type UpdateExpenseMutationData = {
+  updateExpense: Expense;
+};
+
+type UseExpenseActionsOptions = {
+  /** Refetch these queries after mutation (e.g. GET_GROUPS when group summaries embed expenses). */
+  refetchQueries?: DocumentNode[];
+};
+
+export const useExpenseActions = (options?: UseExpenseActionsOptions) => {
+  const refetchQueries = options?.refetchQueries?.map((query) => ({ query })) ?? [];
+
+  const [add, { loading: adding }] = useMutation<AddExpenseMutationData>(ADD_EXPENSE, {
+    update(cache, { data }) {
+      addExpenseToCache(cache, data?.addExpense ?? null);
+    },
+    refetchQueries,
   });
 
-  const [update, { loading: updating }] = useMutation(UPDATE_EXPENSE, {
-    refetchQueries: [{ query: refetchQuery }],
+  const [update, { loading: updating }] = useMutation<UpdateExpenseMutationData>(UPDATE_EXPENSE, {
+    update(cache, { data }) {
+      updateExpenseInCache(cache, data?.updateExpense ?? null);
+    },
+    refetchQueries,
   });
 
   const [remove, { loading: deleting }] = useMutation(DELETE_EXPENSE, {
-    refetchQueries: [{ query: refetchQuery }],
+    update(cache, _result, { variables }) {
+      const id = variables?.input?.id;
+      if (typeof id === 'string') {
+        removeExpenseFromCache(cache, id);
+      }
+    },
+    refetchQueries,
   });
 
   const addExpense = async (input: AddExpenseInput) => {
