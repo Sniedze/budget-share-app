@@ -5,6 +5,11 @@ import {
   updateExpense,
 } from '../modules/expenses/service.js';
 import {
+  acceptGroupInvitation,
+  declineExpenseGroupParticipation,
+  declineGroupInvitation,
+} from '../modules/groups/invitations.js';
+import {
   createGroup,
   listHouseholdSettlements,
   listGroups,
@@ -135,6 +140,30 @@ export const resolvers = {
     ) => {
       const user = requireAuth(context);
       return recordSettlementPayment(args.input, user.email);
+    },
+    acceptGroupInvitation: async (
+      _parent: unknown,
+      args: { id: string },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      return acceptGroupInvitation(args.id, user.email);
+    },
+    declineGroupInvitation: async (
+      _parent: unknown,
+      args: { id: string },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      return declineGroupInvitation(args.id, user.email);
+    },
+    declineExpenseGroupParticipation: async (
+      _parent: unknown,
+      args: { groupId: string; category: string },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      return declineExpenseGroupParticipation(args.groupId, args.category, user.email);
     },
   },
 };

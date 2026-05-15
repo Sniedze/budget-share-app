@@ -56,33 +56,98 @@ export const buildPendingInviteeEmail = (params: {
   return { subject, text, html };
 };
 
-export const buildExistingMemberAddedEmail = (params: {
+export const buildHouseholdMemberInviteEmail = (params: {
   memberName: string;
+  memberEmail: string;
   groupName: string;
   actorEmail: string;
+  invitationsUrl: string;
+  registerUrl: string;
   loginUrl: string;
+  hasAccount: boolean;
 }): InvitationEmailPayload => {
   const memberName = sanitizeEmailPlainText(params.memberName);
   const groupName = sanitizeEmailPlainText(params.groupName);
   const actorEmail = sanitizeEmailPlainText(params.actorEmail);
+  const memberEmail = sanitizeEmailPlainText(params.memberEmail);
+  const invitationsUrl = params.invitationsUrl;
+  const registerUrl = params.registerUrl;
   const loginUrl = params.loginUrl;
 
-  const subject = `You've been added to "${groupName}" on BudgetShare`;
+  const subject = `You've been invited to "${groupName}" on BudgetShare`;
+  const accountLines = params.hasAccount
+    ? [
+        'Log in to accept or decline the invitation:',
+        loginUrl,
+        '',
+        'Or open your invitations directly:',
+        invitationsUrl,
+      ]
+    : [
+        `Create an account with this email (${memberEmail}) to join automatically after registration:`,
+        registerUrl,
+        '',
+        'After you have an account, you can accept or decline here:',
+        invitationsUrl,
+      ];
+
   const text = [
     `Hi ${memberName},`,
     '',
-    `${actorEmail} created "${groupName}" on BudgetShare and added you as a member.`,
+    `${actorEmail} added you to the household "${groupName}" on BudgetShare.`,
     '',
-    'Open the app to see it:',
+    ...accountLines,
+    '',
+    'Thanks,',
+    'BudgetShare',
+  ].join('\n');
+
+  const accountHtml = params.hasAccount
+    ? `<p><a href="${escapeHtml(loginUrl)}">Log in</a> or <a href="${escapeHtml(invitationsUrl)}">review your invitations</a> to accept or decline.</p>`
+    : `<p><a href="${escapeHtml(registerUrl)}">Register</a> with <strong>${escapeHtml(memberEmail)}</strong>, then <a href="${escapeHtml(invitationsUrl)}">accept or decline</a> the invitation.</p>`;
+
+  const html = `<p>Hi ${escapeHtml(memberName)},</p>
+<p><strong>${escapeHtml(actorEmail)}</strong> added you to the household <strong>${escapeHtml(groupName)}</strong> on BudgetShare.</p>
+${accountHtml}
+<p>Thanks,<br/>BudgetShare</p>`;
+
+  return { subject, text, html };
+};
+
+export const buildExpenseGroupAddedEmail = (params: {
+  memberName: string;
+  groupName: string;
+  expenseGroupName: string;
+  actorEmail: string;
+  invitationsUrl: string;
+  loginUrl: string;
+}): InvitationEmailPayload => {
+  const memberName = sanitizeEmailPlainText(params.memberName);
+  const groupName = sanitizeEmailPlainText(params.groupName);
+  const expenseGroupName = sanitizeEmailPlainText(params.expenseGroupName);
+  const actorEmail = sanitizeEmailPlainText(params.actorEmail);
+  const invitationsUrl = params.invitationsUrl;
+  const loginUrl = params.loginUrl;
+
+  const subject = `Added to "${expenseGroupName}" in "${groupName}" on BudgetShare`;
+  const text = [
+    `Hi ${memberName},`,
+    '',
+    `${actorEmail} added you to the expense group "${expenseGroupName}" in household "${groupName}".`,
+    '',
+    'Open BudgetShare to view splits and expenses:',
     loginUrl,
+    '',
+    'If you do not want to participate in this expense group, open invitations after logging in:',
+    invitationsUrl,
     '',
     'Thanks,',
     'BudgetShare',
   ].join('\n');
 
   const html = `<p>Hi ${escapeHtml(memberName)},</p>
-<p><strong>${escapeHtml(actorEmail)}</strong> created <strong>${escapeHtml(groupName)}</strong> on BudgetShare and added you as a member.</p>
-<p><a href="${escapeHtml(loginUrl)}">Open BudgetShare</a></p>
+<p><strong>${escapeHtml(actorEmail)}</strong> added you to the expense group <strong>${escapeHtml(expenseGroupName)}</strong> in household <strong>${escapeHtml(groupName)}</strong>.</p>
+<p><a href="${escapeHtml(loginUrl)}">Open BudgetShare</a> or <a href="${escapeHtml(invitationsUrl)}">manage invitations</a> to opt out of this expense group.</p>
 <p>Thanks,<br/>BudgetShare</p>`;
 
   return { subject, text, html };

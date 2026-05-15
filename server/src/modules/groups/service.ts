@@ -21,7 +21,13 @@ import { appError, ErrorCode } from '../../graphql/appError.js';
 import { logAuditEvent } from '../audit/service.js';
 import { logAuthzDenied } from '../../logger.js';
 import { stripControlCharacters } from '../../lib/sanitize.js';
-import { queueHouseholdInvitationEmails, queueNewGroupCreatedEmails } from '../email/sendHouseholdInvitations.js';
+import { queueExpenseGroupAddedEmails, queueHouseholdMemberInviteEmails } from '../email/sendMemberNotifications.js';
+import {
+  assertActiveGroupMembership,
+  deleteInvitationsNotInEmails,
+  mapInvitationStatus,
+  upsertPendingInvitations,
+} from './invitations.js';
 import { buildOptimizedTransfers } from './settlementTransfers.js';
 
 type GroupRow = {
@@ -341,9 +347,12 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
       SELECT id, name, description
       FROM \`groups\`
       WHERE id IN (
-        SELECT group_id
-        FROM group_members
-        WHERE email = ?
+        SELECT gm.group_id
+        FROM group_members gm
+        LEFT JOIN group_invitations gi
+          ON gi.group_id = gm.group_id AND gi.email = gm.email
+        WHERE gm.email = ?
+          AND (gi.id IS NULL OR gi.status = 'Accepted')
       )
       ORDER BY created_at DESC, id DESC
     `,
@@ -473,6 +482,7 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
         groupId: number;
         email: string;
         name: string;
+        status: string;
         emailDeliveryStatus: string | null;
       })[]
     >(
@@ -481,6 +491,7 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
           gi.group_id AS groupId,
           gi.email,
           gm.name,
+          gi.status,
           gi.email_delivery_status AS emailDeliveryStatus
         FROM group_invitations gi
         INNER JOIN group_members gm
@@ -496,6 +507,7 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
       existing.push({
         email: row.email,
         name: row.name,
+        status: mapInvitationStatus(row.status),
         emailDeliveryStatus: mapInvitationEmailDeliveryStatus(row.emailDeliveryStatus),
       });
       pendingByGroupId.set(row.groupId, existing);
@@ -547,7 +559,6 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
     throw appError(ErrorCode.BAD_USER_INPUT, 'Group creator must be included in members.');
   }
 
-  let pendingInvitationEmailsForNotify: string[] = [];
   let memberEmailsHavingAccounts = new Set<string>();
   const connection = await db.getConnection();
   let groupId = 0;
@@ -584,30 +595,21 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
       `,
       [members.map((member) => member.email)],
     );
-    const existingUserEmails = new Set(
+    memberEmailsHavingAccounts = new Set(
       existingUsers.map((row) =>
         typeof row.email === 'string' ? row.email.trim().toLowerCase() : '',
       ),
     );
-    memberEmailsHavingAccounts = existingUserEmails;
 
-    const pendingInvitationEmails = members
+    const invitedEmails = members
       .map((member) => member.email)
-      .filter((email) => !existingUserEmails.has(email));
-    pendingInvitationEmailsForNotify = pendingInvitationEmails;
-
-    if (pendingInvitationEmails.length > 0) {
-      const invitationPlaceholders = buildBulkInsertPlaceholders(pendingInvitationEmails.length, 2);
-      const invitationValues = pendingInvitationEmails.flatMap((email) => [groupId, email]);
-      await connection.execute(
-        `
-          INSERT INTO group_invitations (group_id, email, status)
-          VALUES ${invitationPlaceholders.replace(/\(\?, \?\)/g, '(?, ?, \'Pending\')')}
-          ON DUPLICATE KEY UPDATE status = VALUES(status), accepted_at = NULL
-        `,
-        invitationValues,
-      );
-    }
+      .filter((email) => email !== normalizedActorEmail);
+    await upsertPendingInvitations(connection, groupId, invitedEmails);
+    await deleteInvitationsNotInEmails(
+      connection,
+      groupId,
+      members.map((member) => member.email),
+    );
 
     await connection.commit();
   } catch (error) {
@@ -617,24 +619,20 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
     connection.release();
   }
 
-  const pendingSet = new Set(pendingInvitationEmailsForNotify);
-  const pendingInvitees = members
-    .filter((member) => pendingSet.has(member.email))
-    .map((member) => ({ email: member.email, name: member.name }));
-  const existingMembersToNotify = members
-    .filter(
-      (member) =>
-        member.email !== normalizedActorEmail && memberEmailsHavingAccounts.has(member.email),
-    )
-    .map((member) => ({ email: member.email, name: member.name }));
+  const inviteTargets = members
+    .filter((member) => member.email !== normalizedActorEmail)
+    .map((member) => ({
+      email: member.email,
+      name: member.name,
+      hasAccount: memberEmailsHavingAccounts.has(member.email),
+    }));
 
-  if (pendingInvitees.length > 0 || existingMembersToNotify.length > 0) {
-    queueNewGroupCreatedEmails({
+  if (inviteTargets.length > 0) {
+    queueHouseholdMemberInviteEmails({
       groupId,
       groupName: name,
       actorEmail: normalizedActorEmail,
-      pendingInvitees,
-      existingMembersToNotify,
+      targets: inviteTargets,
     });
   }
 
@@ -647,9 +645,10 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
     yourShare: 0,
     expenses: [],
     expenseGroupLabels: [],
-    pendingInvitations: pendingInvitees.map((member) => ({
-      email: member.email,
-      name: member.name,
+    pendingInvitations: inviteTargets.map((target) => ({
+      email: target.email,
+      name: target.name,
+      status: 'Pending' as const,
       emailDeliveryStatus: undefined,
     })),
   };
@@ -736,7 +735,8 @@ export const updateGroup = async (
     throw appError(ErrorCode.BAD_USER_INPUT, 'Group editor must remain in members.');
   }
 
-  let pendingInvitationEmailsForNotify: string[] = [];
+  const beforeEmailSet = new Set(beforeMemberRows.map((member) => member.email.trim().toLowerCase()));
+  let memberEmailsHavingAccounts = new Set<string>();
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
@@ -783,29 +783,21 @@ export const updateGroup = async (
       `,
       [members.map((member) => member.email)],
     );
-    const existingUserEmails = new Set(
+    memberEmailsHavingAccounts = new Set(
       existingUsers.map((row) =>
         typeof row.email === 'string' ? row.email.trim().toLowerCase() : '',
       ),
     );
 
-    const pendingInvitationEmails = members
+    const newInvitedEmails = members
       .map((member) => member.email)
-      .filter((email) => !existingUserEmails.has(email));
-    pendingInvitationEmailsForNotify = pendingInvitationEmails;
-
-    if (pendingInvitationEmails.length > 0) {
-      const invitationPlaceholders = buildBulkInsertPlaceholders(pendingInvitationEmails.length, 2);
-      const invitationValues = pendingInvitationEmails.flatMap((email) => [numericGroupId, email]);
-      await connection.execute(
-        `
-          INSERT INTO group_invitations (group_id, email, status)
-          VALUES ${invitationPlaceholders.replace(/\(\?, \?\)/g, '(?, ?, \'Pending\')')}
-          ON DUPLICATE KEY UPDATE status = VALUES(status), accepted_at = NULL
-        `,
-        invitationValues,
-      );
-    }
+      .filter((email) => email !== normalizedActorEmail && !beforeEmailSet.has(email));
+    await upsertPendingInvitations(connection, numericGroupId, newInvitedEmails);
+    await deleteInvitationsNotInEmails(
+      connection,
+      numericGroupId,
+      members.map((member) => member.email),
+    );
 
     await connection.commit();
   } catch (error) {
@@ -815,16 +807,20 @@ export const updateGroup = async (
     connection.release();
   }
 
-  if (pendingInvitationEmailsForNotify.length > 0) {
-    const pendingSet = new Set(pendingInvitationEmailsForNotify);
-    const invitees = members
-      .filter((member) => pendingSet.has(member.email))
-      .map((member) => ({ email: member.email, name: member.name }));
-    queueHouseholdInvitationEmails({
+  const newInviteTargets = members
+    .filter((member) => member.email !== normalizedActorEmail && !beforeEmailSet.has(member.email))
+    .map((member) => ({
+      email: member.email,
+      name: member.name,
+      hasAccount: memberEmailsHavingAccounts.has(member.email),
+    }));
+
+  if (newInviteTargets.length > 0) {
+    queueHouseholdMemberInviteEmails({
       groupId: numericGroupId,
       groupName: name,
       actorEmail: normalizedActorEmail,
-      invitees,
+      targets: newInviteTargets,
     });
   }
 
@@ -877,14 +873,12 @@ export const updateGroup = async (
     yourShare: 0,
     expenses: [],
     expenseGroupLabels: templateLabelsByGroupId.get(numericGroupId) ?? [],
-    pendingInvitations: pendingInvitationEmailsForNotify.map((email) => {
-      const member = members.find((entry) => entry.email === email);
-      return {
-        email,
-        name: member?.name ?? email,
-        emailDeliveryStatus: undefined,
-      };
-    }),
+    pendingInvitations: newInviteTargets.map((target) => ({
+      email: target.email,
+      name: target.name,
+      status: 'Pending' as const,
+      emailDeliveryStatus: undefined,
+    })),
   };
 };
 
@@ -904,6 +898,7 @@ export const listInvitations = async (userEmail: string): Promise<GroupInvitatio
       FROM group_invitations gi
       INNER JOIN \`groups\` g ON g.id = gi.group_id
       WHERE gi.email = ?
+        AND gi.status = 'Pending'
       ORDER BY gi.invited_at DESC, gi.id DESC
     `,
     [normalizedEmail],
@@ -914,7 +909,7 @@ export const listInvitations = async (userEmail: string): Promise<GroupInvitatio
     groupId: String(row.groupId),
     groupName: row.groupName,
     email: row.email,
-    status: row.status === 'Accepted' ? 'Accepted' : 'Pending',
+    status: mapInvitationStatus(row.status),
     emailDeliveryStatus: mapInvitationEmailDeliveryStatus(row.emailDeliveryStatus),
     invitedAt: toIsoString(row.invitedAt),
     acceptedAt: row.acceptedAt ? toIsoString(row.acceptedAt) : undefined,
@@ -927,23 +922,7 @@ export const listSplitTemplates = async (groupId: string, userEmail: string): Pr
     throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid groupId.');
   }
 
-  const isMember = await db.query<RowDataPacket[]>(
-    `
-      SELECT id
-      FROM group_members
-      WHERE group_id = ? AND email = ?
-      LIMIT 1
-    `,
-    [numericGroupId, userEmail.trim().toLowerCase()],
-  );
-  if (isMember[0].length === 0) {
-    logAuthzDenied('group_access_denied', {
-      groupId: String(numericGroupId),
-      email: userEmail.trim().toLowerCase(),
-      action: 'listSplitTemplates',
-    });
-    throw appError(ErrorCode.FORBIDDEN, 'Not authorized for this group.');
-  }
+  await assertActiveGroupMembership(numericGroupId, userEmail, 'listSplitTemplates');
 
   const [rows] = await db.query<SplitTemplateRow[]>(
     `
@@ -979,23 +958,7 @@ export const upsertSplitTemplate = async (
   }
 
   const normalizedEmail = userEmail.trim().toLowerCase();
-  const [membershipRows] = await db.query<RowDataPacket[]>(
-    `
-      SELECT id
-      FROM group_members
-      WHERE group_id = ? AND email = ?
-      LIMIT 1
-    `,
-    [numericGroupId, normalizedEmail],
-  );
-  if (membershipRows.length === 0) {
-    logAuthzDenied('group_access_denied', {
-      groupId: String(numericGroupId),
-      email: normalizedEmail,
-      action: 'upsertSplitTemplate',
-    });
-    throw appError(ErrorCode.FORBIDDEN, 'Not authorized for this group.');
-  }
+  await assertActiveGroupMembership(numericGroupId, userEmail, 'upsertSplitTemplate');
 
   const category = input.category.trim();
   const templateName = input.templateName.trim();
@@ -1008,6 +971,29 @@ export const upsertSplitTemplate = async (
 
   const splitDetails = normalizeTemplateSplitDetails(input.splitDetails);
   const splitDetailsJson = JSON.stringify(splitDetails);
+
+  const [existingTemplateRows] = await db.query<SplitTemplateRow[]>(
+    `
+      SELECT
+        id,
+        group_id AS groupId,
+        category,
+        template_name AS templateName,
+        split_details AS splitDetails
+      FROM group_split_templates
+      WHERE group_id = ? AND category = ?
+      LIMIT 1
+    `,
+    [numericGroupId, category],
+  );
+  const previousParticipants = new Set(
+    parseTemplateSplitDetails(existingTemplateRows[0]?.splitDetails).map((entry) =>
+      entry.participant.trim().toLowerCase(),
+    ),
+  );
+  const addedParticipantNames = splitDetails
+    .map((entry) => entry.participant.trim().toLowerCase())
+    .filter((participant) => participant.length > 0 && !previousParticipants.has(participant));
 
   await db.execute(
     `
@@ -1037,6 +1023,44 @@ export const upsertSplitTemplate = async (
   const row = rows[0];
   if (!row) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Failed to upsert split template.');
+  }
+
+  if (addedParticipantNames.length > 0) {
+    const [groupRows] = await db.query<GroupRow[]>(
+      `
+        SELECT id, name, description
+        FROM \`groups\`
+        WHERE id = ?
+        LIMIT 1
+      `,
+      [numericGroupId],
+    );
+    const groupName = groupRows[0]?.name ?? 'Household';
+    const [householdMembers] = await db.query<GroupMemberRow[]>(
+      `
+        SELECT group_id AS groupId, name, email, ratio
+        FROM group_members
+        WHERE group_id = ?
+      `,
+      [numericGroupId],
+    );
+    const memberByName = new Map(
+      householdMembers.map((member) => [member.name.trim().toLowerCase(), member]),
+    );
+    const notifyTargets = addedParticipantNames
+      .map((participantName) => memberByName.get(participantName))
+      .filter((member): member is GroupMemberRow => Boolean(member))
+      .filter((member) => member.email.trim().toLowerCase() !== normalizedEmail)
+      .map((member) => ({ email: member.email, name: member.name }));
+
+    if (notifyTargets.length > 0) {
+      queueExpenseGroupAddedEmails({
+        groupName,
+        expenseGroupName: category,
+        actorEmail: normalizedEmail,
+        targets: notifyTargets,
+      });
+    }
   }
 
   return {

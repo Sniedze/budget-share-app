@@ -359,4 +359,9 @@ export const migrateSchema = async (): Promise<void> => {
   await ensureIndex('group_invitations', 'idx_group_invitations_email_status', 'email, status');
   await ensureIndex('settlement_payments', 'idx_settlement_payments_group_settled', 'group_id, settled_at DESC');
   await ensureIndex('audit_logs', 'idx_audit_logs_entity', 'entity_type, entity_id');
+
+  const { backfillAcceptedInvitationsForExistingMembers } = await import(
+    '../modules/groups/invitations.js'
+  );
+  await backfillAcceptedInvitationsForExistingMembers();
 };

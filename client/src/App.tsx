@@ -19,6 +19,9 @@ const RegisterPage = lazy(() =>
 const SettlementsPage = lazy(() =>
   import('./pages/SettlementsPage').then((module) => ({ default: module.SettlementsPage })),
 );
+const InvitationsPage = lazy(() =>
+  import('./pages/InvitationsPage').then((module) => ({ default: module.InvitationsPage })),
+);
 
 const RequireAuth = ({ children }: { children: JSX.Element }): JSX.Element => {
   const location = useLocation();
@@ -102,6 +105,14 @@ const App = (): JSX.Element => {
           element={
             <RequireAuth>
               <ImportPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/invitations"
+          element={
+            <RequireAuth>
+              <InvitationsPage />
             </RequireAuth>
           }
         />

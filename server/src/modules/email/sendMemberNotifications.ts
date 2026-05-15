@@ -9,8 +9,8 @@ import {
   logInvitationEmailSkipped,
 } from '../../logger.js';
 import {
-  buildExistingMemberAddedEmail,
-  buildPendingInviteeEmail,
+  buildExpenseGroupAddedEmail,
+  buildHouseholdMemberInviteEmail,
   type InvitationEmailPayload,
 } from './invitationEmailTemplates.js';
 import {
@@ -19,7 +19,11 @@ import {
 } from './invitationEmailStatus.js';
 import { getSmtpTransporter } from './smtpTransporter.js';
 
-export type HouseholdInvitee = { email: string; name: string };
+export type MemberNotifyTarget = {
+  email: string;
+  name: string;
+  hasAccount: boolean;
+};
 
 type EmailSendPayload = InvitationEmailPayload & {
   from: string;
@@ -58,175 +62,153 @@ const sendMailWithRetry = async (
   return { ok: false, attempts: SMTP_RETRY_MAX_ATTEMPTS, message: lastMessage };
 };
 
-const deliverInvitationEmail = async (
+const deliverHouseholdInviteEmail = async (
   transporter: ReturnType<typeof getSmtpTransporter>,
   smtpFrom: string,
   groupId: number,
-  invitee: HouseholdInvitee,
   groupName: string,
-  emailContent: InvitationEmailPayload,
-  logContext?: { template?: string },
+  actorEmail: string,
+  target: MemberNotifyTarget,
 ): Promise<void> => {
+  const baseUrl = getPublicAppBaseUrl();
+  const emailContent = buildHouseholdMemberInviteEmail({
+    memberName: target.name,
+    memberEmail: target.email,
+    groupName,
+    actorEmail,
+    invitationsUrl: `${baseUrl}/invitations`,
+    registerUrl: `${baseUrl}/register`,
+    loginUrl: `${baseUrl}/login`,
+    hasAccount: target.hasAccount,
+  });
+
   const result = await sendMailWithRetry(transporter, {
     from: smtpFrom,
-    to: invitee.email,
+    to: target.email,
     ...emailContent,
   });
+
   if (result.ok) {
-    await updateInvitationEmailDeliveryStatus(groupId, invitee.email, 'email_sent');
+    await updateInvitationEmailDeliveryStatus(groupId, target.email, 'email_sent');
     logInvitationEmailSent({
-      to: invitee.email,
+      to: target.email,
       groupName,
+      template: target.hasAccount ? 'household_invite_existing' : 'household_invite_new',
       attempts: result.attempts,
-      template: logContext?.template,
     });
     return;
   }
-  await updateInvitationEmailDeliveryStatus(groupId, invitee.email, 'email_failed');
+
+  await updateInvitationEmailDeliveryStatus(groupId, target.email, 'email_failed');
   logInvitationEmailFailed({
-    to: invitee.email,
+    to: target.email,
     groupName,
     attempts: result.attempts,
     message: result.message,
   });
 };
 
-/**
- * Sends one email per invitee (non-registered members). Requires SMTP env vars;
- * if unset, logs once and returns without throwing.
- */
-export const sendHouseholdInvitationEmails = async (params: {
+export const sendHouseholdMemberInviteEmails = async (params: {
   groupId: number;
   groupName: string;
   actorEmail: string;
-  invitees: HouseholdInvitee[];
+  targets: MemberNotifyTarget[];
 }): Promise<void> => {
-  const { groupId, groupName, actorEmail, invitees } = params;
-  if (invitees.length === 0) {
+  const { groupId, groupName, actorEmail, targets } = params;
+  if (targets.length === 0) {
     return;
   }
 
   if (!isSmtpConfigured()) {
     logInvitationEmailSkipped({
       reason: 'smtp_not_configured',
-      recipientCount: invitees.length,
+      recipientCount: targets.length,
       groupName,
+      context: 'household_member_invite',
     });
     await markInvitationsEmailSkipped(
       groupId,
-      invitees.map((invitee) => invitee.email),
+      targets.map((target) => target.email),
     );
     return;
   }
 
   const smtp = getResolvedSmtpSettings()!;
   const transporter = getSmtpTransporter(smtp);
-  const baseUrl = getPublicAppBaseUrl();
-  const registerUrl = `${baseUrl}/register`;
-  const loginUrl = `${baseUrl}/login`;
-
-  for (const invitee of invitees) {
-    const emailContent = buildPendingInviteeEmail({
-      inviteeName: invitee.name,
-      inviteeEmail: invitee.email,
-      groupName,
-      actorEmail,
-      registerUrl,
-      loginUrl,
-    });
-    await deliverInvitationEmail(transporter, smtp.from, groupId, invitee, groupName, emailContent);
+  for (const target of targets) {
+    await deliverHouseholdInviteEmail(transporter, smtp.from, groupId, groupName, actorEmail, target);
   }
 };
 
-/** Fire-and-forget after DB commit so HTTP latency is not tied to SMTP. */
-export const queueHouseholdInvitationEmails = (params: {
+export const queueHouseholdMemberInviteEmails = (params: {
   groupId: number;
   groupName: string;
   actorEmail: string;
-  invitees: HouseholdInvitee[];
+  targets: MemberNotifyTarget[];
 }): void => {
-  void sendHouseholdInvitationEmails(params).catch((err) => {
+  void sendHouseholdMemberInviteEmails(params).catch((err) => {
     logInvitationEmailFailed({
-      phase: 'unhandled_batch',
+      phase: 'unhandled_household_invite_batch',
       message: err instanceof Error ? err.message : String(err),
     });
   });
 };
 
-/**
- * When a **new** household is created: email pending invitees (no account yet) plus existing
- * members other than the creator.
- */
-export const sendNewGroupCreatedEmails = async (params: {
-  groupId: number;
+export const sendExpenseGroupAddedEmails = async (params: {
   groupName: string;
+  expenseGroupName: string;
   actorEmail: string;
-  pendingInvitees: HouseholdInvitee[];
-  existingMembersToNotify: HouseholdInvitee[];
+  targets: Array<{ email: string; name: string }>;
 }): Promise<void> => {
-  const { groupId, groupName, actorEmail, pendingInvitees, existingMembersToNotify } = params;
-  const total = pendingInvitees.length + existingMembersToNotify.length;
-  if (total === 0) {
+  const { groupName, expenseGroupName, actorEmail, targets } = params;
+  if (targets.length === 0) {
     return;
   }
 
   if (!isSmtpConfigured()) {
     logInvitationEmailSkipped({
       reason: 'smtp_not_configured',
-      recipientCount: total,
+      recipientCount: targets.length,
       groupName,
-      context: 'new_group_created',
+      context: 'expense_group_added',
+      expenseGroupName,
     });
-    await markInvitationsEmailSkipped(
-      groupId,
-      pendingInvitees.map((invitee) => invitee.email),
-    );
     return;
   }
 
   const smtp = getResolvedSmtpSettings()!;
   const transporter = getSmtpTransporter(smtp);
   const baseUrl = getPublicAppBaseUrl();
-  const registerUrl = `${baseUrl}/register`;
+  const invitationsUrl = `${baseUrl}/invitations`;
   const loginUrl = `${baseUrl}/login`;
 
-  for (const invitee of pendingInvitees) {
-    const emailContent = buildPendingInviteeEmail({
-      inviteeName: invitee.name,
-      inviteeEmail: invitee.email,
+  for (const target of targets) {
+    const emailContent = buildExpenseGroupAddedEmail({
+      memberName: target.name,
       groupName,
+      expenseGroupName,
       actorEmail,
-      registerUrl,
-      loginUrl,
-    });
-    await deliverInvitationEmail(transporter, smtp.from, groupId, invitee, groupName, emailContent, {
-      template: 'invite_pending',
-    });
-  }
-
-  for (const member of existingMembersToNotify) {
-    const emailContent = buildExistingMemberAddedEmail({
-      memberName: member.name,
-      groupName,
-      actorEmail,
+      invitationsUrl,
       loginUrl,
     });
     const result = await sendMailWithRetry(transporter, {
       from: smtp.from,
-      to: member.email,
+      to: target.email,
       ...emailContent,
     });
     if (result.ok) {
       logInvitationEmailSent({
-        to: member.email,
+        to: target.email,
         groupName,
-        template: 'member_existing',
+        template: 'expense_group_added',
+        expenseGroupName,
         attempts: result.attempts,
       });
     } else {
       logInvitationEmailFailed({
-        to: member.email,
+        to: target.email,
         groupName,
+        expenseGroupName,
         attempts: result.attempts,
         message: result.message,
       });
@@ -234,16 +216,15 @@ export const sendNewGroupCreatedEmails = async (params: {
   }
 };
 
-export const queueNewGroupCreatedEmails = (params: {
-  groupId: number;
+export const queueExpenseGroupAddedEmails = (params: {
   groupName: string;
+  expenseGroupName: string;
   actorEmail: string;
-  pendingInvitees: HouseholdInvitee[];
-  existingMembersToNotify: HouseholdInvitee[];
+  targets: Array<{ email: string; name: string }>;
 }): void => {
-  void sendNewGroupCreatedEmails(params).catch((err) => {
+  void sendExpenseGroupAddedEmails(params).catch((err) => {
     logInvitationEmailFailed({
-      phase: 'unhandled_new_group_batch',
+      phase: 'unhandled_expense_group_batch',
       message: err instanceof Error ? err.message : String(err),
     });
   });

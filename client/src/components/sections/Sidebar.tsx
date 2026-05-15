@@ -1,4 +1,4 @@
-import { HandCoins, LayoutDashboard, LineChart, Users, Upload, type LucideIcon } from 'lucide-react';
+import { HandCoins, Inbox, LayoutDashboard, LineChart, Users, Upload, type LucideIcon } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import styled from 'styled-components';
 import { colors, radii, spacing } from '../../styles/tokens';
@@ -122,6 +122,7 @@ const navItems: NavItem[] = [
   { label: 'Personal Finances', Icon: LayoutDashboard, to: '/' },
   { label: 'Budget & Forecast', Icon: LineChart, to: '/budget' },
   { label: 'Household', Icon: Users, to: '/groups' },
+  { label: 'Invitations', Icon: Inbox, to: '/invitations' },
   { label: 'Settlements', Icon: HandCoins, to: '/settlements' },
   { label: 'Import Statement', Icon: Upload, to: '/import' },
 ];
