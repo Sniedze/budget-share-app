@@ -1,7 +1,15 @@
+import type { InvitationEmailDeliveryStatusLabel } from './invitationEmailStatus';
+
 export type GroupMember = {
   name: string;
   email: string;
   ratio: number;
+};
+
+export type GroupPendingInvitation = {
+  email: string;
+  name: string;
+  emailDeliveryStatus?: InvitationEmailDeliveryStatusLabel;
 };
 
 export type GroupExpense = {
@@ -26,6 +34,7 @@ export type GroupSummary = {
   expenses: GroupExpense[];
   /** Split-template categories for this household (may have no expenses yet). */
   expenseGroupLabels: string[];
+  pendingInvitations?: GroupPendingInvitation[];
 };
 
 export type CreateGroupInput = {

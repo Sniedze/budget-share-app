@@ -9,6 +9,11 @@ export const GET_GROUPS = gql`
       totalSpent
       yourShare
       expenseGroupLabels
+      pendingInvitations {
+        email
+        name
+        emailDeliveryStatus
+      }
       members {
         name
         email
@@ -53,6 +58,11 @@ export const CREATE_GROUP = gql`
       totalSpent
       yourShare
       expenseGroupLabels
+      pendingInvitations {
+        email
+        name
+        emailDeliveryStatus
+      }
       members {
         name
         email
@@ -82,6 +92,11 @@ export const UPDATE_GROUP = gql`
       totalSpent
       yourShare
       expenseGroupLabels
+      pendingInvitations {
+        email
+        name
+        emailDeliveryStatus
+      }
       members {
         name
         email
