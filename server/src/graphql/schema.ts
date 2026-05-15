@@ -216,6 +216,40 @@ export const typeDefs = `#graphql
     flow: ExpenseFlow
   }
 
+  input ImportExpenseRowInput {
+    clientRowId: ID!
+    title: String!
+    amount: Float!
+    transactionDate: String!
+    category: String!
+    expenseGroup: String
+    split: SplitType!
+    splitDetails: [SplitAllocationInput!]
+    groupId: ID
+    paidByUserId: ID
+    isPrivate: Boolean
+    currency: String
+    flow: ExpenseFlow
+  }
+
+  input ImportExpensesInput {
+    rows: [ImportExpenseRowInput!]!
+  }
+
+  type ImportExpenseRowResult {
+    clientRowId: ID!
+    success: Boolean!
+    expense: Expense
+    errorCode: String
+    errorMessage: String
+  }
+
+  type ImportExpensesPayload {
+    results: [ImportExpenseRowResult!]!
+    importedCount: Int!
+    failedCount: Int!
+  }
+
   input RecordSettlementPaymentInput {
     groupId: ID!
     expenseGroup: String
@@ -258,6 +292,7 @@ export const typeDefs = `#graphql
 
   type Mutation {
     addExpense(input: AddExpenseInput!): Expense!
+    importExpenses(input: ImportExpensesInput!): ImportExpensesPayload!
     deleteExpense(input: DeleteExpenseInput!): Boolean!
     updateExpense(input: UpdateExpenseInput!): Expense
     createGroup(input: CreateGroupInput!): Group!
