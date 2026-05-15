@@ -43,12 +43,19 @@ export type UpdateGroupInput = {
 
 export type GroupInvitationStatus = 'Pending' | 'Accepted';
 
+export type InvitationEmailDeliveryStatus =
+  | 'PendingEmail'
+  | 'EmailSent'
+  | 'EmailFailed'
+  | 'EmailSkipped';
+
 export type GroupInvitation = {
   id: string;
   groupId: string;
   groupName: string;
   email: string;
   status: GroupInvitationStatus;
+  emailDeliveryStatus?: InvitationEmailDeliveryStatus;
   invitedAt: string;
   acceptedAt?: string;
 };

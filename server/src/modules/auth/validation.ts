@@ -1,14 +1,13 @@
 /** bcrypt truncates at 72 bytes; cap here for predictable behavior. */
 import { appError, ErrorCode } from '../../graphql/appError.js';
+import { stripControlCharacters } from '../../lib/sanitize.js';
 
 export const MAX_PASSWORD_LENGTH = 72;
 export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_EMAIL_LENGTH = 254;
 export const MAX_FULL_NAME_LENGTH = 255;
 
-/** Strip ASCII control characters (incl. newlines) from user-visible fields. */
-export const stripControlCharacters = (value: string): string =>
-  value.replace(/[\u0000-\u001F\u007F]/g, '');
+export { stripControlCharacters };
 
 /**
  * Practical email check (not full RFC 5322). ASCII-focused for typical logins.
@@ -52,14 +51,14 @@ export const assertPasswordAcceptableForRegister = (password: string): void => {
   if (password.length < MIN_PASSWORD_LENGTH) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Password must be at least 8 characters.');
   }
-  if (password.length > MAX_PASSWORD_LENGTH) {
-    throw appError(ErrorCode.BAD_USER_INPUT, 'Password must be at most 72 characters.');
+  if (Buffer.byteLength(password, 'utf8') > MAX_PASSWORD_LENGTH) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Password must be at most 72 bytes.');
   }
 };
 
 /** Reject huge payloads before bcrypt work; same error as bad credentials. */
 export const assertPasswordLengthForLogin = (password: string): void => {
-  if (password.length > MAX_PASSWORD_LENGTH) {
+  if (Buffer.byteLength(password, 'utf8') > MAX_PASSWORD_LENGTH) {
     throw appError(ErrorCode.UNAUTHENTICATED, 'Invalid email or password.');
   }
 };

@@ -6,6 +6,7 @@ import type {
   Group,
   GroupInvitation,
   GroupMember,
+  InvitationEmailDeliveryStatus,
   HouseholdSettlement,
   RecordSettlementPaymentInput,
   SettlementBalance,
@@ -18,6 +19,7 @@ import type {
 import { appError, ErrorCode } from '../../graphql/appError.js';
 import { logAuditEvent } from '../audit/service.js';
 import { logAuthzDenied } from '../../logger.js';
+import { stripControlCharacters } from '../../lib/sanitize.js';
 import { queueHouseholdInvitationEmails, queueNewGroupCreatedEmails } from '../email/sendHouseholdInvitations.js';
 import { buildOptimizedTransfers } from './settlementTransfers.js';
 
@@ -40,9 +42,27 @@ type GroupInvitationRow = {
   groupName: string;
   email: string;
   status: string;
+  emailDeliveryStatus: string | null;
   invitedAt: Date | string;
   acceptedAt: Date | string | null;
 } & RowDataPacket;
+
+const mapInvitationEmailDeliveryStatus = (
+  raw: string | null | undefined,
+): InvitationEmailDeliveryStatus | undefined => {
+  switch (raw) {
+    case 'pending_email':
+      return 'PendingEmail';
+    case 'email_sent':
+      return 'EmailSent';
+    case 'email_failed':
+      return 'EmailFailed';
+    case 'email_skipped':
+      return 'EmailSkipped';
+    default:
+      return undefined;
+  }
+};
 
 type GroupExpenseRow = {
   id: number;
@@ -456,7 +476,7 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
 };
 
 export const createGroup = async (input: CreateGroupInput, actorEmail: string): Promise<Group> => {
-  const name = input.name.trim();
+  const name = stripControlCharacters(input.name.trim());
   if (!name) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Group name is required.');
   }
@@ -571,6 +591,7 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
 
   if (pendingInvitees.length > 0 || existingMembersToNotify.length > 0) {
     queueNewGroupCreatedEmails({
+      groupId,
       groupName: name,
       actorEmail: normalizedActorEmail,
       pendingInvitees,
@@ -599,7 +620,7 @@ export const updateGroup = async (
     throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid group id.');
   }
 
-  const name = input.name.trim();
+  const name = stripControlCharacters(input.name.trim());
   if (!name) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Group name is required.');
   }
@@ -756,6 +777,7 @@ export const updateGroup = async (
       .filter((member) => pendingSet.has(member.email))
       .map((member) => ({ email: member.email, name: member.name }));
     queueHouseholdInvitationEmails({
+      groupId: numericGroupId,
       groupName: name,
       actorEmail: normalizedActorEmail,
       invitees,
@@ -824,6 +846,7 @@ export const listInvitations = async (userEmail: string): Promise<GroupInvitatio
         g.name AS groupName,
         gi.email,
         gi.status,
+        gi.email_delivery_status AS emailDeliveryStatus,
         gi.invited_at AS invitedAt,
         gi.accepted_at AS acceptedAt
       FROM group_invitations gi
@@ -840,6 +863,7 @@ export const listInvitations = async (userEmail: string): Promise<GroupInvitatio
     groupName: row.groupName,
     email: row.email,
     status: row.status === 'Accepted' ? 'Accepted' : 'Pending',
+    emailDeliveryStatus: mapInvitationEmailDeliveryStatus(row.emailDeliveryStatus),
     invitedAt: toIsoString(row.invitedAt),
     acceptedAt: row.acceptedAt ? toIsoString(row.acceptedAt) : undefined,
   }));

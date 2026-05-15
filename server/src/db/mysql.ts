@@ -336,6 +336,23 @@ export const migrateSchema = async (): Promise<void> => {
       `);
   }
 
+  const [invitationCols] = await db.query<ColumnCheckRow[]>(
+    `
+        SELECT COLUMN_NAME AS columnName
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'group_invitations'
+          AND COLUMN_NAME IN ('email_delivery_status')
+      `,
+  );
+  const invitationColumnSet = new Set(invitationCols.map((row) => row.columnName));
+  if (!invitationColumnSet.has('email_delivery_status')) {
+    await db.execute(`
+        ALTER TABLE group_invitations
+        ADD COLUMN email_delivery_status VARCHAR(32) NULL
+      `);
+  }
+
   await ensureIndex('expenses', 'idx_expenses_group_transaction', 'group_id, transaction_date DESC');
   await ensureIndex('expenses', 'idx_expenses_creator_transaction', 'created_by_user_id, transaction_date DESC');
   await ensureIndex('group_members', 'idx_group_members_email', 'email');

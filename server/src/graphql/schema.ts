@@ -69,12 +69,20 @@ export const typeDefs = `#graphql
     Accepted
   }
 
+  enum InvitationEmailDeliveryStatus {
+    PendingEmail
+    EmailSent
+    EmailFailed
+    EmailSkipped
+  }
+
   type GroupInvitation {
     id: ID!
     groupId: ID!
     groupName: String!
     email: String!
     status: GroupInvitationStatus!
+    emailDeliveryStatus: InvitationEmailDeliveryStatus
     invitedAt: String!
     acceptedAt: String
   }
