@@ -1,13 +1,15 @@
+import { isDuplicateTransactionGraphqlError, type GraphqlErrorShape } from '../../lib/graphqlErrorCodes';
+
 /**
- * Matches server `DUPLICATE_TRANSACTION_MESSAGE` (keep substring in sync for UI detection).
+ * Legacy prefix when server does not return `extensions.code` (keep for older deployments).
  */
 export const BACKEND_DUPLICATE_EXPENSE_PREFIX = 'Duplicate transaction:';
 
 export const getMutationErrorMessage = (error: unknown): string => {
   if (error instanceof Error) {
     const err = error as Error & {
-      graphQLErrors?: ReadonlyArray<{ message?: string }>;
-      networkError?: { result?: { errors?: ReadonlyArray<{ message?: string }> } };
+      graphQLErrors?: ReadonlyArray<GraphqlErrorShape>;
+      networkError?: { result?: { errors?: ReadonlyArray<GraphqlErrorShape> } };
     };
     const gql = err.graphQLErrors?.[0]?.message;
     if (gql) {
@@ -22,6 +24,14 @@ export const getMutationErrorMessage = (error: unknown): string => {
   return 'Import failed';
 };
 
-export const isBackendDuplicateExpenseError = (message: string): boolean => {
+export const isBackendDuplicateExpenseError = (error: unknown): boolean => {
+  if (error instanceof Error) {
+    const err = error as Error & { graphQLErrors?: ReadonlyArray<GraphqlErrorShape> };
+    const gqlError = err.graphQLErrors?.[0];
+    if (gqlError && isDuplicateTransactionGraphqlError(gqlError)) {
+      return true;
+    }
+  }
+  const message = getMutationErrorMessage(error);
   return message.trim().startsWith(BACKEND_DUPLICATE_EXPENSE_PREFIX);
 };

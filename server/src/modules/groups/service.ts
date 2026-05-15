@@ -15,9 +15,11 @@ import type {
   UpdateGroupInput,
   UpsertSplitTemplateInput,
 } from './types.js';
+import { appError, ErrorCode } from '../../graphql/appError.js';
 import { logAuditEvent } from '../audit/service.js';
 import { logAuthzDenied } from '../../logger.js';
 import { queueHouseholdInvitationEmails, queueNewGroupCreatedEmails } from '../email/sendHouseholdInvitations.js';
+import { buildOptimizedTransfers } from './settlementTransfers.js';
 
 type GroupRow = {
   id: number;
@@ -177,12 +179,12 @@ const normalizeTemplateSplitDetails = (
     .filter((item) => item.participant.length > 0 && Number.isFinite(item.ratio) && item.ratio > 0);
 
   if (normalized.length === 0) {
-    throw new Error('Template split must include at least one member.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Template split must include at least one member.');
   }
 
   const ratioTotal = normalized.reduce((sum, item) => sum + item.ratio, 0);
   if (Math.abs(ratioTotal - 100) > 0.01) {
-    throw new Error(`Template ratios must add up to 100% (current: ${ratioTotal.toFixed(2)}%).`);
+    throw appError(ErrorCode.BAD_USER_INPUT, `Template ratios must add up to 100% (current: ${ratioTotal.toFixed(2)}%).`);
   }
 
   return normalized.map((item) => ({
@@ -245,42 +247,6 @@ const parseExpenseSplitDetails = (
   } catch {
     return [];
   }
-};
-
-const buildOptimizedTransfers = (balances: SettlementBalance[]): SettlementTransfer[] => {
-  const creditors = balances
-    .filter((entry) => entry.amount > 0.01)
-    .map((entry) => ({ ...entry }));
-  const debtors = balances
-    .filter((entry) => entry.amount < -0.01)
-    .map((entry) => ({ memberName: entry.memberName, amount: Math.abs(entry.amount) }));
-  const transfers: SettlementTransfer[] = [];
-  let creditorIndex = 0;
-  let debtorIndex = 0;
-
-  while (creditorIndex < creditors.length && debtorIndex < debtors.length) {
-    const creditor = creditors[creditorIndex];
-    const debtor = debtors[debtorIndex];
-    const amount = roundCents(Math.min(creditor.amount, debtor.amount));
-    if (amount <= 0) {
-      break;
-    }
-    transfers.push({
-      fromMember: debtor.memberName,
-      toMember: creditor.memberName,
-      amount,
-    });
-    creditor.amount = roundCents(creditor.amount - amount);
-    debtor.amount = roundCents(debtor.amount - amount);
-    if (creditor.amount <= 0.01) {
-      creditorIndex += 1;
-    }
-    if (debtor.amount <= 0.01) {
-      debtorIndex += 1;
-    }
-  }
-
-  return transfers;
 };
 
 const buildSettlementForScope = (
@@ -492,26 +458,26 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
 export const createGroup = async (input: CreateGroupInput, actorEmail: string): Promise<Group> => {
   const name = input.name.trim();
   if (!name) {
-    throw new Error('Group name is required.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Group name is required.');
   }
 
   const members = normalizeMembers(input.members).filter((member) => member.name && member.email);
   if (members.length < 2) {
-    throw new Error('A group must include at least two members.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'A group must include at least two members.');
   }
 
   const totalRatio = members.reduce((sum, member) => sum + member.ratio, 0);
   if (Math.abs(totalRatio - 100) > 0.01) {
-    throw new Error(`Member ratios must add up to 100% (current: ${totalRatio.toFixed(2)}%).`);
+    throw appError(ErrorCode.BAD_USER_INPUT, `Member ratios must add up to 100% (current: ${totalRatio.toFixed(2)}%).`);
   }
   if (members.some((member) => !Number.isFinite(member.ratio) || member.ratio <= 0)) {
-    throw new Error('Each member ratio must be greater than 0.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Each member ratio must be greater than 0.');
   }
 
   const duplicateEmails = new Set<string>();
   for (const member of members) {
     if (duplicateEmails.has(member.email)) {
-      throw new Error('Each group member must have a unique email.');
+      throw appError(ErrorCode.BAD_USER_INPUT, 'Each group member must have a unique email.');
     }
     duplicateEmails.add(member.email);
   }
@@ -519,7 +485,7 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
   const normalizedActorEmail = actorEmail.trim().toLowerCase();
   const actorInMembers = members.some((member) => member.email === normalizedActorEmail);
   if (!actorInMembers) {
-    throw new Error('Group creator must be included in members.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Group creator must be included in members.');
   }
 
   let pendingInvitationEmailsForNotify: string[] = [];
@@ -630,31 +596,31 @@ export const updateGroup = async (
 ): Promise<Group> => {
   const numericGroupId = Number(input.id);
   if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
-    throw new Error('Invalid group id.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid group id.');
   }
 
   const name = input.name.trim();
   if (!name) {
-    throw new Error('Group name is required.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Group name is required.');
   }
 
   const members = normalizeMembers(input.members).filter((member) => member.name && member.email);
   if (members.length < 2) {
-    throw new Error('A group must include at least two members.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'A group must include at least two members.');
   }
 
   const totalRatio = members.reduce((sum, member) => sum + member.ratio, 0);
   if (Math.abs(totalRatio - 100) > 0.01) {
-    throw new Error(`Member ratios must add up to 100% (current: ${totalRatio.toFixed(2)}%).`);
+    throw appError(ErrorCode.BAD_USER_INPUT, `Member ratios must add up to 100% (current: ${totalRatio.toFixed(2)}%).`);
   }
   if (members.some((member) => !Number.isFinite(member.ratio) || member.ratio <= 0)) {
-    throw new Error('Each member ratio must be greater than 0.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Each member ratio must be greater than 0.');
   }
 
   const duplicateEmails = new Set<string>();
   for (const member of members) {
     if (duplicateEmails.has(member.email)) {
-      throw new Error('Each group member must have a unique email.');
+      throw appError(ErrorCode.BAD_USER_INPUT, 'Each group member must have a unique email.');
     }
     duplicateEmails.add(member.email);
   }
@@ -671,7 +637,7 @@ export const updateGroup = async (
   );
   const beforeGroup = beforeRows[0];
   if (!beforeGroup) {
-    throw new Error('Group not found.');
+    throw appError(ErrorCode.NOT_FOUND, 'Group not found.');
   }
   const [beforeMemberRows] = await db.query<GroupMemberRow[]>(
     `
@@ -697,12 +663,12 @@ export const updateGroup = async (
       email: normalizedActorEmail,
       action: 'updateGroup',
     });
-    throw new Error('Not authorized for this group.');
+    throw appError(ErrorCode.FORBIDDEN, 'Not authorized for this group.');
   }
 
   const actorInMembers = members.some((member) => member.email === normalizedActorEmail);
   if (!actorInMembers) {
-    throw new Error('Group editor must remain in members.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Group editor must remain in members.');
   }
 
   let pendingInvitationEmailsForNotify: string[] = [];
@@ -807,7 +773,7 @@ export const updateGroup = async (
   );
   const groupRow = groupRows[0];
   if (!groupRow) {
-    throw new Error('Group not found.');
+    throw appError(ErrorCode.NOT_FOUND, 'Group not found.');
   }
 
   await logAuditEvent({
@@ -882,7 +848,7 @@ export const listInvitations = async (userEmail: string): Promise<GroupInvitatio
 export const listSplitTemplates = async (groupId: string, userEmail: string): Promise<SplitTemplate[]> => {
   const numericGroupId = Number(groupId);
   if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
-    throw new Error('Invalid groupId.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid groupId.');
   }
 
   const isMember = await db.query<RowDataPacket[]>(
@@ -900,7 +866,7 @@ export const listSplitTemplates = async (groupId: string, userEmail: string): Pr
       email: userEmail.trim().toLowerCase(),
       action: 'listSplitTemplates',
     });
-    throw new Error('Not authorized for this group.');
+    throw appError(ErrorCode.FORBIDDEN, 'Not authorized for this group.');
   }
 
   const [rows] = await db.query<SplitTemplateRow[]>(
@@ -933,7 +899,7 @@ export const upsertSplitTemplate = async (
 ): Promise<SplitTemplate> => {
   const numericGroupId = Number(input.groupId);
   if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
-    throw new Error('Invalid groupId.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid groupId.');
   }
 
   const normalizedEmail = userEmail.trim().toLowerCase();
@@ -952,16 +918,16 @@ export const upsertSplitTemplate = async (
       email: normalizedEmail,
       action: 'upsertSplitTemplate',
     });
-    throw new Error('Not authorized for this group.');
+    throw appError(ErrorCode.FORBIDDEN, 'Not authorized for this group.');
   }
 
   const category = input.category.trim();
   const templateName = input.templateName.trim();
   if (!category) {
-    throw new Error('Template category is required.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Template category is required.');
   }
   if (!templateName) {
-    throw new Error('Template name is required.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Template name is required.');
   }
 
   const splitDetails = normalizeTemplateSplitDetails(input.splitDetails);
@@ -994,7 +960,7 @@ export const upsertSplitTemplate = async (
   );
   const row = rows[0];
   if (!row) {
-    throw new Error('Failed to upsert split template.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Failed to upsert split template.');
   }
 
   return {
@@ -1122,7 +1088,7 @@ export const recordSettlementPayment = async (
 ): Promise<SettlementPayment> => {
   const groupId = Number(input.groupId);
   if (!Number.isFinite(groupId) || groupId <= 0) {
-    throw new Error('Invalid groupId.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid groupId.');
   }
   const normalizedEmail = userEmail.trim().toLowerCase();
   const [membershipRows] = await db.query<RowDataPacket[]>(
@@ -1140,7 +1106,7 @@ export const recordSettlementPayment = async (
       email: normalizedEmail,
       action: 'recordSettlementPayment',
     });
-    throw new Error('Not authorized for this group.');
+    throw appError(ErrorCode.FORBIDDEN, 'Not authorized for this group.');
   }
 
   const fromMember = input.fromMember.trim();
@@ -1148,13 +1114,13 @@ export const recordSettlementPayment = async (
   const amount = Number(input.amount);
   const settledAt = input.settledAt.trim();
   if (!fromMember || !toMember || fromMember.toLowerCase() === toMember.toLowerCase()) {
-    throw new Error('Provide valid payer and recipient members.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Provide valid payer and recipient members.');
   }
   if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error('Settlement amount must be greater than 0.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Settlement amount must be greater than 0.');
   }
   if (!settledAt) {
-    throw new Error('Settlement date is required.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Settlement date is required.');
   }
 
   const [result] = await db.execute<ResultSetHeader>(
@@ -1193,7 +1159,7 @@ export const recordSettlementPayment = async (
   );
   const row = rows[0];
   if (!row) {
-    throw new Error('Unable to record settlement payment.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Unable to record settlement payment.');
   }
   return {
     id: String(row.id),

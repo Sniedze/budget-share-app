@@ -10,8 +10,9 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction,
 ): void => {
-  const statusCode = Number(err.statusCode ?? err.status ?? 500);
-  const safeStatus = Number.isFinite(statusCode) && statusCode >= 400 ? statusCode : 500;
+  const rawStatus = Number(err.statusCode ?? err.status ?? 500);
+  const safeStatus =
+    Number.isFinite(rawStatus) && rawStatus >= 400 && rawStatus <= 599 ? Math.trunc(rawStatus) : 500;
   const requestId = getRequestId(res);
 
   logServerError({

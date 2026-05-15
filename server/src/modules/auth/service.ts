@@ -4,6 +4,7 @@ import { db } from '../../db/mysql.js';
 import { queryOne } from '../../db/queryHelpers.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from './jwt.js';
 import type { AuthPayload, LoginInput, RegisterInput, User } from './types.js';
+import { appError, ErrorCode } from '../../graphql/appError.js';
 import {
   assertPasswordAcceptableForRegister,
   assertPasswordLengthForLogin,
@@ -63,7 +64,7 @@ export const register = async (input: RegisterInput): Promise<AuthPayload> => {
 
   const existingUser = await getUserByEmail(email);
   if (existingUser) {
-    throw new Error('Email already in use.');
+    throw appError(ErrorCode.CONFLICT, 'Email already in use.');
   }
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
@@ -85,7 +86,7 @@ export const register = async (input: RegisterInput): Promise<AuthPayload> => {
     [insertResult.insertId],
   );
   if (!userRow) {
-    throw new Error('Failed to load created user.');
+    throw appError(ErrorCode.INTERNAL_SERVER_ERROR, 'Failed to load created user.');
   }
 
   await db.execute(
@@ -106,12 +107,12 @@ export const login = async (input: LoginInput): Promise<AuthPayload> => {
   assertPasswordLengthForLogin(input.password);
   const user = await getUserByEmail(email);
   if (!user) {
-    throw new Error('Invalid email or password.');
+    throw appError(ErrorCode.UNAUTHENTICATED, 'Invalid email or password.');
   }
 
   const isValidPassword = await bcrypt.compare(input.password, user.password_hash);
   if (!isValidPassword) {
-    throw new Error('Invalid email or password.');
+    throw appError(ErrorCode.UNAUTHENTICATED, 'Invalid email or password.');
   }
 
   return toAuthPayload(user);
@@ -120,7 +121,7 @@ export const login = async (input: LoginInput): Promise<AuthPayload> => {
 export const refreshSession = async (refreshToken: string): Promise<AuthPayload> => {
   const claims = verifyRefreshToken(refreshToken);
   if (!claims) {
-    throw new Error('Invalid refresh token.');
+    throw appError(ErrorCode.UNAUTHENTICATED, 'Invalid refresh token.');
   }
 
   const user = await queryOne<UserRow>(
@@ -133,12 +134,12 @@ export const refreshSession = async (refreshToken: string): Promise<AuthPayload>
     [claims.userId],
   );
   if (!user) {
-    throw new Error('User not found.');
+    throw appError(ErrorCode.NOT_FOUND, 'User not found.');
   }
 
   const version = Number(user.refresh_token_version) || 0;
   if (claims.rtv !== version) {
-    throw new Error('Invalid refresh token.');
+    throw appError(ErrorCode.UNAUTHENTICATED, 'Invalid refresh token.');
   }
 
   return toAuthPayload(user);

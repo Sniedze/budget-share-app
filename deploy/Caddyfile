@@ -1,6 +1,13 @@
 soperfect.dk, www.soperfect.dk {
     encode gzip zstd
 
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
     # Backend GraphQL API and health check
     handle /graphql* {
         reverse_proxy api:4000

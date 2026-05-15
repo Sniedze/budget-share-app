@@ -12,16 +12,15 @@ export type GraphqlContext = {
   requestId: string;
 };
 
+const BEARER_TOKEN_PATTERN = /^Bearer\s+(\S+)$/i;
+
 const extractBearerToken = (req: Request): string | null => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return null;
   }
-  const [scheme, token] = authHeader.split(' ');
-  if (scheme?.toLowerCase() !== 'bearer' || !token) {
-    return null;
-  }
-  return token.trim();
+  const match = BEARER_TOKEN_PATTERN.exec(authHeader.trim());
+  return match?.[1] ?? null;
 };
 
 const readGraphqlOperationName = (req: Request): string | null => {

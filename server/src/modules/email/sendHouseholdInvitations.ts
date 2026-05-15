@@ -24,7 +24,8 @@ const escapeHtml = (value: string): string =>
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 const parsePositiveInt = (raw: string | undefined, fallback: number): number => {
   const parsed = Number(raw);

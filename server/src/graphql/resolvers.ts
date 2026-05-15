@@ -21,6 +21,7 @@ import {
   revokeRefreshTokens,
 } from '../modules/auth/service.js';
 import { clearSessionCookies, getRefreshTokenFromCookies, setSessionCookies } from '../modules/auth/cookies.js';
+import { appError, ErrorCode } from './appError.js';
 import type {
   CreateExpenseInput,
   DeleteExpenseInput,
@@ -106,7 +107,7 @@ export const resolvers = {
       const fromCookie = getRefreshTokenFromCookies(context.req);
       const token = (fromBody && fromBody.length > 0 ? fromBody : null) ?? fromCookie;
       if (!token) {
-        throw new Error('Refresh token required.');
+        throw appError(ErrorCode.UNAUTHENTICATED, 'Refresh token required.');
       }
       const payload = await refreshSession(token);
       setSessionCookies(context.res, payload.accessToken, payload.refreshToken, { remember: true });

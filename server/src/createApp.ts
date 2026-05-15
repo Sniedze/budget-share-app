@@ -1,5 +1,6 @@
 import express, { type Express } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express5';
 import { typeDefs } from './graphql/schema.js';
@@ -11,10 +12,11 @@ import { graphqlCsrfGuard } from './middleware/graphqlCsrfGuard.js';
 import { assignRequestContext, getCurrentRequestId } from './middleware/requestContext.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { createCorsOptions } from './config/corsOptions.js';
+import { formatGraphqlError } from './graphql/formatGraphqlError.js';
 
 const parseMaxRecursiveSelections = (): number | false => {
   const raw = process.env.GRAPHQL_MAX_RECURSIVE_SELECTIONS;
-  if (!raw || raw.trim().length == 0) {
+  if (!raw || raw.trim().length === 0) {
     return 30;
   }
   const parsed = Number(raw);
@@ -39,13 +41,7 @@ export const createHttpApp = async (): Promise<HttpServerBundle> => {
     resolvers,
     maxRecursiveSelections: parseMaxRecursiveSelections(),
     formatError(formattedError) {
-      return {
-        ...formattedError,
-        extensions: {
-          ...formattedError.extensions,
-          requestId: getCurrentRequestId() ?? 'unknown',
-        },
-      };
+      return formatGraphqlError(formattedError);
     },
   });
 
@@ -54,12 +50,22 @@ export const createHttpApp = async (): Promise<HttpServerBundle> => {
     app.set('trust proxy', 1);
   }
   app.use(assignRequestContext);
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+    }),
+  );
   app.use(cors(createCorsOptions()));
   const jsonBodyLimit = process.env.JSON_BODY_LIMIT ?? '512kb';
   app.use(express.json({ limit: jsonBodyLimit }));
 
-  app.get('/health', (_req, res) => {
-    res.status(200).json({ ok: true, service: 'server' });
+  app.get('/health', async (_req, res) => {
+    try {
+      await checkDbConnection();
+      res.status(200).json({ ok: true, service: 'server', db: 'ok' });
+    } catch {
+      res.status(503).json({ ok: false, service: 'server', db: 'unavailable' });
+    }
   });
   app.use(
     '/graphql',

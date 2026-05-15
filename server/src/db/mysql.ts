@@ -1,12 +1,15 @@
 import mysql from 'mysql2/promise';
 import type { RowDataPacket } from 'mysql2';
+import { resolveDbConfig } from './config.js';
+
+const dbConfig = resolveDbConfig();
 
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  port: Number(process.env.DB_PORT) || 3306,
-  user: process.env.DB_USER || 'budget_user',
-  password: process.env.DB_PASSWORD || 'budget_password',
-  database: process.env.DB_NAME || 'budget_app',
+  host: dbConfig.host,
+  port: dbConfig.port,
+  user: dbConfig.user,
+  password: dbConfig.password,
+  database: dbConfig.database,
   waitForConnections: true,
   connectionLimit: 10,
 });
@@ -143,6 +146,24 @@ export const ensureSchema = async (): Promise<void> => {
 type ColumnCheckRow = {
   columnName: string;
 } & RowDataPacket;
+
+const ensureIndex = async (table: string, indexName: string, columns: string): Promise<void> => {
+  const [rows] = await db.query<RowDataPacket[]>(
+    `
+      SELECT 1
+      FROM information_schema.STATISTICS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND INDEX_NAME = ?
+      LIMIT 1
+    `,
+    [table, indexName],
+  );
+  if (rows.length > 0) {
+    return;
+  }
+  await db.execute(`CREATE INDEX ${indexName} ON \`${table}\` (${columns})`);
+};
 
 export const migrateSchema = async (): Promise<void> => {
   const [rows] = await db.query<ColumnCheckRow[]>(
@@ -314,4 +335,11 @@ export const migrateSchema = async (): Promise<void> => {
         ADD COLUMN refresh_token_version INT NOT NULL DEFAULT 0
       `);
   }
+
+  await ensureIndex('expenses', 'idx_expenses_group_transaction', 'group_id, transaction_date DESC');
+  await ensureIndex('expenses', 'idx_expenses_creator_transaction', 'created_by_user_id, transaction_date DESC');
+  await ensureIndex('group_members', 'idx_group_members_email', 'email');
+  await ensureIndex('group_invitations', 'idx_group_invitations_email_status', 'email, status');
+  await ensureIndex('settlement_payments', 'idx_settlement_payments_group_settled', 'group_id, settled_at DESC');
+  await ensureIndex('audit_logs', 'idx_audit_logs_entity', 'entity_type, entity_id');
 };

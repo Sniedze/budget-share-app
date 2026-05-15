@@ -1,4 +1,6 @@
 /** bcrypt truncates at 72 bytes; cap here for predictable behavior. */
+import { appError, ErrorCode } from '../../graphql/appError.js';
+
 export const MAX_PASSWORD_LENGTH = 72;
 export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_EMAIL_LENGTH = 254;
@@ -14,40 +16,50 @@ export const stripControlCharacters = (value: string): string =>
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,63}$/;
 
 export const validateEmailFormat = (email: string, mode: 'login' | 'register'): void => {
+  const loginMessage = 'Invalid email or password.';
   if (email.length === 0) {
-    throw new Error(mode === 'login' ? 'Invalid email or password.' : 'Email is required.');
+    throw appError(
+      mode === 'login' ? ErrorCode.UNAUTHENTICATED : ErrorCode.BAD_USER_INPUT,
+      mode === 'login' ? loginMessage : 'Email is required.',
+    );
   }
   if (email.length > MAX_EMAIL_LENGTH) {
-    throw new Error(mode === 'login' ? 'Invalid email or password.' : 'Email is too long.');
+    throw appError(
+      mode === 'login' ? ErrorCode.UNAUTHENTICATED : ErrorCode.BAD_USER_INPUT,
+      mode === 'login' ? loginMessage : 'Email is too long.',
+    );
   }
   if (!EMAIL_REGEX.test(email)) {
-    throw new Error(mode === 'login' ? 'Invalid email or password.' : 'Enter a valid email address.');
+    throw appError(
+      mode === 'login' ? ErrorCode.UNAUTHENTICATED : ErrorCode.BAD_USER_INPUT,
+      mode === 'login' ? loginMessage : 'Enter a valid email address.',
+    );
   }
 };
 
 export const normalizeFullNameForRegister = (fullName: string): string => {
   const stripped = stripControlCharacters(fullName).trim();
   if (stripped.length === 0) {
-    throw new Error('Full name is required.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Full name is required.');
   }
   if (stripped.length > MAX_FULL_NAME_LENGTH) {
-    throw new Error('Full name is too long.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Full name is too long.');
   }
   return stripped;
 };
 
 export const assertPasswordAcceptableForRegister = (password: string): void => {
   if (password.length < MIN_PASSWORD_LENGTH) {
-    throw new Error('Password must be at least 8 characters.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Password must be at least 8 characters.');
   }
   if (password.length > MAX_PASSWORD_LENGTH) {
-    throw new Error('Password must be at most 72 characters.');
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Password must be at most 72 characters.');
   }
 };
 
 /** Reject huge payloads before bcrypt work; same error as bad credentials. */
 export const assertPasswordLengthForLogin = (password: string): void => {
   if (password.length > MAX_PASSWORD_LENGTH) {
-    throw new Error('Invalid email or password.');
+    throw appError(ErrorCode.UNAUTHENTICATED, 'Invalid email or password.');
   }
 };

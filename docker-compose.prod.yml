@@ -42,6 +42,10 @@ services:
       NODE_ENV: production
       PORT: '4000'
       TRUST_PROXY: '1'
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?ALLOWED_ORIGINS is required}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
       DB_HOST: mysql
       DB_PORT: '3306'
       DB_USER: ${MYSQL_USER}
