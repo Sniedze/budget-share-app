@@ -80,7 +80,9 @@ export const useHouseholdPageState = () => {
   const { user } = useAuth();
   const { data, loading, error } = useQuery<GroupsQueryData>(GET_GROUPS);
   const { data: expensesData } = useQuery<GetExpensesResponse>(GET_EXPENSES);
-  const { addExpense, isMutating: isCreatingExpense } = useExpenseActions(GET_GROUPS);
+  const { addExpense, isMutating: isCreatingExpense } = useExpenseActions({
+    refetchQueries: [GET_GROUPS],
+  });
   const [createGroupMutation, { loading: creatingGroup }] = useMutation<CreateGroupMutationData>(CREATE_GROUP, {
     refetchQueries: [{ query: GET_GROUPS }],
     awaitRefetchQueries: true,

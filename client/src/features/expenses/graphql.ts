@@ -1,79 +1,31 @@
 import { gql } from '@apollo/client';
+import { EXPENSE_FIELDS } from './expenseFields';
+
+export { EXPENSE_FIELDS };
 
 export const GET_EXPENSES = gql`
+  ${EXPENSE_FIELDS}
   query GetExpenses {
     expenses {
-      id
-      title
-      amount
-      currency
-      createdAt
-      transactionDate
-      category
-      expenseGroup
-      split
-      groupId
-      createdByUserId
-      paidByUserId
-      isPrivate
-      flow
-      splitDetails {
-        participant
-        ratio
-        amount
-      }
+      ...ExpenseFields
     }
   }
 `;
 
 export const ADD_EXPENSE = gql`
+  ${EXPENSE_FIELDS}
   mutation AddExpense($input: AddExpenseInput!) {
     addExpense(input: $input) {
-      id
-      title
-      amount
-      currency
-      createdAt
-      transactionDate
-      category
-      expenseGroup
-      split
-      groupId
-      createdByUserId
-      paidByUserId
-      isPrivate
-      flow
-      splitDetails {
-        participant
-        ratio
-        amount
-      }
+      ...ExpenseFields
     }
   }
 `;
 
 export const UPDATE_EXPENSE = gql`
+  ${EXPENSE_FIELDS}
   mutation UpdateExpense($input: UpdateExpenseInput!) {
     updateExpense(input: $input) {
-      id
-      title
-      amount
-      currency
-      createdAt
-      transactionDate
-      category
-      expenseGroup
-      split
-      groupId
-      createdByUserId
-      paidByUserId
-      isPrivate
-      flow
-      splitDetails {
-        participant
-        ratio
-        amount
-      }
+      ...ExpenseFields
     }
   }
 `;

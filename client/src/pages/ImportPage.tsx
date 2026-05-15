@@ -1274,7 +1274,7 @@ export const ImportPage = (): JSX.Element => {
   const { user } = useAuth();
   const { data: expensesData } = useQuery<GetExpensesResponse>(GET_EXPENSES);
   const { data: groupsData } = useQuery<{ groups: GroupSummary[] }>(GET_GROUPS);
-  const { addExpense, isMutating } = useExpenseActions(GET_EXPENSES);
+  const { addExpense, isMutating } = useExpenseActions();
   const [rows, setRows] = useState<ImportedRow[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
   const [importInfo, setImportInfo] = useState<string | null>(null);

@@ -32,9 +32,52 @@ export const getTotalAmount = (expenses: Expense[]): number => {
   return expenses.reduce((sum, expense) => sum + expense.amount, 0);
 };
 
-export const getDashboardStats = (totalAmount: number): DashboardStat[] => {
-  const personalAmount = totalAmount * 0.65;
-  const sharedAmount = totalAmount * 0.35;
+type GroupNameInput = {
+  name: string;
+};
+
+const isCurrentMonthExpense = (expense: Expense): boolean => {
+  const date = new Date(expense.transactionDate);
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+};
+
+const formatPercentOfTotal = (part: number, total: number): string => {
+  if (total <= 0) {
+    return '0% of total';
+  }
+  return `${Math.round((part / total) * 100)}% of total`;
+};
+
+const formatActiveGroupsHint = (groups: GroupNameInput[]): string => {
+  if (groups.length === 0) {
+    return 'No households yet';
+  }
+
+  const names = groups.map((group) => group.name.trim()).filter((name) => name.length > 0);
+  if (names.length === 0) {
+    return 'No households yet';
+  }
+
+  const maxNames = 3;
+  if (names.length <= maxNames) {
+    return names.join(', ');
+  }
+
+  const shown = names.slice(0, maxNames).join(', ');
+  const remaining = names.length - maxNames;
+  return `${shown}, +${remaining} more`;
+};
+
+export const getDashboardStats = (expenses: Expense[], groups: GroupNameInput[]): DashboardStat[] => {
+  const monthExpenses = expenses.filter(isCurrentMonthExpense);
+  const totalAmount = getTotalAmount(monthExpenses);
+  const personalAmount = monthExpenses
+    .filter((expense) => !expense.groupId)
+    .reduce((sum, expense) => sum + expense.amount, 0);
+  const sharedAmount = monthExpenses
+    .filter((expense) => Boolean(expense.groupId))
+    .reduce((sum, expense) => sum + expense.amount, 0);
 
   return [
     {
@@ -45,17 +88,17 @@ export const getDashboardStats = (totalAmount: number): DashboardStat[] => {
     {
       label: 'Personal Expenses',
       value: formatAppCurrency(personalAmount),
-      hint: '65% of total',
+      hint: formatPercentOfTotal(personalAmount, totalAmount),
     },
     {
       label: 'Shared Expenses',
       value: formatAppCurrency(sharedAmount),
-      hint: '35% of total',
+      hint: formatPercentOfTotal(sharedAmount, totalAmount),
     },
     {
       label: 'Active Groups',
-      value: '3',
-      hint: 'Household, Utilities, Food',
+      value: String(groups.length),
+      hint: formatActiveGroupsHint(groups),
     },
   ];
 };

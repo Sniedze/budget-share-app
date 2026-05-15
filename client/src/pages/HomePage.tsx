@@ -11,7 +11,6 @@ import {
   buildMerchantSuggestions,
   getBreakdownData,
   getDashboardStats,
-  getTotalAmount,
   getTrendData,
   ExpenseForm,
   outgoingExpensesOnly,
@@ -111,7 +110,7 @@ export const HomePage = (): JSX.Element => {
 
   const { data, loading, error } = useQuery<GetExpensesResponse>(GET_EXPENSES);
   const { data: groupsData } = useQuery<{ groups: GroupSummary[] }>(GET_GROUPS);
-  const { addExpense, updateExpense, deleteExpense, isMutating } = useExpenseActions(GET_EXPENSES);
+  const { addExpense, updateExpense, deleteExpense, isMutating } = useExpenseActions();
   const { data: groupTemplatesData } = useQuery<{ groupSplitTemplates: SplitTemplate[] }>(GET_GROUP_SPLIT_TEMPLATES, {
     variables: { groupId: formValues.groupId },
     skip: !formValues.groupId || formValues.split !== 'Shared',
@@ -129,12 +128,18 @@ export const HomePage = (): JSX.Element => {
 
   const expenses = useMemo(() => data?.expenses ?? [], [data]);
   const outgoingExpenses = useMemo(() => outgoingExpensesOnly(expenses), [expenses]);
-  const totalAmount = useMemo(() => getTotalAmount(outgoingExpenses), [outgoingExpenses]);
-  const stats = useMemo(() => getDashboardStats(totalAmount), [totalAmount]);
+  const householdOptions = useMemo(() => groupsData?.groups ?? [], [groupsData?.groups]);
+  const stats = useMemo(
+    () =>
+      getDashboardStats(
+        outgoingExpenses,
+        householdOptions.map((group) => ({ name: group.name })),
+      ),
+    [outgoingExpenses, householdOptions],
+  );
   const trendData = useMemo(() => getTrendData(outgoingExpenses), [outgoingExpenses]);
   const breakdownData = useMemo(() => getBreakdownData(outgoingExpenses), [outgoingExpenses]);
   const monthlyOverview = useMemo(() => getMonthlyOverview(outgoingExpenses), [outgoingExpenses]);
-  const householdOptions = useMemo(() => groupsData?.groups ?? [], [groupsData?.groups]);
   const sortedCategoryOptions = useMemo(
     () => [...DEFAULT_EXPENSE_CATEGORIES].sort((left, right) => left.localeCompare(right)),
     [],
