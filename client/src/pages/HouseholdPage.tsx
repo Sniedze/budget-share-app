@@ -5,6 +5,7 @@ import { AppLayout, Badge, Button, Card, ErrorText, HeaderRow, HeaderText, Muted
 import { AddExpenseModal } from './household/AddExpenseModal';
 import { CreateExpenseGroupModal } from './household/CreateExpenseGroupModal';
 import { CreateHouseholdModal } from './household/CreateHouseholdModal';
+import { PendingInvitationsPanel } from './household/PendingInvitationsPanel';
 import { useHouseholdPageState } from './household/useHouseholdPageState';
 import { formatAppCurrency } from '../format/currency';
 import { splitExpenseTitleForDisplay } from '../format/expenseTitle';
@@ -264,6 +265,7 @@ export const HouseholdPage = (): JSX.Element => {
                 <strong>{activeGroup.members.length}</strong>
               </StatCard>
             </StatGrid>
+            <PendingInvitationsPanel invitations={activeGroup.pendingInvitations ?? []} />
           </HouseholdSummaryCard>
         ) : null}
 

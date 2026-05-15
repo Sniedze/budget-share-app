@@ -26,6 +26,13 @@ export type Group = {
   expenses: GroupExpense[];
   /** Categories from `group_split_templates` for this household. */
   expenseGroupLabels: string[];
+  pendingInvitations: GroupPendingInvitation[];
+};
+
+export type GroupPendingInvitation = {
+  email: string;
+  name: string;
+  emailDeliveryStatus?: InvitationEmailDeliveryStatus;
 };
 
 export type CreateGroupInput = {

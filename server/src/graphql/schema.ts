@@ -62,6 +62,14 @@ export const typeDefs = `#graphql
     expenses: [GroupExpense!]!
     """Expense group names from split templates (may exist before any expense is posted)."""
     expenseGroupLabels: [String!]!
+    """Pending invitees without accounts yet (for the current viewer's households)."""
+    pendingInvitations: [GroupPendingInvitation!]!
+  }
+
+  type GroupPendingInvitation {
+    email: String!
+    name: String!
+    emailDeliveryStatus: InvitationEmailDeliveryStatus
   }
 
   enum GroupInvitationStatus {

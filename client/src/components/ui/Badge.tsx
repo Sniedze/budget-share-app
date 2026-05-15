@@ -1,7 +1,7 @@
 import styled from 'styled-components';
 import { colors, radii } from '../../styles/tokens';
 
-export type BadgeVariant = 'default' | 'accent';
+export type BadgeVariant = 'default' | 'accent' | 'danger';
 
 export const Badge = styled.span<{ $variant?: BadgeVariant }>`
   display: inline-flex;
@@ -10,6 +10,8 @@ export const Badge = styled.span<{ $variant?: BadgeVariant }>`
   border-radius: ${radii.full};
   font-size: 11px;
   font-weight: 600;
-  color: ${({ $variant = 'default' }) => ($variant === 'accent' ? colors.accent : colors.textMuted)};
-  background: ${({ $variant = 'default' }) => ($variant === 'accent' ? colors.sidebarActiveBg : '#f3f4f6')};
+  color: ${({ $variant = 'default' }) =>
+    $variant === 'accent' ? colors.accent : $variant === 'danger' ? '#b91c1c' : colors.textMuted};
+  background: ${({ $variant = 'default' }) =>
+    $variant === 'accent' ? colors.sidebarActiveBg : $variant === 'danger' ? '#fee2e2' : '#f3f4f6'};
 `;

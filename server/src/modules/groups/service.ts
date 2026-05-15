@@ -6,6 +6,7 @@ import type {
   Group,
   GroupInvitation,
   GroupMember,
+  GroupPendingInvitation,
   InvitationEmailDeliveryStatus,
   HouseholdSettlement,
   RecordSettlementPaymentInput,
@@ -464,6 +465,43 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
 
   const templateLabelsByGroupId = await listExpenseGroupLabelsByGroupId(groupRows.map((group) => group.id));
 
+  const groupIds = groupRows.map((group) => group.id);
+  const pendingByGroupId = new Map<number, GroupPendingInvitation[]>();
+  if (groupIds.length > 0) {
+    const [pendingRows] = await db.query<
+      (RowDataPacket & {
+        groupId: number;
+        email: string;
+        name: string;
+        emailDeliveryStatus: string | null;
+      })[]
+    >(
+      `
+        SELECT
+          gi.group_id AS groupId,
+          gi.email,
+          gm.name,
+          gi.email_delivery_status AS emailDeliveryStatus
+        FROM group_invitations gi
+        INNER JOIN group_members gm
+          ON gm.group_id = gi.group_id AND gm.email = gi.email
+        WHERE gi.group_id IN (?)
+          AND gi.status = 'Pending'
+        ORDER BY gi.invited_at DESC, gi.id DESC
+      `,
+      [groupIds],
+    );
+    for (const row of pendingRows) {
+      const existing = pendingByGroupId.get(row.groupId) ?? [];
+      existing.push({
+        email: row.email,
+        name: row.name,
+        emailDeliveryStatus: mapInvitationEmailDeliveryStatus(row.emailDeliveryStatus),
+      });
+      pendingByGroupId.set(row.groupId, existing);
+    }
+  }
+
   return groupRows.map((row) => ({
     ...(totalsByGroupId.get(row.id) ?? { totalSpent: 0, yourShare: 0 }),
     id: String(row.id),
@@ -472,6 +510,7 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
     members: membersByGroupId.get(row.id) ?? [],
     expenses: expensesByGroupId.get(row.id) ?? [],
     expenseGroupLabels: templateLabelsByGroupId.get(row.id) ?? [],
+    pendingInvitations: pendingByGroupId.get(row.id) ?? [],
   }));
 };
 
@@ -608,6 +647,11 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
     yourShare: 0,
     expenses: [],
     expenseGroupLabels: [],
+    pendingInvitations: pendingInvitees.map((member) => ({
+      email: member.email,
+      name: member.name,
+      emailDeliveryStatus: undefined,
+    })),
   };
 };
 
@@ -833,6 +877,14 @@ export const updateGroup = async (
     yourShare: 0,
     expenses: [],
     expenseGroupLabels: templateLabelsByGroupId.get(numericGroupId) ?? [],
+    pendingInvitations: pendingInvitationEmailsForNotify.map((email) => {
+      const member = members.find((entry) => entry.email === email);
+      return {
+        email,
+        name: member?.name ?? email,
+        emailDeliveryStatus: undefined,
+      };
+    }),
   };
 };
 
