@@ -10,12 +10,8 @@ import {
   filterExpensesInMonth,
   filterIncomingExpensesInMonth,
   filterOutgoingExpensesInMonth,
-  loadAssumptions,
-  loadMonthBudgets,
   monthlyActualTotals,
   projectedYearEndBalance,
-  saveAssumptions,
-  saveMonthBudgets,
   suggestMonthBudgetsFromPreviousMonth,
   sumByCategory,
   sumExpenseAmounts,
@@ -26,6 +22,7 @@ import {
   ytdIncomingThrough,
   ytdIncomeFromMonthlyEstimate,
 } from './selectors';
+import { loadAssumptions, loadMonthBudgets, saveAssumptions, saveMonthBudgets } from './storage';
 import { CATEGORY_DOT_COLORS, DEFAULT_CATEGORY_OPTIONS } from './budgetPageStyles';
 import type { CategoryTrendRow, MonthlyBreakdownRow, MonthlyBreakdownTotals } from './budgetPageTypes';
 import {

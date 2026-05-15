@@ -74,6 +74,7 @@ import {
   TrendTag,
   useBudgetPageState,
   ytdRangeLabel,
+  type BudgetAssumptions,
 } from '../features/budget';
 import { formatAppCurrency } from '../format/currency';
 import { spacing } from '../styles/tokens';
@@ -629,7 +630,10 @@ export const BudgetPage = (): JSX.Element => {
                       step="0.01"
                       value={draftAssumptions.startingBalance}
                       onChange={(e) =>
-                        setDraftAssumptions((p) => ({ ...p, startingBalance: Number(e.target.value) }))
+                        setDraftAssumptions((p: BudgetAssumptions) => ({
+                          ...p,
+                          startingBalance: Number(e.target.value),
+                        }))
                       }
                     />
                   </label>
@@ -642,7 +646,10 @@ export const BudgetPage = (): JSX.Element => {
                       step="0.01"
                       value={draftAssumptions.monthlyIncomeEstimate}
                       onChange={(e) =>
-                        setDraftAssumptions((p) => ({ ...p, monthlyIncomeEstimate: Number(e.target.value) }))
+                        setDraftAssumptions((p: BudgetAssumptions) => ({
+                          ...p,
+                          monthlyIncomeEstimate: Number(e.target.value),
+                        }))
                       }
                     />
                   </label>
