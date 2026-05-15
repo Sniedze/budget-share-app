@@ -43,14 +43,61 @@ const isStrictAuthGraphqlOperation = (req: Request): boolean => {
   return false;
 };
 
+const normalizeRateLimitEmail = (raw: unknown): string | null => {
+  if (typeof raw !== 'string') {
+    return null;
+  }
+  const email = raw.trim().toLowerCase();
+  if (email.length === 0 || email.length > 254) {
+    return null;
+  }
+  return email;
+};
+
+/** Prefer per-email keys for login/register so distributed IPs cannot bypass IP caps. */
+export const extractLoginRegisterEmail = (req: Request): string | null => {
+  const body = req.body as
+    | {
+        variables?: { input?: { email?: unknown } };
+        query?: string;
+      }
+    | undefined;
+  if (!body) {
+    return null;
+  }
+
+  const fromVariables = normalizeRateLimitEmail(body.variables?.input?.email);
+  if (fromVariables) {
+    return fromVariables;
+  }
+
+  if (typeof body.query !== 'string') {
+    return null;
+  }
+
+  const match = body.query.match(/email\s*:\s*"([^"]+)"/i);
+  return match ? normalizeRateLimitEmail(match[1]) : null;
+};
+
+const rateLimitKey = (req: Request): string => {
+  if (isStrictAuthGraphqlOperation(req)) {
+    const email = extractLoginRegisterEmail(req);
+    if (email) {
+      return `auth-email:${email}`;
+    }
+  }
+  return req.ip ?? 'unknown';
+};
+
 /**
  * Limits abuse of the single GraphQL HTTP endpoint. Login/register get a
- * tighter per-IP budget; everything else (including refreshSession) uses a
- * higher cap for normal SPA usage.
+ * tighter per-email budget (fallback per-IP when email is missing); everything
+ * else (including refreshSession) uses a higher cap for normal SPA usage.
  */
 export const graphqlRateLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   limit: (req) => (isStrictAuthGraphqlOperation(req) ? AUTH_RATE_LIMIT : GENERAL_RATE_LIMIT),
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS',

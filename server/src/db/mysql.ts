@@ -128,6 +128,19 @@ export const ensureSchema = async (): Promise<void> => {
     `);
 
   await db.execute(`
+    CREATE TABLE IF NOT EXISTS user_refresh_sessions (
+    id CHAR(36) NOT NULL PRIMARY KEY,
+    user_id INT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_user_refresh_sessions_user
+      FOREIGN KEY (user_id) REFERENCES users(id)
+      ON DELETE CASCADE
+  )
+    `);
+
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS audit_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     actor_user_id INT NULL,
@@ -359,6 +372,8 @@ export const migrateSchema = async (): Promise<void> => {
   await ensureIndex('group_invitations', 'idx_group_invitations_email_status', 'email, status');
   await ensureIndex('settlement_payments', 'idx_settlement_payments_group_settled', 'group_id, settled_at DESC');
   await ensureIndex('audit_logs', 'idx_audit_logs_entity', 'entity_type, entity_id');
+  await ensureIndex('user_refresh_sessions', 'idx_user_refresh_sessions_user', 'user_id');
+  await ensureIndex('user_refresh_sessions', 'idx_user_refresh_sessions_expires', 'expires_at');
 
   const { backfillAcceptedInvitationsForExistingMembers } = await import(
     '../modules/groups/invitations.js'

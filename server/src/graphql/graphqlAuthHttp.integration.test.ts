@@ -79,6 +79,48 @@ const defaultOrigin =
     );
   });
 
+  it('logout on one device does not revoke another device session', async () => {
+    const email = `it-multi-${Date.now()}@example.com`;
+    const password = 'password12';
+    const registerInput = {
+      query: `mutation R($input: RegisterInput!) { register(input: $input) { user { id } } }`,
+      variables: { input: { email, password, fullName: 'Multi Device' } },
+    };
+
+    const deviceA = request.agent(bundle.app);
+    const deviceB = request.agent(bundle.app);
+
+    await deviceA.post('/graphql').set('Origin', defaultOrigin).send(registerInput);
+    await deviceB
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({
+        query: `mutation L($input: LoginInput!) { login(input: $input) { user { id } } }`,
+        variables: { input: { email, password, rememberMe: true } },
+      });
+
+    const logoutA = await deviceA
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({ query: `mutation { logout }` });
+    assert.equal(logoutA.status, 200);
+    assert.equal(logoutA.body.data.logout, true);
+
+    const refreshB = await deviceB
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({ query: `mutation { refreshSession(input: {}) { user { email } } }` });
+    assert.equal(refreshB.status, 200);
+    assert.equal(refreshB.body.data.refreshSession.user.email, email.toLowerCase());
+
+    const refreshA = await deviceA
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({ query: `mutation { refreshSession(input: {}) { user { id } } }` });
+    assert.equal(refreshA.status, 200);
+    assert.ok(refreshA.body.errors?.length, 'logged-out device refresh should fail');
+  });
+
   it('rejects cookie-authenticated mutation without allowlisted Origin (CSRF)', async () => {
     const agent = request.agent(bundle.app);
     const email = `it-csrf-${Date.now()}@example.com`;

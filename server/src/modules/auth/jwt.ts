@@ -11,6 +11,8 @@ export type RefreshTokenClaims = {
   email: string;
   type: 'refresh';
   rtv: number;
+  /** Per-device session id; omitted on legacy tokens issued before session table rollout. */
+  sid?: string;
 };
 
 const isDevelopment = (process.env.NODE_ENV ?? 'development') === 'development';
@@ -41,8 +43,19 @@ export const signAccessToken = (userId: string, email: string): string => {
   return jwt.sign(payload, ACCESS_TOKEN_SECRET, { expiresIn: ACCESS_TOKEN_TTL_SECONDS });
 };
 
-export const signRefreshToken = (userId: string, email: string, refreshTokenVersion: number): string => {
-  const payload: RefreshTokenClaims = { userId, email, type: 'refresh', rtv: refreshTokenVersion };
+export const signRefreshToken = (
+  userId: string,
+  email: string,
+  refreshTokenVersion: number,
+  sessionId: string,
+): string => {
+  const payload: RefreshTokenClaims = {
+    userId,
+    email,
+    type: 'refresh',
+    rtv: refreshTokenVersion,
+    sid: sessionId,
+  };
   return jwt.sign(payload, REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_TTL_SECONDS });
 };
 
@@ -73,6 +86,9 @@ const verifyRefreshWithSecret = (token: string, secret: string): RefreshTokenCla
       return null;
     }
     if (typeof claims.rtv !== 'number' || !Number.isFinite(claims.rtv) || claims.rtv < 0) {
+      return null;
+    }
+    if (claims.sid !== undefined && (typeof claims.sid !== 'string' || claims.sid.trim().length === 0)) {
       return null;
     }
     return claims;

@@ -12,6 +12,13 @@ import {
   stripControlCharacters,
   validateEmailFormat,
 } from './validation.js';
+import {
+  createRefreshSession,
+  isRefreshSessionActive,
+  revokeAllRefreshSessions,
+  revokeRefreshSession,
+  touchRefreshSession,
+} from './refreshSessions.js';
 
 const SALT_ROUNDS = 12;
 
@@ -33,12 +40,12 @@ const toUser = (row: UserRow): User => ({
   createdAt: row.created_at,
 });
 
-const toAuthPayload = (row: UserRow): AuthPayload => {
+const issueAuthPayload = async (row: UserRow, sessionId: string): Promise<AuthPayload> => {
   const user = toUser(row);
   const version = Number(row.refresh_token_version) || 0;
   return {
     accessToken: signAccessToken(user.id, user.email),
-    refreshToken: signRefreshToken(user.id, user.email, version),
+    refreshToken: signRefreshToken(user.id, user.email, version, sessionId),
     user,
   };
 };
@@ -98,7 +105,8 @@ export const register = async (input: RegisterInput): Promise<AuthPayload> => {
     [email],
   );
 
-  return toAuthPayload(userRow);
+  const sessionId = await createRefreshSession(String(userRow.id));
+  return issueAuthPayload(userRow, sessionId);
 };
 
 export const login = async (input: LoginInput): Promise<AuthPayload> => {
@@ -115,7 +123,34 @@ export const login = async (input: LoginInput): Promise<AuthPayload> => {
     throw appError(ErrorCode.UNAUTHENTICATED, 'Invalid email or password.');
   }
 
-  return toAuthPayload(user);
+  const sessionId = await createRefreshSession(String(user.id));
+  return issueAuthPayload(user, sessionId);
+};
+
+const assertRefreshTokenUsable = async (
+  claims: NonNullable<ReturnType<typeof verifyRefreshToken>>,
+  user: UserRow,
+): Promise<string> => {
+  const version = Number(user.refresh_token_version) || 0;
+  if (claims.rtv !== version) {
+    throw appError(ErrorCode.UNAUTHENTICATED, 'Invalid refresh token.');
+  }
+
+  const sessionId = claims.sid?.trim();
+  if (!sessionId) {
+    return createRefreshSession(String(user.id));
+  }
+
+  const active = await isRefreshSessionActive(sessionId, String(user.id));
+  if (!active) {
+    throw appError(ErrorCode.UNAUTHENTICATED, 'Invalid refresh token.');
+  }
+
+  const touched = await touchRefreshSession(sessionId, String(user.id));
+  if (!touched) {
+    throw appError(ErrorCode.UNAUTHENTICATED, 'Invalid refresh token.');
+  }
+  return sessionId;
 };
 
 export const refreshSession = async (refreshToken: string): Promise<AuthPayload> => {
@@ -137,14 +172,25 @@ export const refreshSession = async (refreshToken: string): Promise<AuthPayload>
     throw appError(ErrorCode.NOT_FOUND, 'User not found.');
   }
 
-  const version = Number(user.refresh_token_version) || 0;
-  if (claims.rtv !== version) {
-    throw appError(ErrorCode.UNAUTHENTICATED, 'Invalid refresh token.');
-  }
-
-  return toAuthPayload(user);
+  const sessionId = await assertRefreshTokenUsable(claims, user);
+  return issueAuthPayload(user, sessionId);
 };
 
+/** Revokes only the refresh session tied to the given token (current device). */
+export const logoutSession = async (refreshToken: string | null | undefined): Promise<void> => {
+  if (!refreshToken?.trim()) {
+    return;
+  }
+
+  const claims = verifyRefreshToken(refreshToken);
+  if (!claims?.sid?.trim()) {
+    return;
+  }
+
+  await revokeRefreshSession(claims.sid.trim(), claims.userId);
+};
+
+/** Invalidates every refresh session for the user (password change, account compromise). */
 export const revokeRefreshTokens = async (userId: string): Promise<void> => {
   await db.execute(
     `
@@ -154,6 +200,7 @@ export const revokeRefreshTokens = async (userId: string): Promise<void> => {
     `,
     [userId],
   );
+  await revokeAllRefreshSessions(userId);
 };
 
 export const getUserById = async (userId: string): Promise<User | null> => {

@@ -19,12 +19,7 @@ import {
   updateGroup,
   upsertSplitTemplate,
 } from '../modules/groups/service.js';
-import {
-  login,
-  refreshSession,
-  register,
-  revokeRefreshTokens,
-} from '../modules/auth/service.js';
+import { login, logoutSession, refreshSession, register } from '../modules/auth/service.js';
 import { clearSessionCookies, getRefreshTokenFromCookies, setSessionCookies } from '../modules/auth/cookies.js';
 import { appError, ErrorCode } from './appError.js';
 import type {
@@ -119,9 +114,8 @@ export const resolvers = {
       return { user: payload.user };
     },
     logout: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
-      if (context.currentUser) {
-        await revokeRefreshTokens(context.currentUser.id);
-      }
+      const refreshToken = getRefreshTokenFromCookies(context.req);
+      await logoutSession(refreshToken);
       clearSessionCookies(context.res);
       return true;
     },

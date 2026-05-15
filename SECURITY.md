@@ -24,12 +24,12 @@
 - JWT secrets must be explicitly set outside development:
   - `JWT_ACCESS_SECRET`
   - `JWT_REFRESH_SECRET`
-- **Sessions:** Access and refresh JWTs are issued as **httpOnly** cookies on the `/graphql` path (`SameSite=Lax`, `Secure` in production). The browser must send `credentials: 'include'` on API requests (the SPA does this). **Logout** increments `users.refresh_token_version` so existing refresh JWTs stop working; access JWTs remain valid until they expire (short TTL by default).
+- **Sessions:** Access and refresh JWTs are issued as **httpOnly** cookies on the `/graphql` path (`SameSite=Lax`, `Secure` in production). The browser must send `credentials: 'include'` on API requests (the SPA does this). Each login/register creates a row in `user_refresh_sessions`; refresh JWTs carry a session id (`sid`). **Logout** deletes only that session (other browsers stay signed in). `users.refresh_token_version` is still available for future “log out everywhere” / password-change flows. Access JWTs remain valid until they expire (short TTL by default).
 - **CORS:** The API uses an allowlist (`ALLOWED_ORIGINS`, comma-separated). If unset, only common **local** dev origins are allowed. Production deployments **must** set `ALLOWED_ORIGINS` to the real web app URL(s) and use HTTPS. `credentials: true` is enabled for cookie-based auth; keep origins explicit.
 - **CSRF:** Cookie-authenticated GraphQL **mutations** require an allowed `Origin` header (or `Referer` origin fallback). Requests with session cookies from non-allowlisted origins are rejected with HTTP 403.
 - **Request size:** JSON bodies are capped via `JSON_BODY_LIMIT` (default `512kb`) to limit oversized GraphQL payloads.
 - **Query abuse guard:** Apollo `maxRecursiveSelections` is enabled via `GRAPHQL_MAX_RECURSIVE_SELECTIONS` (default `30`) to curb deeply-recursive GraphQL operations.
-- **Rate limiting:** GraphQL uses a 15-minute window with separate caps for auth operations (`GRAPHQL_RATE_LIMIT_AUTH`, default `100`) and general operations (`GRAPHQL_RATE_LIMIT_GENERAL`, default `800`).
+- **Rate limiting:** GraphQL uses a 15-minute window with separate caps for auth operations (`GRAPHQL_RATE_LIMIT_AUTH`, default `100`) and general operations (`GRAPHQL_RATE_LIMIT_GENERAL`, default `800`). Login/register limits are keyed by **normalized email** when present (fallback to client IP).
 
 ## Household invitation email
 
