@@ -15,6 +15,7 @@ export { AuthPageShell } from './AuthPageShell';
 export { Button } from './Button';
 export { Card } from './Card';
 export { Input } from './Input';
+export { PageLoading } from './PageLoading';
 export {
  AppLayout, HeaderRow, HeaderText, PageSurface 
 } from './Layout';

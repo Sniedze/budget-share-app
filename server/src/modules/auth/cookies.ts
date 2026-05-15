@@ -3,6 +3,9 @@ import { ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS } from './jwt.js';
 
 export const ACCESS_COOKIE_NAME = process.env.AUTH_ACCESS_COOKIE_NAME ?? 'budgetshare_access';
 export const REFRESH_COOKIE_NAME = process.env.AUTH_REFRESH_COOKIE_NAME ?? 'budgetshare_refresh';
+/** Non-httpOnly hint so the SPA can skip `me` when no session is likely (not a secret). */
+export const SESSION_HINT_COOKIE_NAME =
+  process.env.AUTH_SESSION_HINT_COOKIE_NAME ?? 'budgetshare_session';
 
 /** Cookies are scoped to the GraphQL path so they are not sent to /health. */
 const COOKIE_PATH = '/graphql';
@@ -10,6 +13,11 @@ const COOKIE_PATH = '/graphql';
 const baseCookieFlags = (): string => {
   const secure = process.env.NODE_ENV === 'production';
   return `Path=${COOKIE_PATH}; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
+};
+
+const sessionHintFlags = (): string => {
+  const secure = process.env.NODE_ENV === 'production';
+  return `Path=/; SameSite=Lax${secure ? '; Secure' : ''}`;
 };
 
 const parseCookieHeader = (header: string | undefined): Record<string, string> => {
@@ -70,10 +78,22 @@ export const setSessionCookies = (
       `${REFRESH_COOKIE_NAME}=${encodeURIComponent(refreshToken)}; ${flags}`,
     );
   }
+  setSessionHintCookie(res);
+};
+
+export const setSessionHintCookie = (res: Response): void => {
+  const flags = sessionHintFlags();
+  const maxAge = REFRESH_TOKEN_TTL_SECONDS;
+  res.appendHeader(
+    'Set-Cookie',
+    `${SESSION_HINT_COOKIE_NAME}=1; ${flags}; Max-Age=${maxAge}`,
+  );
 };
 
 export const clearSessionCookies = (res: Response): void => {
   const flags = baseCookieFlags();
   res.appendHeader('Set-Cookie', `${ACCESS_COOKIE_NAME}=; ${flags}; Max-Age=0`);
   res.appendHeader('Set-Cookie', `${REFRESH_COOKIE_NAME}=; ${flags}; Max-Age=0`);
+  const hintFlags = sessionHintFlags();
+  res.appendHeader('Set-Cookie', `${SESSION_HINT_COOKIE_NAME}=; ${hintFlags}; Max-Age=0`);
 };

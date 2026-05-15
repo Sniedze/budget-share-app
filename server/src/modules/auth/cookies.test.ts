@@ -4,6 +4,7 @@ import type { Request, Response } from 'express';
 import {
   ACCESS_COOKIE_NAME,
   REFRESH_COOKIE_NAME,
+  SESSION_HINT_COOKIE_NAME,
   clearSessionCookies,
   getAccessTokenFromCookies,
   getRefreshTokenFromCookies,
@@ -51,7 +52,7 @@ describe('auth cookies', () => {
   it('setSessionCookies with remember sets Max-Age on access and refresh', () => {
     const res = createCaptureRes();
     setSessionCookies(res, 'access-token', 'refresh-token', { remember: true });
-    assert.equal(res.setCookies.length, 2);
+    assert.equal(res.setCookies.length, 3);
     assert.match(res.setCookies[0], new RegExp(`^${ACCESS_COOKIE_NAME}=access-token`));
     assert.match(res.setCookies[0], new RegExp(`Max-Age=${ACCESS_TOKEN_TTL_SECONDS}`));
     assert.match(res.setCookies[0], /Path=\/graphql/);
@@ -64,7 +65,7 @@ describe('auth cookies', () => {
   it('setSessionCookies without remember omits Max-Age on refresh (session cookie)', () => {
     const res = createCaptureRes();
     setSessionCookies(res, 'a', 'r', { remember: false });
-    assert.equal(res.setCookies.length, 2);
+    assert.equal(res.setCookies.length, 3);
     assert.match(res.setCookies[0], new RegExp(`Max-Age=${ACCESS_TOKEN_TTL_SECONDS}`));
     assert.match(res.setCookies[1], new RegExp(`^${REFRESH_COOKIE_NAME}=r`));
     assert.doesNotMatch(res.setCookies[1], /Max-Age=/);
@@ -73,10 +74,12 @@ describe('auth cookies', () => {
   it('clearSessionCookies clears both cookies with Max-Age=0', () => {
     const res = createCaptureRes();
     clearSessionCookies(res);
-    assert.equal(res.setCookies.length, 2);
+    assert.equal(res.setCookies.length, 3);
     assert.match(res.setCookies[0], new RegExp(`^${ACCESS_COOKIE_NAME}=;`));
     assert.match(res.setCookies[0], /Max-Age=0/);
     assert.match(res.setCookies[1], new RegExp(`^${REFRESH_COOKIE_NAME}=;`));
     assert.match(res.setCookies[1], /Max-Age=0/);
+    assert.match(res.setCookies[2], new RegExp(`^${SESSION_HINT_COOKIE_NAME}=;`));
+    assert.match(res.setCookies[2], /Max-Age=0/);
   });
 });

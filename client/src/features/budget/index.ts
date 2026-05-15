@@ -1,3 +1,6 @@
+export type { CategoryTrendRow, MonthlyBreakdownRow, MonthlyBreakdownTotals } from './budgetPageTypes';
+export * from './budgetPageStyles';
+export { useBudgetPageState } from './useBudgetPageState';
 export {
   loadAssumptions,
   loadMonthBudgets,

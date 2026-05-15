@@ -191,18 +191,10 @@ const loadMemberGroupIds = async (userEmail: string): Promise<Set<number>> => {
   return new Set(rows.map((row) => Number(row.group_id)));
 };
 
-const isGroupMember = async (groupId: number, userEmail: string): Promise<boolean> => {
-  const [rows] = await db.query<RowDataPacket[]>(
-    `
-      SELECT id
-      FROM group_members
-      WHERE group_id = ?
-        AND (email = ?)
-      LIMIT 1
-    `,
-    [groupId, userEmail],
-  );
-  return rows.length > 0;
+const assertGroupMember = (groupId: number, memberGroupIds: Set<number>): void => {
+  if (!memberGroupIds.has(groupId)) {
+    throw appError(ErrorCode.FORBIDDEN, 'You are not a member of this group.');
+  }
 };
 
 const canAccessExpense = (row: ExpenseRow, userId: string, memberGroupIds: Set<number>): boolean => {
@@ -298,8 +290,9 @@ export const createExpense = async (
   const splitDetails = toStoredSplitDetails(input.amount, sourceSplitDetails);
   validateSplitConsistency(split, splitDetails, true);
   const splitDetailsJson = splitDetails.length > 0 ? JSON.stringify(splitDetails) : null;
-  if (groupId !== null && !(await isGroupMember(groupId, actor.email))) {
-    throw appError(ErrorCode.FORBIDDEN, 'You are not a member of this group.');
+  const memberGroupIds = await loadMemberGroupIds(actor.email);
+  if (groupId !== null) {
+    assertGroupMember(groupId, memberGroupIds);
   }
   const paidByUserId = input.paidByUserId ? Number(input.paidByUserId) : Number(actor.userId);
   const isPrivate = flow === 'Incoming' ? false : groupId !== null && Boolean(input.isPrivate);
@@ -401,7 +394,8 @@ export const deleteExpense = async (id: string, actor: { userId: string; email: 
       throw appError(ErrorCode.FORBIDDEN, 'Not authorized to delete this expense.');
     }
   } else {
-    if (!(await isGroupMember(row.group_id, actor.email))) {
+    const memberGroupIds = await loadMemberGroupIds(actor.email);
+    if (!memberGroupIds.has(row.group_id)) {
       logAuthzDenied('expense_delete_denied', { expenseId: id, userId: actor.userId, reason: 'not_group_member' });
       throw appError(ErrorCode.FORBIDDEN, 'Not authorized to delete this expense.');
     }
@@ -457,11 +451,12 @@ export const updateExpense = async (
     return null;
   }
 
+  const memberGroupIds = await loadMemberGroupIds(actor.email);
   const existingGroupId = existing.group_id;
   const canEdit =
     existingGroupId === null
       ? existing.created_by_user_id !== null && String(existing.created_by_user_id) === actor.userId
-      : await isGroupMember(existingGroupId, actor.email);
+      : memberGroupIds.has(existingGroupId);
   if (!canEdit) {
     logAuthzDenied('expense_update_denied', { expenseId: input.id, userId: actor.userId, reason: 'no_edit_access' });
     throw appError(ErrorCode.FORBIDDEN, 'Not authorized to update this expense.');
@@ -510,8 +505,8 @@ export const updateExpense = async (
     }
   }
 
-  if (nextGroupId !== null && !(await isGroupMember(nextGroupId, actor.email))) {
-    throw appError(ErrorCode.FORBIDDEN, 'You are not a member of this group.');
+  if (nextGroupId !== null) {
+    assertGroupMember(nextGroupId, memberGroupIds);
   }
   const nextPaidByUserId = input.paidByUserId ? Number(input.paidByUserId) : existing.paid_by_user_id;
   const nextIsPrivate =

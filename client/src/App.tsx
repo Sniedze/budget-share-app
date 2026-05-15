@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { PageLoading } from './components/ui';
 import { useAuth } from './features/auth';
 
 const HouseholdPage = lazy(() =>
@@ -27,7 +28,7 @@ const RequireAuth = ({ children }: { children: JSX.Element }): JSX.Element => {
   const location = useLocation();
   const { isAuthenticated, isInitializing } = useAuth();
   if (isInitializing) {
-    return <div>Loading...</div>;
+    return <PageLoading />;
   }
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
@@ -40,7 +41,7 @@ const PublicOnly = ({ children }: { children: JSX.Element }): JSX.Element => {
   const from = (location.state as { from?: { pathname?: string } } | undefined)?.from?.pathname ?? '/';
   const { isAuthenticated, isInitializing } = useAuth();
   if (isInitializing) {
-    return <div>Loading...</div>;
+    return <PageLoading />;
   }
   if (isAuthenticated) {
     return <Navigate to={from} replace />;
@@ -50,7 +51,7 @@ const PublicOnly = ({ children }: { children: JSX.Element }): JSX.Element => {
 
 const App = (): JSX.Element => {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<PageLoading />}>
       <Routes>
         <Route
           path="/login"

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { LOGIN, LOGOUT, ME, REGISTER } from './graphql';
+import { hasSessionHintCookie } from './sessionHint';
 import { clearStoredTokens } from './storage';
 import type { AuthUser } from './types';
 
@@ -47,6 +48,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
   } = useQuery<MeQueryData>(ME, {
     fetchPolicy: 'network-only',
     errorPolicy: 'all',
+    skip: !hasSessionHintCookie(),
   });
   useEffect(() => {
     if (meData) {
