@@ -17,6 +17,7 @@ import {
   listSplitTemplates,
   recordSettlementPayment,
   updateGroup,
+  deleteExpenseGroup,
   upsertSplitTemplate,
 } from '../modules/groups/service.js';
 import { login, logoutSession, refreshSession, register } from '../modules/auth/service.js';
@@ -158,6 +159,14 @@ export const resolvers = {
     ) => {
       const user = requireAuth(context);
       return declineExpenseGroupParticipation(args.groupId, args.category, user.email);
+    },
+    deleteExpenseGroup: async (
+      _parent: unknown,
+      args: { groupId: string; category: string },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      return deleteExpenseGroup(args.groupId, args.category, user.email);
     },
   },
 };

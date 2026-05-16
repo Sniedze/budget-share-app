@@ -307,14 +307,16 @@ export const ExpenseForm = ({
             value={split}
             onChange={onInputChange}
           >
-            <option value="Personal">Personal</option>
-            <option value="Shared">Shared</option>
-            <option value="Custom">One-time custom split</option>
+            <option value="Personal">Personal only (not in a household)</option>
+            <option value="Shared">Shared (household)</option>
+            <option value="Custom">One-time custom split (not in a household)</option>
           </Input>
         </FieldGroup>
       </ModeRow>
       {split === 'Personal' ? (
-        <MutedText>Personal expense for your own tracking.</MutedText>
+        <MutedText>
+          Tracked on this page only. To show an expense on the Household page, choose Shared and pick a household.
+        </MutedText>
       ) : null}
 
       {split === 'Shared' ? (

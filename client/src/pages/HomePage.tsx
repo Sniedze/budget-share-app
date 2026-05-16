@@ -1,5 +1,5 @@
 import { useQuery } from '@apollo/client/react';
-import { ChangeEvent, FormEvent, Suspense, lazy, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { MonthlyOverviewSection, RecentExpensesSection, StatsSection } from '../components/sections';
 import { Sidebar } from '../components/sections/Sidebar';
@@ -9,6 +9,7 @@ import {
   DEFAULT_EXPENSE_CATEGORIES,
   GET_EXPENSES,
   buildMerchantSuggestions,
+  getMerchantSuggestionPatch,
   getBreakdownData,
   getDashboardStats,
   getTrendData,
@@ -111,6 +112,7 @@ export const HomePage = (): JSX.Element => {
   const { data, loading, error } = useQuery<GetExpensesResponse>(GET_EXPENSES);
   const { data: groupsData } = useQuery<{ groups: GroupSummary[] }>(GET_GROUPS);
   const { addExpense, updateExpense, deleteExpense, isMutating } = useExpenseActions();
+  const hasDefaultedSharedSplit = useRef(false);
   const { data: groupTemplatesData } = useQuery<{ groupSplitTemplates: SplitTemplate[] }>(GET_GROUP_SPLIT_TEMPLATES, {
     variables: { groupId: formValues.groupId },
     skip: !formValues.groupId || formValues.split !== 'Shared',
@@ -158,6 +160,18 @@ export const HomePage = (): JSX.Element => {
         .sort((left, right) => left.localeCompare(right)),
     [groupTemplatesData?.groupSplitTemplates],
   );
+
+  useEffect(() => {
+    if (hasDefaultedSharedSplit.current || editingId || householdOptions.length === 0) {
+      return;
+    }
+    hasDefaultedSharedSplit.current = true;
+    setFormValues((previous) =>
+      previous.split === 'Personal' && previous.title.trim().length === 0
+        ? { ...previous, split: 'Shared' }
+        : previous,
+    );
+  }, [editingId, householdOptions.length]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -247,19 +261,35 @@ export const HomePage = (): JSX.Element => {
       return;
     }
     const { name, value } = event.target;
-    const normalizedMerchant = value.trim().toLowerCase();
-    const matchedMerchantCategory =
-      name === 'title' ? merchantCategoryLookup.get(normalizedMerchant)?.category : undefined;
-    setFormValues({
-      ...formValues,
-      [name]:
-        name === 'split' ? (value as SplitType) : (value as ExpenseFormValues[keyof ExpenseFormValues]),
-      ...(matchedMerchantCategory ? { category: matchedMerchantCategory } : {}),
-      ...(name === 'split' && value === 'Custom' && formValues.splitDetails.length === 0
-        ? { splitDetails: DEFAULT_CUSTOM_SPLIT_DETAILS }
-        : {}),
-      ...(name === 'split' && value !== 'Shared' ? { groupId: '', expenseGroup: '', isPrivate: false } : {}),
-      ...(name === 'groupId' ? { expenseGroup: '' } : {}),
+    setFormValues((previous) => {
+      const nextValue =
+        name === 'split' ? (value as SplitType) : (value as ExpenseFormValues[keyof ExpenseFormValues]);
+      let next: ExpenseFormValues = {
+        ...previous,
+        [name]: nextValue,
+      };
+
+      if (name === 'title') {
+        const suggestion = merchantCategoryLookup.get(value.trim().toLowerCase());
+        next = {
+          ...next,
+          ...getMerchantSuggestionPatch(suggestion, {
+            defaultSplitDetails: DEFAULT_CUSTOM_SPLIT_DETAILS,
+          }),
+        };
+      }
+
+      if (name === 'split' && value === 'Custom' && next.splitDetails.length === 0) {
+        next = { ...next, splitDetails: DEFAULT_CUSTOM_SPLIT_DETAILS };
+      }
+      if (name === 'split' && value !== 'Shared') {
+        next = { ...next, groupId: '', expenseGroup: '', isPrivate: false };
+      }
+      if (name === 'groupId') {
+        next = { ...next, expenseGroup: '' };
+      }
+
+      return next;
     });
   };
 
@@ -343,7 +373,9 @@ export const HomePage = (): JSX.Element => {
         <HeaderRow>
           <HeaderText>
             <SectionTitle>Personal Finances</SectionTitle>
-            <SectionSubtitle>Overview of your expenses and spending patterns</SectionSubtitle>
+            <SectionSubtitle>
+              Overview of your expenses and spending patterns. Household-linked entries use split type Shared.
+            </SectionSubtitle>
           </HeaderText>
           <UserMenu />
         </HeaderRow>

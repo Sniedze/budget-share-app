@@ -11,6 +11,7 @@ import {
 import {
   CREATE_GROUP,
   DECLINE_EXPENSE_GROUP_PARTICIPATION,
+  DELETE_EXPENSE_GROUP,
   GET_GROUPS,
   GET_GROUP_SPLIT_TEMPLATES,
   UPDATE_GROUP,
@@ -77,6 +78,9 @@ const withEvenRatios = (inputMembers: GroupMember[]): GroupMember[] => {
   });
 };
 
+/** Shows every household expense regardless of expense-group tab. */
+export const ALL_HOUSEHOLD_EXPENSE_GROUPS = '__all__';
+
 export const useHouseholdPageState = () => {
   const { user } = useAuth();
   const { data, loading, error } = useQuery<GroupsQueryData>(GET_GROUPS);
@@ -96,13 +100,17 @@ export const useHouseholdPageState = () => {
     refetchQueries: [{ query: GET_GROUPS }],
     awaitRefetchQueries: true,
   });
-  const [declineExpenseGroupMutation, { loading: decliningExpenseGroup }] = useMutation(
+  const [declineExpenseGroupMutation, { loading: isDecliningExpenseGroup }] = useMutation(
     DECLINE_EXPENSE_GROUP_PARTICIPATION,
     {
       refetchQueries: [{ query: GET_GROUPS }],
       awaitRefetchQueries: true,
     },
   );
+  const [deleteExpenseGroupMutation, { loading: isDeletingExpenseGroup }] = useMutation(DELETE_EXPENSE_GROUP, {
+    refetchQueries: [{ query: GET_GROUPS }],
+    awaitRefetchQueries: true,
+  });
   const groups = useMemo(() => data?.groups ?? [], [data?.groups]);
   const [activeGroupId, setActiveGroupId] = useState('');
   const [isModalOpen, setModalOpen] = useState(false);
@@ -127,11 +135,12 @@ export const useHouseholdPageState = () => {
   const [customTemplateCategory, setCustomTemplateCategory] = useState('');
   const [editingTemplateCategory, setEditingTemplateCategory] = useState<string | null>(null);
   const [templateError, setTemplateError] = useState<string | null>(null);
+  const [templateSuccessMessage, setTemplateSuccessMessage] = useState<string | null>(null);
   const [templateMembers, setTemplateMembers] = useState<Array<{ name: string; selected: boolean; ratio: string }>>(
     [],
   );
   const [templateSplitMode, setTemplateSplitMode] = useState<TemplateSplitMode>('equal');
-  const [activeExpenseGroupCategory, setActiveExpenseGroupCategory] = useState('');
+  const [activeExpenseGroupCategory, setActiveExpenseGroupCategory] = useState(ALL_HOUSEHOLD_EXPENSE_GROUPS);
 
   const activeGroup = useMemo(
     () => groups.find((group) => group.id === activeGroupId) ?? groups[0],
@@ -188,21 +197,42 @@ export const useHouseholdPageState = () => {
     return Math.abs(total - 100) <= 0.01;
   }, [selectedTemplateMembers]);
   const isTemplateSubmitDisabled = savingTemplate || !isTemplateCategoryValid || !areSelectedTemplateRatiosValid;
-  const activeExpenseGroup = useMemo(
-    () =>
-      splitTemplates.find((template) => template.category === activeExpenseGroupCategory) ?? splitTemplates[0],
-    [activeExpenseGroupCategory, splitTemplates],
-  );
+  const isViewingAllExpenseGroups = activeExpenseGroupCategory === ALL_HOUSEHOLD_EXPENSE_GROUPS;
+  const activeExpenseGroup = useMemo(() => {
+    if (isViewingAllExpenseGroups) {
+      return null;
+    }
+    return (
+      splitTemplates.find((template) => template.category === activeExpenseGroupCategory) ?? splitTemplates[0] ?? null
+    );
+  }, [activeExpenseGroupCategory, isViewingAllExpenseGroups, splitTemplates]);
   const activeExpenseGroupExpenses = useMemo(() => {
-    if (!activeGroup || !activeExpenseGroup) {
+    if (!activeGroup) {
       return [];
+    }
+    if (isViewingAllExpenseGroups) {
+      return activeGroup.expenses;
+    }
+    if (!activeExpenseGroup) {
+      return activeGroup.expenses;
     }
     return activeGroup.expenses.filter(
       (expense) =>
         (expense.expenseGroup ?? expense.category).trim().toLowerCase() ===
         activeExpenseGroup.category.trim().toLowerCase(),
     );
-  }, [activeExpenseGroup, activeGroup]);
+  }, [activeExpenseGroup, activeGroup, isViewingAllExpenseGroups]);
+  const expenseCountByGroupCategory = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!activeGroup) {
+      return counts;
+    }
+    for (const expense of activeGroup.expenses) {
+      const key = (expense.expenseGroup ?? expense.category).trim().toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [activeGroup]);
   const activeExpenseGroupTotals = useMemo(
     () =>
       activeExpenseGroupExpenses.reduce(
@@ -272,12 +302,14 @@ export const useHouseholdPageState = () => {
   }, [activeGroupId, groups]);
   useEffect(() => {
     if (!splitTemplates.length) {
-      setActiveExpenseGroupCategory('');
+      setActiveExpenseGroupCategory(ALL_HOUSEHOLD_EXPENSE_GROUPS);
       return;
     }
-    const hasActive = splitTemplates.some((template) => template.category === activeExpenseGroupCategory);
+    const hasActive =
+      activeExpenseGroupCategory === ALL_HOUSEHOLD_EXPENSE_GROUPS ||
+      splitTemplates.some((template) => template.category === activeExpenseGroupCategory);
     if (!hasActive) {
-      setActiveExpenseGroupCategory(splitTemplates[0].category);
+      setActiveExpenseGroupCategory(ALL_HOUSEHOLD_EXPENSE_GROUPS);
     }
   }, [activeExpenseGroupCategory, splitTemplates]);
 
@@ -390,6 +422,7 @@ export const useHouseholdPageState = () => {
   };
 
   const openTemplateModal = () => {
+    setTemplateSuccessMessage(null);
     if (!activeGroup) {
       return;
     }
@@ -415,12 +448,14 @@ export const useHouseholdPageState = () => {
     setTemplateModalOpen(false);
     setEditingTemplateCategory(null);
     setTemplateError(null);
+    setTemplateSuccessMessage(null);
   };
 
   const openEditTemplateModal = (template: SplitTemplate) => {
     if (!activeGroup) {
       return;
     }
+    setTemplateSuccessMessage(null);
     const ratioByParticipant = new Map(
       template.splitDetails.map((allocation) => [allocation.participant.trim().toLowerCase(), allocation.ratio]),
     );
@@ -815,27 +850,89 @@ export const useHouseholdPageState = () => {
     setExpenseTitle(pickClosestOption(event.currentTarget.value, merchantOptions));
   };
 
-  const isInActiveExpenseGroup = useMemo(() => {
-    if (!activeExpenseGroup || !user?.fullName) {
+  const canOptOutOfEditingTemplate = useMemo(() => {
+    if (!editingTemplateCategory || !user?.fullName) {
       return false;
     }
     const normalizedName = user.fullName.trim().toLowerCase();
-    return activeExpenseGroup.splitDetails.some(
-      (allocation) => allocation.participant.trim().toLowerCase() === normalizedName,
+    return templateMembers.some(
+      (member) => member.selected && member.name.trim().toLowerCase() === normalizedName,
     );
-  }, [activeExpenseGroup, user?.fullName]);
+  }, [editingTemplateCategory, templateMembers, user?.fullName]);
 
-  const declineActiveExpenseGroup = async (): Promise<void> => {
-    if (!activeGroup || !activeExpenseGroup) {
+  const linkedExpenseCountForEditingTemplate = useMemo(() => {
+    if (!activeGroup || !editingTemplateCategory) {
+      return 0;
+    }
+    const categoryKey = editingTemplateCategory.trim().toLowerCase();
+    return activeGroup.expenses.filter(
+      (expense) => (expense.expenseGroup ?? expense.category).trim().toLowerCase() === categoryKey,
+    ).length;
+  }, [activeGroup, editingTemplateCategory]);
+
+  const confirmOptOutOfEditingTemplate = async (): Promise<void> => {
+    if (!activeGroup || !editingTemplateCategory) {
       return;
     }
-    await declineExpenseGroupMutation({
-      variables: {
-        groupId: activeGroup.id,
-        category: activeExpenseGroup.category,
-      },
-    });
-    setActiveExpenseGroupCategory('');
+    setTemplateError(null);
+    try {
+      await declineExpenseGroupMutation({
+        variables: {
+          groupId: activeGroup.id,
+          category: editingTemplateCategory,
+        },
+      });
+      await refetchGroupTemplates();
+      const normalizedName = user?.fullName?.trim().toLowerCase();
+      if (normalizedName) {
+        setTemplateMembers((previous) =>
+          previous.map((member) =>
+            member.name.trim().toLowerCase() === normalizedName
+              ? { ...member, selected: false, ratio: '' }
+              : member,
+          ),
+        );
+      }
+      setActiveExpenseGroupCategory(ALL_HOUSEHOLD_EXPENSE_GROUPS);
+      setTemplateSuccessMessage(`You have opted out of "${editingTemplateCategory}".`);
+    } catch (mutationError) {
+      setTemplateError(
+        mutationError instanceof Error
+          ? mutationError.message
+          : 'Unable to opt out right now. Please try again.',
+      );
+      throw mutationError;
+    }
+  };
+
+  const confirmDeleteEditingTemplate = async (): Promise<void> => {
+    if (!activeGroup || !editingTemplateCategory) {
+      return;
+    }
+    setTemplateError(null);
+    try {
+      const deleted = await deleteExpenseGroupMutation({
+        variables: {
+          groupId: activeGroup.id,
+          category: editingTemplateCategory,
+        },
+      });
+      if (!deleted.data?.deleteExpenseGroup) {
+        setTemplateError('Expense group was not found or could not be deleted.');
+        return;
+      }
+      await refetchGroupTemplates();
+      setActiveExpenseGroupCategory(ALL_HOUSEHOLD_EXPENSE_GROUPS);
+      setTemplateSuccessMessage(`"${editingTemplateCategory}" was deleted.`);
+      setEditingTemplateCategory(null);
+    } catch (mutationError) {
+      setTemplateError(
+        mutationError instanceof Error
+          ? mutationError.message
+          : 'Unable to delete expense group right now. Please try again.',
+      );
+      throw mutationError;
+    }
   };
 
   return {
@@ -850,6 +947,9 @@ export const useHouseholdPageState = () => {
     openEditHouseholdModal,
     openTemplateModal,
     splitTemplates,
+    ALL_HOUSEHOLD_EXPENSE_GROUPS,
+    isViewingAllExpenseGroups,
+    expenseCountByGroupCategory,
     setActiveExpenseGroupCategory,
     activeExpenseGroupExpenses,
     activeExpenseGroupTotals,
@@ -916,8 +1016,12 @@ export const useHouseholdPageState = () => {
     clearTemplateRatiosForCustom,
     setTemplateMembers,
     editingTemplateCategory,
-    isInActiveExpenseGroup,
-    declineActiveExpenseGroup,
-    decliningExpenseGroup,
+    templateSuccessMessage,
+    canOptOutOfEditingTemplate,
+    linkedExpenseCountForEditingTemplate,
+    confirmOptOutOfEditingTemplate,
+    confirmDeleteEditingTemplate,
+    isDecliningExpenseGroup,
+    isDeletingExpenseGroup,
   };
 };

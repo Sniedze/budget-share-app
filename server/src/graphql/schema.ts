@@ -271,5 +271,6 @@ export const typeDefs = `#graphql
     acceptGroupInvitation(id: ID!): GroupInvitation!
     declineGroupInvitation(id: ID!): GroupInvitation!
     declineExpenseGroupParticipation(groupId: ID!, category: String!): Boolean!
+    deleteExpenseGroup(groupId: ID!, category: String!): Boolean!
   }
 `;
