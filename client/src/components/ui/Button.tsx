@@ -29,7 +29,7 @@ export const Button = styled.button<ButtonProps>`
   color: ${colors.surface};
   cursor: pointer;
   box-shadow: ${({ $elevation = 'none' }) =>
-    $elevation === 'accent' ? '0 10px 18px rgba(79, 70, 229, 0.2)' : 'none'};
+    $elevation === 'accent' ? `0 10px 18px ${colors.primaryShadow}` : 'none'};
   background: ${({ $variant = 'primary' }) => {
     if ($variant === 'secondary') return colors.secondary;
     if ($variant === 'danger') return colors.danger;

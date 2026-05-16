@@ -11,6 +11,34 @@ type LogAuditEventInput = {
   metadata?: unknown;
 };
 
+const parseRetentionDays = (): number | null => {
+  const raw = process.env.AUDIT_LOG_RETENTION_DAYS?.trim();
+  if (!raw) {
+    return 90;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return Math.floor(parsed);
+};
+
+/** Deletes audit rows older than AUDIT_LOG_RETENTION_DAYS (default 90). Set to 0 to disable. */
+export const purgeOldAuditLogs = async (): Promise<number> => {
+  const retentionDays = parseRetentionDays();
+  if (retentionDays === null) {
+    return 0;
+  }
+  const [result] = await db.execute(
+    `
+      DELETE FROM audit_logs
+      WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
+    `,
+    [retentionDays],
+  );
+  return typeof result.affectedRows === 'number' ? result.affectedRows : 0;
+};
+
 export const logAuditEvent = async (input: LogAuditEventInput): Promise<void> => {
   await db.execute(
     `

@@ -1,11 +1,11 @@
-import { useMutation, useQuery } from '@apollo/client/react';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Clock, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
 import styled from 'styled-components';
 import { Sidebar } from '../components/sections/Sidebar';
 import {
   AppLayout,
   Button,
-  Card,
   ErrorText,
   HeaderRow,
   HeaderText,
@@ -23,126 +23,118 @@ import {
   Tr,
   UserMenu,
 } from '../components/ui';
+import { useSettlementsPageState } from '../features/settlements/useSettlementsPageState';
+import type { SettlementPeriodValue } from '../features/settlements/settlementPeriod';
+import type { SettlementTransfer } from '../features/settlements/types';
 import {
-  GET_HOUSEHOLD_SETTLEMENTS,
-  RECORD_SETTLEMENT_PAYMENT,
-  type GetHouseholdSettlementsResponse,
-} from '../features/settlements';
+  ActionCell,
+  Avatar,
+  BalanceAmount,
+  BalanceIdentity,
+  BalanceList,
+  BalanceName,
+  BalanceRow,
+  BalanceStatus,
+  IconBadge,
+  MonthlyGroup,
+  MonthlyGroupTitle,
+  Panel,
+  PanelHeader,
+  PanelTitle,
+  RecordFormGrid,
+  RecordPanel,
+  StatusPill,
+  SummaryCard,
+  SummaryGrid,
+  SummaryCardTop,
+  SummaryHint,
+  SummaryLabel,
+  SummaryValue,
+  TabButton,
+  TabGroup,
+  ToolbarField,
+  ToolbarRow,
+  ToolbarSelect,
+} from '../features/settlements/settlementsPageStyles';
 import { formatAppCurrency } from '../format/currency';
 import { spacing } from '../styles/tokens';
 
-const Grid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: ${spacing.md};
-
-  @media (max-width: 980px) {
-    grid-template-columns: 1fr;
+const formatSignedCurrency = (value: number): string => {
+  const formatted = formatAppCurrency(Math.abs(value));
+  if (value > 0.01) {
+    return `+${formatted}`;
   }
-`;
-
-const FormGrid = styled.form`
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: ${spacing.sm};
-  align-items: end;
-
-  @media (max-width: 980px) {
-    grid-template-columns: 1fr;
+  if (value < -0.01) {
+    return `-${formatted}`;
   }
-`;
+  return formatted;
+};
 
-const Field = styled.label`
-  display: grid;
-  gap: 6px;
-  font-size: 13px;
-`;
-
-const Select = styled.select`
-  font: inherit;
-  padding: 10px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: #ffffff;
-  min-width: 140px;
+const EmptyBalances = styled.p`
+  margin: 0;
+  color: #6b7280;
+  font-size: 14px;
 `;
 
 export const SettlementsPage = (): JSX.Element => {
-  const { data, loading, error } = useQuery<GetHouseholdSettlementsResponse>(GET_HOUSEHOLD_SETTLEMENTS);
-  const [recordPayment, { loading: isSaving }] = useMutation(RECORD_SETTLEMENT_PAYMENT, {
-    refetchQueries: [{ query: GET_HOUSEHOLD_SETTLEMENTS }],
-    awaitRefetchQueries: true,
-  });
-  const households = useMemo(() => data?.householdSettlements ?? [], [data?.householdSettlements]);
-  const [activeGroupId, setActiveGroupId] = useState('');
-  const [scope, setScope] = useState('__household__');
-  const [fromMember, setFromMember] = useState('');
-  const [toMember, setToMember] = useState('');
-  const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
-  const [settledAt, setSettledAt] = useState(() => new Date().toISOString().slice(0, 10));
-  const [formError, setFormError] = useState<string | null>(null);
+  const {
+    loading,
+    error,
+    households,
+    activeHousehold,
+    activeGroupId,
+    setActiveGroupId,
+    scope,
+    setScope,
+    detailsTab,
+    setDetailsTab,
+    balances,
+    transfers,
+    payments,
+    periodPayments,
+    settlementPeriod,
+    setSettlementPeriod,
+    settlementPeriodOptions,
+    monthlyGroups,
+    viewerName,
+    summary,
+    memberRows,
+    periodLabel,
+    dueDateLabel,
+    showRecordForm,
+    setShowRecordForm,
+    fromMember,
+    setFromMember,
+    toMember,
+    setToMember,
+    amount,
+    setAmount,
+    note,
+    setNote,
+    settledAt,
+    setSettledAt,
+    formError,
+    isSaving,
+    markAsPaid,
+    sendReminder,
+    settlementDueStatus,
+    onSubmit,
+    getInitials,
+  } = useSettlementsPageState();
 
-  useEffect(() => {
-    if (!households.length) {
-      setActiveGroupId('');
-      return;
-    }
-    if (!households.some((item) => item.groupId === activeGroupId)) {
-      setActiveGroupId(households[0].groupId);
-    }
-  }, [activeGroupId, households]);
+  const [reminderError, setReminderError] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
-  const activeHouseholdForScope = useMemo(
-    () => households.find((item) => item.groupId === activeGroupId) ?? households[0],
-    [activeGroupId, households],
-  );
-  useEffect(() => {
-    if (!activeHouseholdForScope || scope === '__household__') {
-      return;
-    }
-    const hasGroup = activeHouseholdForScope.expenseGroups.some((g) => g.expenseGroup === scope);
-    if (!hasGroup) {
-      setScope('__household__');
-    }
-  }, [activeHouseholdForScope, scope]);
-
-  const activeHousehold = activeHouseholdForScope;
-  const activeScopeGroup = useMemo(
-    () => activeHousehold?.expenseGroups.find((item) => item.expenseGroup === scope),
-    [activeHousehold?.expenseGroups, scope],
-  );
-  const balances = activeScopeGroup ? activeScopeGroup.balances : activeHousehold?.balances ?? [];
-  const transfers = activeScopeGroup ? activeScopeGroup.transfers : activeHousehold?.transfers ?? [];
-
-  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setFormError(null);
-    const parsedAmount = Number(amount);
-    if (!activeHousehold || !fromMember || !toMember || fromMember === toMember || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      setFormError('Fill valid payer, recipient, and amount.');
-      return;
-    }
-    try {
-      await recordPayment({
-        variables: {
-          input: {
-            groupId: activeHousehold.groupId,
-            expenseGroup: scope === '__household__' ? null : scope,
-            fromMember,
-            toMember,
-            amount: parsedAmount,
-            note: note.trim() || null,
-            settledAt,
-          },
-        },
-      });
-      setAmount('');
-      setNote('');
-    } catch (mutationError) {
-      setFormError(mutationError instanceof Error ? mutationError.message : 'Unable to record settlement.');
+  const handleMarkAsPaid = async (transfer: SettlementTransfer) => {
+    setPaymentError(null);
+    const issue = await markAsPaid(transfer);
+    if (issue) {
+      setPaymentError(issue);
     }
   };
+
+  const netHint =
+    summary.netBalance > 0.01 ? 'You are owed' : summary.netBalance < -0.01 ? 'You owe' : 'All settled';
 
   return (
     <AppLayout>
@@ -151,12 +143,12 @@ export const SettlementsPage = (): JSX.Element => {
         <HeaderRow>
           <HeaderText>
             <SectionTitle>Settlements</SectionTitle>
-            <SectionSubtitle>Household balances, net-debt optimization, and reconciliation feed.</SectionSubtitle>
+            <SectionSubtitle>Track and settle shared expenses with household members</SectionSubtitle>
           </HeaderText>
           <UserMenu />
         </HeaderRow>
 
-        {loading ? <MutedText>Loading settlements...</MutedText> : null}
+        {loading ? <MutedText>Loading settlements…</MutedText> : null}
         {error ? (
           <ErrorText>
             {error.message}
@@ -164,166 +156,393 @@ export const SettlementsPage = (): JSX.Element => {
             'graphQLErrors' in error &&
             Array.isArray(error.graphQLErrors) &&
             error.graphQLErrors[0]?.extensions?.requestId
-              ? ` (requestId: ${String(error.graphQLErrors[0].extensions.requestId)} — see API terminal logs.)`
+              ? ` (requestId: ${String(error.graphQLErrors[0].extensions.requestId)})`
               : null}
           </ErrorText>
         ) : null}
-        {!loading && !error && !activeHousehold ? <MutedText>No household data available yet.</MutedText> : null}
+
+        {!loading && !error && households.length === 0 ? (
+          <Panel>
+            <MutedText>
+              Settlements need at least one household. Create a household, add members, and log shared expenses —
+              then return here.
+            </MutedText>
+            <Button as={Link} to="/groups" $variant="accent" style={{ marginTop: spacing.md, width: 'fit-content' }}>
+              Go to Household
+            </Button>
+          </Panel>
+        ) : null}
 
         {activeHousehold ? (
           <>
-            <Grid>
-              <Card>
-                <SectionSubtitle style={{ marginTop: 0 }}>Household</SectionSubtitle>
-                <Field>
+            <ToolbarRow>
+              <ToolbarField>
+                Period
+                <ToolbarSelect
+                  value={settlementPeriod}
+                  onChange={(event) =>
+                    setSettlementPeriod(event.currentTarget.value as SettlementPeriodValue)
+                  }
+                >
+                  {settlementPeriodOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </ToolbarSelect>
+              </ToolbarField>
+              {households.length > 1 ? (
+                <ToolbarField>
                   Household
-                  <Select value={activeHousehold.groupId} onChange={(event) => setActiveGroupId(event.currentTarget.value)}>
+                  <ToolbarSelect
+                    value={activeGroupId}
+                    onChange={(event) => setActiveGroupId(event.currentTarget.value)}
+                  >
                     {households.map((household) => (
                       <option key={household.groupId} value={household.groupId}>
                         {household.groupName}
                       </option>
                     ))}
-                  </Select>
-                </Field>
-                <Field>
+                  </ToolbarSelect>
+                </ToolbarField>
+              ) : null}
+              {activeHousehold.expenseGroups.length > 0 ? (
+                <ToolbarField>
                   Scope
-                  <Select value={scope} onChange={(event) => setScope(event.currentTarget.value)}>
+                  <ToolbarSelect value={scope} onChange={(event) => setScope(event.currentTarget.value)}>
                     <option value="__household__">Total household</option>
                     {activeHousehold.expenseGroups.map((group) => (
                       <option key={`${activeHousehold.groupId}-${group.expenseGroup}`} value={group.expenseGroup}>
                         {group.expenseGroup}
                       </option>
                     ))}
-                  </Select>
-                </Field>
-              </Card>
+                  </ToolbarSelect>
+                </ToolbarField>
+              ) : null}
+            </ToolbarRow>
 
-              <Card>
-                <SectionSubtitle style={{ marginTop: 0 }}>Record settled payment</SectionSubtitle>
-                <FormGrid onSubmit={onSubmit}>
-                  <Field>
-                    From (who owed)
-                    <Select value={fromMember} onChange={(event) => setFromMember(event.currentTarget.value)}>
-                      <option value="">Select member</option>
-                      {balances.map((entry) => (
-                        <option key={`from-${entry.memberName}`} value={entry.memberName}>
-                          {entry.memberName}
-                        </option>
+            <SummaryGrid>
+              <SummaryCard $featured>
+                <SummaryCardTop>
+                  <SummaryLabel $featured>Net Balance</SummaryLabel>
+                  <IconBadge $featured>
+                    <DollarSign size={18} />
+                  </IconBadge>
+                </SummaryCardTop>
+                <div>
+                  <SummaryValue $featured>{formatSignedCurrency(summary.netBalance)}</SummaryValue>
+                  <SummaryHint $featured>{netHint}</SummaryHint>
+                </div>
+              </SummaryCard>
+
+              <SummaryCard>
+                <SummaryCardTop>
+                  <SummaryLabel>You Are Owed</SummaryLabel>
+                  <IconBadge $tone="green">
+                    <TrendingUp size={18} />
+                  </IconBadge>
+                </SummaryCardTop>
+                <div>
+                  <SummaryValue $tone="positive">{formatSignedCurrency(summary.youAreOwed)}</SummaryValue>
+                  <SummaryHint>
+                    From {summary.owedByCount} {summary.owedByCount === 1 ? 'person' : 'people'}
+                  </SummaryHint>
+                </div>
+              </SummaryCard>
+
+              <SummaryCard>
+                <SummaryCardTop>
+                  <SummaryLabel>You Owe</SummaryLabel>
+                  <IconBadge $tone="red">
+                    <TrendingDown size={18} />
+                  </IconBadge>
+                </SummaryCardTop>
+                <div>
+                  <SummaryValue $tone="negative">-{formatAppCurrency(summary.youOwe)}</SummaryValue>
+                  <SummaryHint>
+                    To {summary.oweToCount} {summary.oweToCount === 1 ? 'person' : 'people'}
+                  </SummaryHint>
+                </div>
+              </SummaryCard>
+
+              <SummaryCard>
+                <SummaryCardTop>
+                  <SummaryLabel>Pending Settlements</SummaryLabel>
+                  <IconBadge $tone="amber">
+                    <Clock size={18} />
+                  </IconBadge>
+                </SummaryCardTop>
+                <div>
+                  <SummaryValue>{String(summary.pendingCount)}</SummaryValue>
+                  <SummaryHint>In selected period</SummaryHint>
+                </div>
+              </SummaryCard>
+            </SummaryGrid>
+
+            <Panel>
+              <PanelTitle>Current Balances</PanelTitle>
+              {memberRows.length === 0 ? (
+                <EmptyBalances>No outstanding balances between members for this scope.</EmptyBalances>
+              ) : (
+                <BalanceList>
+                  {memberRows.map((row) => (
+                    <BalanceRow key={row.memberName}>
+                      <BalanceIdentity>
+                        <Avatar>{getInitials(row.memberName)}</Avatar>
+                        <div>
+                          <BalanceName>{row.memberName}</BalanceName>
+                          <BalanceStatus>{row.label}</BalanceStatus>
+                        </div>
+                      </BalanceIdentity>
+                      <BalanceAmount $tone={row.netRelativeToViewer >= 0 ? 'positive' : 'negative'}>
+                        {formatSignedCurrency(row.netRelativeToViewer)}
+                      </BalanceAmount>
+                    </BalanceRow>
+                  ))}
+                </BalanceList>
+              )}
+            </Panel>
+
+            <Panel>
+              <PanelHeader>
+                <PanelTitle>Settlement Details</PanelTitle>
+                <TabGroup>
+                  <TabButton type="button" $active={detailsTab === 'pending'} onClick={() => setDetailsTab('pending')}>
+                    Pending
+                  </TabButton>
+                  <TabButton type="button" $active={detailsTab === 'history'} onClick={() => setDetailsTab('history')}>
+                    History
+                  </TabButton>
+                  <TabButton type="button" $active={detailsTab === 'monthly'} onClick={() => setDetailsTab('monthly')}>
+                    Monthly View
+                  </TabButton>
+                </TabGroup>
+              </PanelHeader>
+
+              {detailsTab === 'pending' ? (
+                <TableWrapper>
+                  <Table>
+                    <Thead>
+                      <Tr>
+                        <Th>From</Th>
+                        <Th>To</Th>
+                        <Th>Amount</Th>
+                        <Th>Period</Th>
+                        <Th>Due date</Th>
+                        <Th>Status</Th>
+                        <Th>Action</Th>
+                      </Tr>
+                    </Thead>
+                    <Tbody>
+                      {transfers.map((transfer, index) => {
+                        const viewerReceives = viewerName === transfer.toMember;
+                        const dueStatus = settlementDueStatus(dueDateLabel);
+                        const isOverdue = dueStatus === 'overdue';
+                        return (
+                          <Tr key={`${transfer.fromMember}-${transfer.toMember}-${index}`}>
+                            <Td>{transfer.fromMember}</Td>
+                            <Td>{transfer.toMember}</Td>
+                            <Td>{formatAppCurrency(transfer.amount)}</Td>
+                            <Td>{periodLabel}</Td>
+                            <Td>{dueDateLabel}</Td>
+                            <Td>
+                              <StatusPill $variant={dueStatus}>
+                                {isOverdue ? 'Overdue' : 'Pending'}
+                              </StatusPill>
+                            </Td>
+                            <Td>
+                              <ActionCell>
+                                <Button
+                                  type="button"
+                                  $variant="accent"
+                                  $size="sm"
+                                  disabled={isSaving}
+                                  onClick={() => void handleMarkAsPaid(transfer)}
+                                >
+                                  Mark as Paid
+                                </Button>
+                                {viewerReceives ? (
+                                  <Button
+                                    type="button"
+                                    $variant="secondary"
+                                    $size="sm"
+                                    disabled={!isOverdue}
+                                    title={
+                                      isOverdue
+                                        ? 'Open email to remind the payer'
+                                        : 'Available after the due date has passed'
+                                    }
+                                    onClick={() => {
+                                      setReminderError(null);
+                                      const reminderIssue = sendReminder(transfer);
+                                      if (reminderIssue) {
+                                        setReminderError(reminderIssue);
+                                      }
+                                    }}
+                                  >
+                                    Send Reminder
+                                  </Button>
+                                ) : null}
+                              </ActionCell>
+                            </Td>
+                          </Tr>
+                        );
+                      })}
+                      {transfers.length === 0 ? (
+                        <Tr>
+                          <Td colSpan={7}>No pending transfers. This scope is settled.</Td>
+                        </Tr>
+                      ) : null}
+                    </Tbody>
+                  </Table>
+                </TableWrapper>
+              ) : null}
+              {paymentError ? <ErrorText>{paymentError}</ErrorText> : null}
+              {reminderError ? <ErrorText>{reminderError}</ErrorText> : null}
+
+              {detailsTab === 'history' ? (
+                <TableWrapper>
+                  <Table>
+                    <Thead>
+                      <Tr>
+                        <Th>From</Th>
+                        <Th>To</Th>
+                        <Th>Amount</Th>
+                        <Th>Period</Th>
+                        <Th>Date</Th>
+                        <Th>Status</Th>
+                        <Th>Note</Th>
+                      </Tr>
+                    </Thead>
+                    <Tbody>
+                      {payments.map((payment) => (
+                        <Tr key={payment.id}>
+                          <Td>{payment.fromMember}</Td>
+                          <Td>{payment.toMember}</Td>
+                          <Td>{formatAppCurrency(payment.amount)}</Td>
+                          <Td>{payment.expenseGroup ?? 'Total household'}</Td>
+                          <Td>{payment.settledAt}</Td>
+                          <Td>
+                            <StatusPill $variant="paid">Paid</StatusPill>
+                          </Td>
+                          <Td>{payment.note ?? '—'}</Td>
+                        </Tr>
                       ))}
-                    </Select>
-                  </Field>
-                  <Field>
-                    To (who is owed)
-                    <Select value={toMember} onChange={(event) => setToMember(event.currentTarget.value)}>
-                      <option value="">Select member</option>
-                      {balances.map((entry) => (
-                        <option key={`to-${entry.memberName}`} value={entry.memberName}>
-                          {entry.memberName}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field>
-                    Amount
-                    <Input value={amount} onChange={(event) => setAmount(event.currentTarget.value)} placeholder="0.00" />
-                  </Field>
-                  <Field>
-                    Settled date
-                    <Input type="date" value={settledAt} onChange={(event) => setSettledAt(event.currentTarget.value)} />
-                  </Field>
-                  <Field>
-                    Note (optional)
-                    <Input value={note} onChange={(event) => setNote(event.currentTarget.value)} placeholder="Bank transfer" />
-                  </Field>
-                  <Button type="submit" $variant="accent" disabled={isSaving}>
-                    {isSaving ? 'Saving...' : 'Record payment'}
-                  </Button>
-                </FormGrid>
-                {formError ? <ErrorText>{formError}</ErrorText> : null}
-              </Card>
-            </Grid>
+                      {payments.length === 0 ? (
+                        <Tr>
+                          <Td colSpan={7}>No settlement payments recorded yet.</Td>
+                        </Tr>
+                      ) : null}
+                    </Tbody>
+                  </Table>
+                </TableWrapper>
+              ) : null}
 
-            <SectionSubtitle>Balances</SectionSubtitle>
-            <TableWrapper>
-              <Table>
-                <Thead>
-                  <Tr>
-                    <Th>Member</Th>
-                    <Th>Net amount</Th>
-                    <Th>Status</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {balances.map((entry) => (
-                    <Tr key={`balance-${entry.memberName}`}>
-                      <Td>{entry.memberName}</Td>
-                      <Td>{formatAppCurrency(Math.abs(entry.amount))}</Td>
-                      <Td>{entry.amount > 0.01 ? 'Is owed' : entry.amount < -0.01 ? 'Owes' : 'Settled'}</Td>
-                    </Tr>
-                  ))}
-                </Tbody>
-              </Table>
-            </TableWrapper>
+              {detailsTab === 'monthly' ? (
+                <>
+                  {monthlyGroups.length === 0 ? (
+                    <MutedText>No payments to show by month yet.</MutedText>
+                  ) : (
+                    monthlyGroups.map((group) => (
+                      <MonthlyGroup key={group.monthKey}>
+                        <MonthlyGroupTitle>
+                          {group.label} · {formatAppCurrency(group.total)} ({group.payments.length} payments)
+                        </MonthlyGroupTitle>
+                        <TableWrapper>
+                          <Table>
+                            <Thead>
+                              <Tr>
+                                <Th>From</Th>
+                                <Th>To</Th>
+                                <Th>Amount</Th>
+                                <Th>Scope</Th>
+                                <Th>Date</Th>
+                              </Tr>
+                            </Thead>
+                            <Tbody>
+                              {group.payments.map((payment) => (
+                                <Tr key={payment.id}>
+                                  <Td>{payment.fromMember}</Td>
+                                  <Td>{payment.toMember}</Td>
+                                  <Td>{formatAppCurrency(payment.amount)}</Td>
+                                  <Td>{payment.expenseGroup ?? 'Total household'}</Td>
+                                  <Td>{payment.settledAt}</Td>
+                                </Tr>
+                              ))}
+                            </Tbody>
+                          </Table>
+                        </TableWrapper>
+                      </MonthlyGroup>
+                    ))
+                  )}
+                </>
+              ) : null}
 
-            <SectionSubtitle>Net-debt optimized transfers</SectionSubtitle>
-            <TableWrapper>
-              <Table>
-                <Thead>
-                  <Tr>
-                    <Th>From</Th>
-                    <Th>To</Th>
-                    <Th>Amount</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {transfers.map((transfer, index) => (
-                    <Tr key={`transfer-${transfer.fromMember}-${transfer.toMember}-${index}`}>
-                      <Td>{transfer.fromMember}</Td>
-                      <Td>{transfer.toMember}</Td>
-                      <Td>{formatAppCurrency(transfer.amount)}</Td>
-                    </Tr>
-                  ))}
-                  {transfers.length === 0 ? (
-                    <Tr>
-                      <Td colSpan={3}>No transfers needed. This scope is settled.</Td>
-                    </Tr>
+              {showRecordForm || detailsTab === 'pending' ? (
+                <RecordPanel>
+                  <PanelHeader style={{ marginBottom: spacing.md }}>
+                    <PanelTitle style={{ fontSize: 16 }}>Record payment</PanelTitle>
+                    {showRecordForm ? (
+                      <Button type="button" $variant="secondary" $size="sm" onClick={() => setShowRecordForm(false)}>
+                        Cancel
+                      </Button>
+                    ) : (
+                      <Button type="button" $variant="accent" $size="sm" onClick={() => setShowRecordForm(true)}>
+                        New payment
+                      </Button>
+                    )}
+                  </PanelHeader>
+                  {showRecordForm ? (
+                    <RecordFormGrid onSubmit={onSubmit}>
+                      <ToolbarField>
+                        From
+                        <ToolbarSelect value={fromMember} onChange={(event) => setFromMember(event.currentTarget.value)}>
+                          <option value="">Select member</option>
+                          {balances.map((entry) => (
+                            <option key={`from-${entry.memberName}`} value={entry.memberName}>
+                              {entry.memberName}
+                            </option>
+                          ))}
+                        </ToolbarSelect>
+                      </ToolbarField>
+                      <ToolbarField>
+                        To
+                        <ToolbarSelect value={toMember} onChange={(event) => setToMember(event.currentTarget.value)}>
+                          <option value="">Select member</option>
+                          {balances.map((entry) => (
+                            <option key={`to-${entry.memberName}`} value={entry.memberName}>
+                              {entry.memberName}
+                            </option>
+                          ))}
+                        </ToolbarSelect>
+                      </ToolbarField>
+                      <ToolbarField>
+                        Amount
+                        <Input value={amount} onChange={(event) => setAmount(event.currentTarget.value)} placeholder="0.00" />
+                      </ToolbarField>
+                      <ToolbarField>
+                        Settled date
+                        <Input type="date" value={settledAt} onChange={(event) => setSettledAt(event.currentTarget.value)} />
+                      </ToolbarField>
+                      <ToolbarField>
+                        Note (optional)
+                        <Input value={note} onChange={(event) => setNote(event.currentTarget.value)} placeholder="Bank transfer" />
+                      </ToolbarField>
+                      <Button type="submit" $variant="accent" disabled={isSaving}>
+                        {isSaving ? 'Saving…' : 'Record payment'}
+                      </Button>
+                    </RecordFormGrid>
                   ) : null}
-                </Tbody>
-              </Table>
-            </TableWrapper>
+                  {formError ? <ErrorText>{formError}</ErrorText> : null}
+                </RecordPanel>
+              ) : null}
+            </Panel>
 
-            <SectionSubtitle>Recorded settlement history</SectionSubtitle>
-            <TableWrapper>
-              <Table>
-                <Thead>
-                  <Tr>
-                    <Th>Date</Th>
-                    <Th>Scope</Th>
-                    <Th>From</Th>
-                    <Th>To</Th>
-                    <Th>Amount</Th>
-                    <Th>Note</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {activeHousehold.payments.map((payment) => (
-                    <Tr key={payment.id}>
-                      <Td>{payment.settledAt}</Td>
-                      <Td>{payment.expenseGroup ?? 'Total household'}</Td>
-                      <Td>{payment.fromMember}</Td>
-                      <Td>{payment.toMember}</Td>
-                      <Td>{formatAppCurrency(payment.amount)}</Td>
-                      <Td>{payment.note ?? '-'}</Td>
-                    </Tr>
-                  ))}
-                  {activeHousehold.payments.length === 0 ? (
-                    <Tr>
-                      <Td colSpan={6}>No settlement payments recorded yet.</Td>
-                    </Tr>
-                  ) : null}
-                </Tbody>
-              </Table>
-            </TableWrapper>
+            {periodPayments.length > 0 ? (
+              <MutedText>
+                {periodPayments.length} payment{periodPayments.length === 1 ? '' : 's'} recorded in {periodLabel}.
+              </MutedText>
+            ) : null}
           </>
         ) : null}
       </PageSurface>

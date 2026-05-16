@@ -1,3 +1,4 @@
+import '../loadEnv.js';
 import mysql from 'mysql2/promise';
 import type { RowDataPacket } from 'mysql2';
 import { resolveDbConfig } from './config.js';
@@ -366,6 +367,22 @@ export const migrateSchema = async (): Promise<void> => {
       `);
   }
 
+  const [groupColumns] = await db.query<ColumnCheckRow[]>(
+    `
+        SELECT COLUMN_NAME AS columnName
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'groups'
+          AND COLUMN_NAME = 'created_at'
+      `,
+  );
+  if (groupColumns.length === 0) {
+    await db.execute(`
+        ALTER TABLE \`groups\`
+        ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      `);
+  }
+
   await ensureIndex('expenses', 'idx_expenses_group_transaction', 'group_id, transaction_date DESC');
   await ensureIndex('expenses', 'idx_expenses_creator_transaction', 'created_by_user_id, transaction_date DESC');
   await ensureIndex('group_members', 'idx_group_members_email', 'email');
@@ -395,4 +412,7 @@ export const migrateSchema = async (): Promise<void> => {
     '../modules/groups/invitations.js'
   );
   await backfillAcceptedInvitationsForExistingMembers();
+
+  const { purgeOldAuditLogs } = await import('../modules/audit/service.js');
+  await purgeOldAuditLogs();
 };

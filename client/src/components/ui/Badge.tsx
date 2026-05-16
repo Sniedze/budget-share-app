@@ -11,7 +11,7 @@ export const Badge = styled.span<{ $variant?: BadgeVariant }>`
   font-size: 11px;
   font-weight: 600;
   color: ${({ $variant = 'default' }) =>
-    $variant === 'accent' ? colors.accent : $variant === 'danger' ? '#b91c1c' : colors.textMuted};
+    $variant === 'accent' ? colors.primaryLightText : $variant === 'danger' ? '#b91c1c' : colors.textMuted};
   background: ${({ $variant = 'default' }) =>
-    $variant === 'accent' ? colors.sidebarActiveBg : $variant === 'danger' ? '#fee2e2' : '#f3f4f6'};
+    $variant === 'accent' ? colors.primaryLightBg : $variant === 'danger' ? '#fee2e2' : colors.background};
 `;

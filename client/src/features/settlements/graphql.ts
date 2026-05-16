@@ -1,8 +1,8 @@
 import { gql } from '@apollo/client';
 
 export const GET_HOUSEHOLD_SETTLEMENTS = gql`
-  query GetHouseholdSettlements {
-    householdSettlements {
+  query GetHouseholdSettlements($period: SettlementPeriod) {
+    householdSettlements(period: $period) {
       groupId
       groupName
       balances {

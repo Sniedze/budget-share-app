@@ -28,7 +28,7 @@
 - **CORS:** The API uses an allowlist (`ALLOWED_ORIGINS`, comma-separated). If unset, only common **local** dev origins are allowed. Production deployments **must** set `ALLOWED_ORIGINS` to the real web app URL(s) and use HTTPS. `credentials: true` is enabled for cookie-based auth; keep origins explicit.
 - **CSRF:** Cookie-authenticated GraphQL **mutations** require an allowed `Origin` header (or `Referer` origin fallback). Requests with session cookies from non-allowlisted origins are rejected with HTTP 403.
 - **Request size:** JSON bodies are capped via `JSON_BODY_LIMIT` (default `512kb`) to limit oversized GraphQL payloads.
-- **Query abuse guard:** Apollo `maxRecursiveSelections` is enabled via `GRAPHQL_MAX_RECURSIVE_SELECTIONS` (default `30`) to curb deeply-recursive GraphQL operations.
+- **Query abuse guard:** Apollo `maxRecursiveSelections` is enabled via `GRAPHQL_MAX_RECURSIVE_SELECTIONS` (default `100`; set `false` to disable) to curb abusive GraphQL operations.
 - **Rate limiting:** GraphQL uses a 15-minute window with separate caps for auth operations (`GRAPHQL_RATE_LIMIT_AUTH`, default `100`) and general operations (`GRAPHQL_RATE_LIMIT_GENERAL`, default `800`). Login/register limits are keyed by **normalized email** when present (fallback to client IP).
 
 ## Household invitation email

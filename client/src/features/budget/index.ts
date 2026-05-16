@@ -1,6 +1,21 @@
-export type { CategoryTrendRow, MonthlyBreakdownRow, MonthlyBreakdownTotals } from './budgetPageTypes';
+export type {
+  CategoryBudgetDisplayRow,
+  CategoryTrendRow,
+  MonthlyBreakdownRow,
+  MonthlyBreakdownTotals,
+  RecentTransactionRow,
+} from './budgetPageTypes';
 export * from './budgetPageStyles';
 export { useBudgetPageState } from './useBudgetPageState';
+export {
+  BudgetCategoryList,
+  BudgetDetailedViews,
+  BudgetForecastCharts,
+  BudgetMonthlyOverview,
+  BudgetPageHeader,
+  BudgetSettingsModal,
+  BudgetSummaryCards,
+} from './components';
 export {
   loadAssumptions,
   loadMonthBudgets,

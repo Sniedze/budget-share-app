@@ -9,18 +9,24 @@ import {
   type ReactNode,
 } from 'react';
 import { LOGIN, LOGOUT, ME, REGISTER } from './graphql';
+import { hasSessionHintCookie } from './sessionHint';
 import { clearStoredTokens } from './storage';
 import type { AuthUser } from './types';
 
-type AuthContextValue = {
+export type AuthStateContextValue = {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isInitializing: boolean;
   isAuthenticating: boolean;
+};
+
+export type AuthActionsContextValue = {
   login: (email: string, password: string, remember?: boolean) => Promise<void>;
   register: (fullName: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 };
+
+export type AuthContextValue = AuthStateContextValue & AuthActionsContextValue;
 
 type MeQueryData = {
   me: AuthUser | null;
@@ -31,7 +37,8 @@ type AuthMutationData = {
   register?: { user: AuthUser };
 };
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const AuthStateContext = createContext<AuthStateContextValue | undefined>(undefined);
+const AuthActionsContext = createContext<AuthActionsContextValue | undefined>(undefined);
 
 const getUserFromAuthMutation = (data: AuthMutationData): AuthUser | null => {
   return data.login?.user ?? data.register?.user ?? null;
@@ -40,19 +47,23 @@ const getUserFromAuthMutation = (data: AuthMutationData): AuthUser | null => {
 export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element => {
   const client = useApolloClient();
   const [user, setUser] = useState<AuthUser | null>(null);
+  const sessionHintPresent = hasSessionHintCookie();
   const {
     data: meData,
     loading: meLoading,
     error: meError,
   } = useQuery<MeQueryData>(ME, {
+    skip: !sessionHintPresent,
     fetchPolicy: 'network-only',
     errorPolicy: 'all',
   });
+
   useEffect(() => {
     if (meData) {
       setUser(meData.me ?? null);
     }
   }, [meData]);
+
   useEffect(() => {
     if (meError) {
       setUser(null);
@@ -104,30 +115,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
     }
   }, [client, logoutMutation]);
 
-  const isInitializing = meLoading && user === null && !meError;
+  const isInitializing = sessionHintPresent && meLoading && user === null && !meError;
 
-  const value = useMemo<AuthContextValue>(
+  const stateValue = useMemo<AuthStateContextValue>(
     () => ({
       user,
       isAuthenticated: Boolean(user),
       isInitializing,
       isAuthenticating: loginLoading || registerLoading,
+    }),
+    [user, isInitializing, loginLoading, registerLoading],
+  );
+
+  const actionsValue = useMemo<AuthActionsContextValue>(
+    () => ({
       login,
       register,
       logout,
     }),
-    [user, isInitializing, loginLoading, registerLoading, login, register, logout],
+    [login, register, logout],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthStateContext.Provider value={stateValue}>
+      <AuthActionsContext.Provider value={actionsValue}>{children}</AuthActionsContext.Provider>
+    </AuthStateContext.Provider>
+  );
 };
 
-/** Hook for consumers; co-located with provider for a single auth module. */
-// eslint-disable-next-line react-refresh/only-export-components -- useAuth must live beside AuthProvider
-export const useAuth = (): AuthContextValue => {
-  const context = useContext(AuthContext);
+export const useAuthState = (): AuthStateContextValue => {
+  const context = useContext(AuthStateContext);
   if (!context) {
-    throw new Error('useAuth must be used inside AuthProvider.');
+    throw new Error('useAuthState must be used inside AuthProvider.');
   }
   return context;
+};
+
+export const useAuthActions = (): AuthActionsContextValue => {
+  const context = useContext(AuthActionsContext);
+  if (!context) {
+    throw new Error('useAuthActions must be used inside AuthProvider.');
+  }
+  return context;
+};
+
+/** Combined auth state and actions (most screens). */
+// eslint-disable-next-line react-refresh/only-export-components -- useAuth must live beside AuthProvider
+export const useAuth = (): AuthContextValue => {
+  return { ...useAuthState(), ...useAuthActions() };
 };

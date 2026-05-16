@@ -29,6 +29,7 @@ import {
   upsertPendingInvitations,
 } from './invitations.js';
 import { buildOptimizedTransfers } from './settlementTransfers.js';
+import { parseSettlementPeriod, settlementPeriodRange } from './settlementPeriod.js';
 
 type GroupRow = {
   id: number;
@@ -99,7 +100,7 @@ type SettlementExpenseRow = {
   groupId: number;
   amount: string;
   expenseGroup: string | null;
-  category: string;
+  category: string | null;
   splitType: string | null;
   splitDetails: string | null;
   paidByName: string | null;
@@ -142,19 +143,32 @@ const isMissingTableError = (error: unknown, tableName: string): boolean => {
   return code === 'ER_NO_SUCH_TABLE' && message.includes(tableName);
 };
 
+const readExpenseGroupLabel = (expense: {
+  expenseGroup: string | null;
+  category: string | null;
+}): string => (expense.expenseGroup ?? expense.category ?? 'General').trim() || 'General';
+
 const listExpenseGroupLabelsByGroupId = async (groupIds: number[]): Promise<Map<number, string[]>> => {
   const map = new Map<number, string[]>();
   if (groupIds.length === 0) {
     return map;
   }
-  const [rows] = await db.query<Array<{ groupId: number; category: string } & RowDataPacket>>(
-    `
+  let rows: Array<{ groupId: number; category: string } & RowDataPacket> = [];
+  try {
+    const [templateRows] = await db.query<Array<{ groupId: number; category: string } & RowDataPacket>>(
+      `
       SELECT group_id AS groupId, category
       FROM group_split_templates
       WHERE group_id IN (?)
     `,
-    [groupIds],
-  );
+      [groupIds],
+    );
+    rows = templateRows;
+  } catch (error) {
+    if (!isMissingTableError(error, 'group_split_templates')) {
+      throw error;
+    }
+  }
   for (const row of rows) {
     const cat = row.category?.trim();
     if (!cat) {
@@ -241,23 +255,33 @@ const normalizeTemplateSplitDetails = (
 const parseTemplateSplitDetails = (
   value: SplitTemplateRow['splitDetails'],
 ): Array<{ participant: string; ratio: number }> => {
+  let parsed: unknown = null;
   if (Array.isArray(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string') {
+    parsed = value;
+  } else if (typeof value === 'string') {
     try {
-      const parsed = JSON.parse(value) as unknown;
-      if (Array.isArray(parsed)) {
-        return parsed as Array<{ participant: string; ratio: number }>;
-      }
-      return [];
+      parsed = JSON.parse(value) as unknown;
     } catch {
       return [];
     }
   }
-
-  return [];
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+  return parsed
+    .map((item) => {
+      if (typeof item !== 'object' || item === null) {
+        return null;
+      }
+      const participant =
+        'participant' in item && typeof item.participant === 'string' ? item.participant.trim() : '';
+      const ratio = 'ratio' in item ? Number(item.ratio) : Number.NaN;
+      if (!participant || !Number.isFinite(ratio)) {
+        return null;
+      }
+      return { participant, ratio };
+    })
+    .filter((item): item is { participant: string; ratio: number } => item !== null);
 };
 
 const roundCents = (value: number): number => Math.round(value * 100) / 100;
@@ -279,7 +303,7 @@ const buildBulkInsertPlaceholders = (rows: number, width: number): string =>
   Array.from({ length: rows }, () => `(${Array.from({ length: width }, () => '?').join(', ')})`).join(', ');
 
 const normalizeSplitDetailsInput = (value: unknown): string | null => {
-  if (value == null) {
+  if (value === null || value === undefined) {
     return null;
   }
   if (typeof value === 'string') {
@@ -344,7 +368,7 @@ const resolveExpenseSettlementShares = (
   }
 
   const splitDetails = parseExpenseSplitDetails(expense.splitDetails as unknown, amount);
-  const expenseGroupKey = (expense.expenseGroup ?? expense.category).trim().toLowerCase();
+  const expenseGroupKey = readExpenseGroupLabel(expense).toLowerCase();
   const templateSplit = templateSplitByKey.get(`${expense.groupId}:${expenseGroupKey}`) ?? [];
 
   if (expense.splitType === 'Custom' && splitDetails.length > 0) {
@@ -440,7 +464,16 @@ const buildSettlementForScope = (
 
 const expenseRowIsPrivate = (row: { isPrivate?: number }): boolean => row.isPrivate === 1;
 
-export const listGroups = async (userEmail: string, viewerUserId: string): Promise<Group[]> => {
+type AccessibleGroupWithMembers = {
+  id: number;
+  name: string;
+  description: string | null;
+  members: GroupMember[];
+};
+
+const loadAccessibleGroupsWithMembers = async (
+  userEmail: string,
+): Promise<AccessibleGroupWithMembers[]> => {
   const normalizedEmail = userEmail.trim().toLowerCase();
   const [groupRows] = await db.query<GroupRow[]>(
     `
@@ -483,6 +516,24 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
     });
     membersByGroupId.set(row.groupId, existingMembers);
   }
+
+  return groupRows.map((group) => ({
+    id: group.id,
+    name: group.name,
+    description: group.description,
+    members: membersByGroupId.get(group.id) ?? [],
+  }));
+};
+
+export const listGroups = async (userEmail: string, viewerUserId: string): Promise<Group[]> => {
+  const normalizedEmail = userEmail.trim().toLowerCase();
+  const accessibleGroups = await loadAccessibleGroupsWithMembers(userEmail);
+  if (accessibleGroups.length === 0) {
+    return [];
+  }
+
+  const groupRows = accessibleGroups;
+  const membersByGroupId = new Map(accessibleGroups.map((group) => [group.id, group.members]));
 
   const [expenseRows] = await db.query<GroupExpenseRow[]>(
     `
@@ -1199,11 +1250,19 @@ export const deleteExpenseGroup = async (
   return result.affectedRows > 0;
 };
 
-const listSettlementPaymentRows = async (groupIds: number[]): Promise<SettlementPaymentRow[]> => {
+const listSettlementPaymentRows = async (
+  groupIds: number[],
+  periodStartIso?: string,
+): Promise<SettlementPaymentRow[]> => {
   if (groupIds.length === 0) {
     return [];
   }
   try {
+    const periodFilter = periodStartIso ? 'AND settled_at >= ?' : '';
+    const params: Array<number[] | string> = [groupIds];
+    if (periodStartIso) {
+      params.push(periodStartIso);
+    }
     const [paymentRows] = await db.query<SettlementPaymentRow[]>(
       `
       SELECT
@@ -1217,9 +1276,10 @@ const listSettlementPaymentRows = async (groupIds: number[]): Promise<Settlement
         settled_at AS settledAt
       FROM settlement_payments
       WHERE group_id IN (?)
+        ${periodFilter}
       ORDER BY settled_at DESC, id DESC
     `,
-      [groupIds],
+      params,
     );
     return paymentRows;
   } catch (error) {
@@ -1233,9 +1293,10 @@ const listSettlementPaymentRows = async (groupIds: number[]): Promise<Settlement
 export const listHouseholdSettlements = async (
   userEmail: string,
   viewerUserId: string,
+  periodInput?: unknown,
 ): Promise<HouseholdSettlement[]> => {
   try {
-    return await listHouseholdSettlementsImpl(userEmail, viewerUserId);
+    return await listHouseholdSettlementsImpl(userEmail, viewerUserId, periodInput);
   } catch (error) {
     console.error('[listHouseholdSettlements]', error);
     throw error;
@@ -1244,14 +1305,17 @@ export const listHouseholdSettlements = async (
 
 const listHouseholdSettlementsImpl = async (
   userEmail: string,
-  viewerUserId: string,
+  _viewerUserId: string,
+  periodInput?: unknown,
 ): Promise<HouseholdSettlement[]> => {
-  const groups = await listGroups(userEmail, viewerUserId);
+  const period = parseSettlementPeriod(periodInput);
+  const { startIso: periodStartIso } = settlementPeriodRange(period);
+  const groups = await loadAccessibleGroupsWithMembers(userEmail);
   if (groups.length === 0) {
     return [];
   }
 
-  const groupIds = groups.map((group) => Number(group.id));
+  const groupIds = groups.map((group) => group.id);
   const templateSplitByKey = await listTemplateSplitDetailsByGroupAndCategory(groupIds);
   const [expenseRows] = await db.query<SettlementExpenseRow[]>(
     `
@@ -1269,11 +1333,12 @@ const listHouseholdSettlementsImpl = async (
       WHERE e.group_id IN (?)
         AND COALESCE(e.is_private, 0) = 0
         AND COALESCE(e.expense_flow, 'Outgoing') = 'Outgoing'
+        AND e.transaction_date >= ?
       ORDER BY e.transaction_date DESC, e.id DESC
     `,
-    [groupIds],
+    [groupIds, periodStartIso],
   );
-  const paymentRows = await listSettlementPaymentRows(groupIds);
+  const paymentRows = await listSettlementPaymentRows(groupIds, periodStartIso);
 
   const expensesByGroupId = new Map<number, SettlementExpenseRow[]>();
   expenseRows.forEach((row) => {
@@ -1320,9 +1385,8 @@ const listHouseholdSettlementsImpl = async (
   });
 
   return groups.map((group) => {
-    const numericGroupId = Number(group.id);
-    const groupExpenses = expensesByGroupId.get(numericGroupId) ?? [];
-    const groupPayments = paymentsByGroupId.get(numericGroupId) ?? [];
+    const groupExpenses = expensesByGroupId.get(group.id) ?? [];
+    const groupPayments = paymentsByGroupId.get(group.id) ?? [];
     const householdComputed = sanitizeSettlementScope(
       buildSettlementForScope(
         group.members,
@@ -1331,14 +1395,12 @@ const listHouseholdSettlementsImpl = async (
         templateSplitByKey,
       ),
     );
-    const expenseGroupNames = new Set(
-      groupExpenses.map((expense) => (expense.expenseGroup ?? expense.category).trim()).filter(Boolean),
-    );
+    const expenseGroupNames = new Set(groupExpenses.map((expense) => readExpenseGroupLabel(expense)));
     const expenseGroups: ExpenseGroupSettlement[] = Array.from(expenseGroupNames)
       .sort((left, right) => left.localeCompare(right))
       .map((expenseGroupName) => {
         const scopedExpenses = groupExpenses.filter(
-          (expense) => (expense.expenseGroup ?? expense.category).trim().toLowerCase() === expenseGroupName.toLowerCase(),
+          (expense) => readExpenseGroupLabel(expense).toLowerCase() === expenseGroupName.toLowerCase(),
         );
         const scopedPayments = groupPayments.filter(
           (payment) => payment.expenseGroup?.trim().toLowerCase() === expenseGroupName.toLowerCase(),
@@ -1355,7 +1417,7 @@ const listHouseholdSettlementsImpl = async (
       });
 
     return {
-      groupId: group.id,
+      groupId: String(group.id),
       groupName: group.name,
       balances: householdComputed.balances,
       transfers: householdComputed.transfers,

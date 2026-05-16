@@ -23,6 +23,6 @@ export const Input = styled.input<InputProps>`
   &:focus {
     outline: 2px solid rgba(79, 70, 229, 0.25);
     outline-offset: 1px;
-    border-color: ${colors.accent};
+    border-color: ${colors.primary};
   }
 `;

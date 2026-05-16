@@ -17,6 +17,8 @@ const readErrorCode = (formattedError: GraphQLFormattedError): string | undefine
   return typeof code === 'string' ? code : undefined;
 };
 
+const isDevelopment = (process.env.NODE_ENV ?? 'development') !== 'production';
+
 export const formatGraphqlError = (
   formattedError: GraphQLFormattedError,
 ): GraphQLFormattedError => {
@@ -33,7 +35,7 @@ export const formatGraphqlError = (
       message: formattedError.message,
     });
     return {
-      message: 'Internal server error.',
+      message: isDevelopment ? formattedError.message : 'Internal server error.',
       extensions: {
         code: ErrorCode.INTERNAL_SERVER_ERROR,
         requestId,

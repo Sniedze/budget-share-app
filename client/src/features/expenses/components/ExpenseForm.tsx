@@ -15,7 +15,7 @@ import type {
   SplitType,
 } from '../types';
 import { APP_CURRENCY_CODE, formatAppCurrency } from '../../../format/currency';
-import { spacing } from '../../../styles/tokens';
+import { colors, spacing } from '../../../styles/tokens';
 
 const Form = styled.form`
   display: grid;
@@ -24,8 +24,8 @@ const Form = styled.form`
 
 const FormCard = styled(Card)`
   margin-bottom: ${spacing.xl};
-  background: #f8faff;
-  border-color: #dbe5ff;
+  background: ${colors.primaryLighterBg};
+  border-color: ${colors.calloutBorder};
 `;
 
 const FormHeader = styled.div`
@@ -108,13 +108,13 @@ const QueuedTable = styled.table`
 const QueuedHeadCell = styled.th`
   text-align: left;
   padding: 6px 8px;
-  border-bottom: 1px solid #dbe5ff;
-  color: #4b5563;
+  border-bottom: 1px solid ${colors.calloutBorder};
+  color: ${colors.textMuted};
 `;
 
 const QueuedCell = styled.td`
   padding: 8px;
-  border-bottom: 1px solid #e5edff;
+  border-bottom: 1px solid ${colors.primaryLightBg};
 `;
 
 type ExpenseFormProps = {

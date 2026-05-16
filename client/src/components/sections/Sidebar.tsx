@@ -1,7 +1,7 @@
 import { HandCoins, Inbox, LayoutDashboard, LineChart, Users, Upload, type LucideIcon } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import styled from 'styled-components';
-import { colors, radii, spacing } from '../../styles/tokens';
+import { colors, gradients, radii, spacing } from '../../styles/tokens';
 
 const Aside = styled.aside`
   padding: ${spacing.xl} 14px;
@@ -30,8 +30,8 @@ const BrandIcon = styled.div`
   font-size: 12px;
   font-weight: 700;
   color: ${colors.surface};
-  background: linear-gradient(135deg, #5b4ef4, #4131d4);
-  box-shadow: 0 6px 12px rgba(67, 56, 202, 0.25);
+  background: ${gradients.brand};
+  box-shadow: 0 6px 12px ${colors.accentShadow};
 `;
 
 const BrandText = styled.div`

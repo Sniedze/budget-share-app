@@ -46,21 +46,25 @@ export const upsertSplitTemplateInputSchema = z.object({
   ).min(1),
 });
 
+const optionalSettlementString = () =>
+  z
+    .string()
+    .nullish()
+    .transform((value) => {
+      if (value === null || value === undefined) {
+        return undefined;
+      }
+      const trimmed = stripControlCharacters(value).trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    });
+
 export const recordSettlementPaymentInputSchema = z.object({
   groupId: z.string().trim().min(1),
-  expenseGroup: z
-    .string()
-    .transform((v) => stripControlCharacters(v).trim())
-    .optional()
-    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  expenseGroup: optionalSettlementString(),
   fromMember: z.string().transform((v) => stripControlCharacters(v).trim()).pipe(z.string().min(1).max(255)),
   toMember: z.string().transform((v) => stripControlCharacters(v).trim()).pipe(z.string().min(1).max(255)),
   amount: z.number().finite().positive(),
-  note: z
-    .string()
-    .transform((v) => stripControlCharacters(v).trim())
-    .optional()
-    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  note: optionalSettlementString(),
   settledAt: z.string().trim().min(1).max(32),
 });
 
