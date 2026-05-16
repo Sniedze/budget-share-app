@@ -133,6 +133,15 @@ const normalizeMembers = (members: GroupMember[]): GroupMember[] => {
   }));
 };
 
+const isMissingTableError = (error: unknown, tableName: string): boolean => {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const code = 'code' in error ? String(error.code) : '';
+  const message = 'message' in error ? String(error.message) : '';
+  return code === 'ER_NO_SUCH_TABLE' && message.includes(tableName);
+};
+
 const listExpenseGroupLabelsByGroupId = async (groupIds: number[]): Promise<Map<number, string[]>> => {
   const map = new Map<number, string[]>();
   if (groupIds.length === 0) {
@@ -171,8 +180,10 @@ const listTemplateSplitDetailsByGroupAndCategory = async (
     return map;
   }
 
-  const [rows] = await db.query<SplitTemplateRow[]>(
-    `
+  let rows: SplitTemplateRow[] = [];
+  try {
+    const [templateRows] = await db.query<SplitTemplateRow[]>(
+      `
       SELECT
         id,
         group_id AS groupId,
@@ -182,8 +193,14 @@ const listTemplateSplitDetailsByGroupAndCategory = async (
       FROM group_split_templates
       WHERE group_id IN (?)
     `,
-    [groupIds],
-  );
+      [groupIds],
+    );
+    rows = templateRows;
+  } catch (error) {
+    if (!isMissingTableError(error, 'group_split_templates')) {
+      throw error;
+    }
+  }
 
   for (const row of rows) {
     const categoryKey = row.category.trim().toLowerCase();
@@ -261,15 +278,29 @@ const toSettlementDateString = (value: Date | string | null | undefined): string
 const buildBulkInsertPlaceholders = (rows: number, width: number): string =>
   Array.from({ length: rows }, () => `(${Array.from({ length: width }, () => '?').join(', ')})`).join(', ');
 
+const normalizeSplitDetailsInput = (value: unknown): string | null => {
+  if (value == null) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return JSON.stringify(value);
+  }
+  return null;
+};
+
 const parseExpenseSplitDetails = (
-  value: string | null,
+  value: unknown,
   expenseAmount?: number,
 ): Array<{ participant: string; amount: number }> => {
-  if (!value) {
+  const normalizedValue = normalizeSplitDetailsInput(value);
+  if (!normalizedValue) {
     return [];
   }
   try {
-    const parsed = JSON.parse(value) as unknown;
+    const parsed = JSON.parse(normalizedValue) as unknown;
     if (!Array.isArray(parsed)) {
       return [];
     }
@@ -312,7 +343,7 @@ const resolveExpenseSettlementShares = (
     return [];
   }
 
-  const splitDetails = parseExpenseSplitDetails(expense.splitDetails, amount);
+  const splitDetails = parseExpenseSplitDetails(expense.splitDetails as unknown, amount);
   const expenseGroupKey = (expense.expenseGroup ?? expense.category).trim().toLowerCase();
   const templateSplit = templateSplitByKey.get(`${expense.groupId}:${expenseGroupKey}`) ?? [];
 
@@ -1168,15 +1199,6 @@ export const deleteExpenseGroup = async (
   return result.affectedRows > 0;
 };
 
-const isMissingTableError = (error: unknown, tableName: string): boolean => {
-  if (!error || typeof error !== 'object') {
-    return false;
-  }
-  const code = 'code' in error ? String(error.code) : '';
-  const message = 'message' in error ? String(error.message) : '';
-  return code === 'ER_NO_SUCH_TABLE' && message.includes(tableName);
-};
-
 const listSettlementPaymentRows = async (groupIds: number[]): Promise<SettlementPaymentRow[]> => {
   if (groupIds.length === 0) {
     return [];
@@ -1209,6 +1231,18 @@ const listSettlementPaymentRows = async (groupIds: number[]): Promise<Settlement
 };
 
 export const listHouseholdSettlements = async (
+  userEmail: string,
+  viewerUserId: string,
+): Promise<HouseholdSettlement[]> => {
+  try {
+    return await listHouseholdSettlementsImpl(userEmail, viewerUserId);
+  } catch (error) {
+    console.error('[listHouseholdSettlements]', error);
+    throw error;
+  }
+};
+
+const listHouseholdSettlementsImpl = async (
   userEmail: string,
   viewerUserId: string,
 ): Promise<HouseholdSettlement[]> => {
@@ -1258,7 +1292,8 @@ export const listHouseholdSettlements = async (
       toMember: row.toMember,
       amount: toSafeGraphqlFloat(Number(row.amount)),
       note: row.note ?? undefined,
-      settledAt: toSettlementDateString(row.settledAt),
+      settledAt:
+        toSettlementDateString(row.settledAt) || new Date().toISOString().slice(0, 10),
     });
     paymentsByGroupId.set(row.groupId, existing);
   });

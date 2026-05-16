@@ -7,11 +7,18 @@ export const DEFAULT_DEV_ORIGINS = [
   'http://127.0.0.1:3000',
 ];
 
+const isDevelopment = (process.env.NODE_ENV ?? 'development') === 'development';
+
 export const getAllowedOrigins = (): string[] => {
   const raw = process.env.ALLOWED_ORIGINS;
-  return raw && raw.trim().length > 0
-    ? raw.split(',').map((entry) => entry.trim()).filter(Boolean)
-    : DEFAULT_DEV_ORIGINS;
+  const configured =
+    raw && raw.trim().length > 0
+      ? raw.split(',').map((entry) => entry.trim()).filter(Boolean)
+      : [];
+  if (isDevelopment) {
+    return [...new Set([...DEFAULT_DEV_ORIGINS, ...configured])];
+  }
+  return configured.length > 0 ? configured : DEFAULT_DEV_ORIGINS;
 };
 
 /**

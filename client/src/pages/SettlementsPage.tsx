@@ -157,7 +157,17 @@ export const SettlementsPage = (): JSX.Element => {
         </HeaderRow>
 
         {loading ? <MutedText>Loading settlements...</MutedText> : null}
-        {error ? <ErrorText>{error.message}</ErrorText> : null}
+        {error ? (
+          <ErrorText>
+            {error.message}
+            {import.meta.env.DEV &&
+            'graphQLErrors' in error &&
+            Array.isArray(error.graphQLErrors) &&
+            error.graphQLErrors[0]?.extensions?.requestId
+              ? ` (requestId: ${String(error.graphQLErrors[0].extensions.requestId)} — see API terminal logs.)`
+              : null}
+          </ErrorText>
+        ) : null}
         {!loading && !error && !activeHousehold ? <MutedText>No household data available yet.</MutedText> : null}
 
         {activeHousehold ? (

@@ -19,7 +19,11 @@ export const resolveDbConfig = (): {
   port: Number(process.env.DB_PORT) || 3306,
   user: isDevelopment ? (process.env.DB_USER?.trim() || 'budget_user') : requiredEnv('DB_USER'),
   password: isDevelopment
-    ? (process.env.DB_PASSWORD?.trim() || 'budget_password')
+    ? (process.env.DB_PASSWORD?.trim() ||
+        process.env.MYSQL_PASSWORD?.trim() ||
+        'budget_password')
     : requiredEnv('DB_PASSWORD'),
-  database: isDevelopment ? (process.env.DB_NAME?.trim() || 'budget_app') : requiredEnv('DB_NAME'),
+  database: isDevelopment
+    ? (process.env.DB_NAME?.trim() || process.env.MYSQL_DATABASE?.trim() || 'budget_app')
+    : requiredEnv('DB_NAME'),
 });
