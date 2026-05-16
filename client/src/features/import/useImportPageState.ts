@@ -55,25 +55,14 @@ import {
   importRuleMatchText,
   reapplyMerchantRulesToRows,
 } from './merchantRules';
+import type { ImportExpensesMutation } from '../../graphql/generated/graphql';
 import type { ImportedRow, ImportMerchantRule, ParsedStatementData, SavedColumnMapping } from './types';
 
 export const useImportPageState = () => {
   const { user } = useAuth();
   const { data: expensesData } = useQuery<GetExpensesResponse>(GET_EXPENSES);
   const { data: groupsData } = useQuery<{ groups: GroupSummary[] }>(GET_GROUPS);
-  const [importExpensesMutation, { loading: isImporting }] = useMutation<{
-    importExpenses: {
-      importedCount: number;
-      failedCount: number;
-      results: Array<{
-        clientRowId: string;
-        success: boolean;
-        errorCode?: string | null;
-        errorMessage?: string | null;
-        expense?: Expense | null;
-      }>;
-    };
-  }>(IMPORT_EXPENSES, {
+  const [importExpensesMutation, { loading: isImporting }] = useMutation<ImportExpensesMutation>(IMPORT_EXPENSES, {
     update(cache, { data }) {
       const created =
         data?.importExpenses.results
@@ -892,16 +881,7 @@ export const useImportPageState = () => {
       return { clientRowId: row.id, ...expense };
     });
 
-    let payload: {
-      importedCount: number;
-      failedCount: number;
-      results: Array<{
-        clientRowId: string;
-        success: boolean;
-        errorCode?: string | null;
-        errorMessage?: string | null;
-      }>;
-    };
+    let payload: ImportExpensesMutation['importExpenses'];
     try {
       const response = await importExpensesMutation({ variables: { input: { rows: importRows } } });
       if (!response.data?.importExpenses) {
