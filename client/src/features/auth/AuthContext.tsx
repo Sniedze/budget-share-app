@@ -143,6 +143,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components -- hooks colocated with provider
 export const useAuthState = (): AuthStateContextValue => {
   const context = useContext(AuthStateContext);
   if (!context) {
@@ -151,6 +152,7 @@ export const useAuthState = (): AuthStateContextValue => {
   return context;
 };
 
+// eslint-disable-next-line react-refresh/only-export-components -- hooks colocated with provider
 export const useAuthActions = (): AuthActionsContextValue => {
   const context = useContext(AuthActionsContext);
   if (!context) {

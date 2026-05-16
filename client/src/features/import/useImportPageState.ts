@@ -130,7 +130,7 @@ export const useImportPageState = () => {
     return map;
   }, [groups]);
 
-  const expenses = expensesData?.expenses ?? [];
+  const expenses = useMemo(() => expensesData?.expenses ?? [], [expensesData?.expenses]);
   const merchantHistory = useMemo(() => buildMerchantHistory(expenses), [expenses]);
   const sharedCategoryHistory = useMemo(() => buildSharedCategoryHistory(expenses), [expenses]);
   const existingExpenseSignatures = useMemo(() => buildExistingExpenseSignatures(expenses), [expenses]);
