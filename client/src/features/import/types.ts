@@ -23,6 +23,22 @@ export type ParsedStatementData = {
   dataRows: string[][];
 };
 
+/** Column indices used when parsing a statement (for remap UI). */
+export type ImportColumnMappingIndices = {
+  dateIndex: number;
+  merchantIndex: number;
+  amountIndex: number;
+  currencyIndex: number;
+  descriptionIndex: number;
+};
+
+/** Raw file grid + mapping so the user can reopen column mapping after parse. */
+export type ImportRemapContext = {
+  statementData: ParsedStatementData;
+  signatures: string[];
+  appliedMapping: ImportColumnMappingIndices;
+};
+
 export type SavedColumnMapping = {
   dateIndex: number;
   merchantIndex: number;

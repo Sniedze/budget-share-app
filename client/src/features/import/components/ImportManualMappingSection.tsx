@@ -4,6 +4,7 @@ import { Actions, InlineInput } from '../importPageStyles';
 
 type ImportManualMappingSectionProps = {
   manualMappingData: ParsedStatementData;
+  isRemappingColumns: boolean;
   manualDateIndex: string;
   setManualDateIndex: (value: string) => void;
   manualMerchantIndex: string;
@@ -15,6 +16,7 @@ type ImportManualMappingSectionProps = {
   manualCurrencyIndex: string;
   setManualCurrencyIndex: (value: string) => void;
   onApplyManualMapping: () => void;
+  onSwapMerchantDescriptionColumns: () => void;
 };
 
 export const ImportManualMappingSection = ({
@@ -29,11 +31,19 @@ export const ImportManualMappingSection = ({
   setManualDescriptionIndex,
   manualCurrencyIndex,
   setManualCurrencyIndex,
+  isRemappingColumns,
   onApplyManualMapping,
+  onSwapMerchantDescriptionColumns,
 }: ImportManualMappingSectionProps): JSX.Element => {
+  const canSwapMerchantDescription = manualMerchantIndex !== '' && manualDescriptionIndex !== '';
+
   return (
     <>
-      <MutedText>Manual mapping required for this file format.</MutedText>
+      <MutedText>
+        {isRemappingColumns
+          ? 'Remap which CSV columns are merchant (payee), description, amount, and date. Merchant should be the human-readable payee name, not a reference number.'
+          : 'Manual mapping required for this file format.'}
+      </MutedText>
       <Actions>
         <InlineInput as="select" value={manualDateIndex} onChange={(event) => setManualDateIndex(event.currentTarget.value)}>
           <option value="">Select Date column</option>
@@ -91,6 +101,15 @@ export const ImportManualMappingSection = ({
             </option>
           ))}
         </InlineInput>
+        <Button
+          type="button"
+          $variant="secondary"
+          onClick={onSwapMerchantDescriptionColumns}
+          disabled={!canSwapMerchantDescription}
+          title="Exchange merchant and description column selections"
+        >
+          Swap merchant ↔ description
+        </Button>
         <Button type="button" onClick={onApplyManualMapping}>
           Apply mapping
         </Button>
