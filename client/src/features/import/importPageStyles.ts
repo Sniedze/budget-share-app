@@ -121,3 +121,41 @@ export const RuleRow = styled.div`
   gap: ${spacing.sm};
   align-items: center;
 `;
+
+export const MappingSectionTitle = styled.h4`
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: ${colors.textPrimary};
+`;
+
+export const ColumnMappingGrid = styled.div`
+  display: grid;
+  gap: ${spacing.sm};
+  margin: ${spacing.sm} 0 ${spacing.md};
+  padding: ${spacing.md};
+  border: 1px solid ${colors.border};
+  border-radius: 12px;
+  background: #f8fafc;
+`;
+
+export const ColumnMappingRow = styled.div<{ $isHeader?: boolean }>`
+  display: grid;
+  grid-template-columns: minmax(140px, 200px) minmax(220px, 1fr);
+  gap: ${spacing.md};
+  align-items: center;
+  padding-bottom: ${({ $isHeader }) => ($isHeader ? spacing.sm : 0)};
+  border-bottom: ${({ $isHeader }) => ($isHeader ? `1px solid ${colors.border}` : 'none')};
+  font-size: ${({ $isHeader }) => ($isHeader ? '12px' : '14px')};
+  color: ${({ $isHeader }) => ($isHeader ? colors.textMuted : colors.textPrimary)};
+`;
+
+export const ColumnMappingLabel = styled.label`
+  font-weight: 600;
+  color: ${colors.textPrimary};
+`;
+
+export const ColumnMappingSelect = styled(InlineInput)`
+  min-width: 0;
+  width: 100%;
+`;
