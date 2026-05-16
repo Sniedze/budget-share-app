@@ -151,6 +151,42 @@ export type HouseholdSettlement = {
   transfers: Array<SettlementTransfer>;
 };
 
+export type ImportExpenseRowInput = {
+  amount: Scalars['Float']['input'];
+  category: Scalars['String']['input'];
+  clientRowId: Scalars['ID']['input'];
+  currency?: InputMaybe<Scalars['String']['input']>;
+  expenseGroup?: InputMaybe<Scalars['String']['input']>;
+  flow?: InputMaybe<ExpenseFlow>;
+  groupId?: InputMaybe<Scalars['ID']['input']>;
+  isPrivate?: InputMaybe<Scalars['Boolean']['input']>;
+  paidByUserId?: InputMaybe<Scalars['ID']['input']>;
+  split: SplitType;
+  splitDetails?: InputMaybe<Array<SplitAllocationInput>>;
+  title: Scalars['String']['input'];
+  transactionDate: Scalars['String']['input'];
+};
+
+export type ImportExpenseRowResult = {
+  __typename?: 'ImportExpenseRowResult';
+  clientRowId: Scalars['ID']['output'];
+  errorCode: Maybe<Scalars['String']['output']>;
+  errorMessage: Maybe<Scalars['String']['output']>;
+  expense: Maybe<Expense>;
+  success: Scalars['Boolean']['output'];
+};
+
+export type ImportExpensesInput = {
+  rows: Array<ImportExpenseRowInput>;
+};
+
+export type ImportExpensesPayload = {
+  __typename?: 'ImportExpensesPayload';
+  failedCount: Scalars['Int']['output'];
+  importedCount: Scalars['Int']['output'];
+  results: Array<ImportExpenseRowResult>;
+};
+
 export type InvitationEmailDeliveryStatus =
   | 'EmailFailed'
   | 'EmailSent'
@@ -172,6 +208,7 @@ export type Mutation = {
   declineGroupInvitation: GroupInvitation;
   deleteExpense: Scalars['Boolean']['output'];
   deleteExpenseGroup: Scalars['Boolean']['output'];
+  importExpenses: ImportExpensesPayload;
   login: AuthPayload;
   logout: Scalars['Boolean']['output'];
   recordSettlementPayment: SettlementPayment;
@@ -217,6 +254,11 @@ export type MutationDeleteExpenseArgs = {
 export type MutationDeleteExpenseGroupArgs = {
   category: Scalars['String']['input'];
   groupId: Scalars['ID']['input'];
+};
+
+
+export type MutationImportExpensesArgs = {
+  input: ImportExpensesInput;
 };
 
 
@@ -270,6 +312,11 @@ export type QueryGroupSplitTemplatesArgs = {
   groupId: Scalars['ID']['input'];
 };
 
+
+export type QueryHouseholdSettlementsArgs = {
+  period?: InputMaybe<SettlementPeriod>;
+};
+
 export type RecordSettlementPaymentInput = {
   amount: Scalars['Float']['input'];
   expenseGroup?: InputMaybe<Scalars['String']['input']>;
@@ -307,6 +354,11 @@ export type SettlementPayment = {
   settledAt: Scalars['String']['output'];
   toMember: Scalars['String']['output'];
 };
+
+export type SettlementPeriod =
+  | 'CurrentMonth'
+  | 'Last6Months'
+  | 'Last12Months';
 
 export type SettlementTransfer = {
   __typename?: 'SettlementTransfer';
@@ -417,6 +469,13 @@ export type AddExpenseMutationVariables = Exact<{
 
 export type AddExpenseMutation = { __typename?: 'Mutation', addExpense: { __typename?: 'Expense', id: string, title: string, amount: number, currency: string, createdAt: string, transactionDate: string, category: string, expenseGroup: string | null, split: SplitType, groupId: string | null, createdByUserId: string | null, paidByUserId: string | null, isPrivate: boolean, flow: ExpenseFlow, splitDetails: Array<{ __typename?: 'SplitAllocation', participant: string, ratio: number, amount: number }> } };
 
+export type ImportExpensesMutationVariables = Exact<{
+  input: ImportExpensesInput;
+}>;
+
+
+export type ImportExpensesMutation = { __typename?: 'Mutation', importExpenses: { __typename?: 'ImportExpensesPayload', importedCount: number, failedCount: number, results: Array<{ __typename?: 'ImportExpenseRowResult', clientRowId: string, success: boolean, errorCode: string | null, errorMessage: string | null, expense: { __typename?: 'Expense', id: string, title: string, amount: number, currency: string, createdAt: string, transactionDate: string, category: string, expenseGroup: string | null, split: SplitType, groupId: string | null, createdByUserId: string | null, paidByUserId: string | null, isPrivate: boolean, flow: ExpenseFlow, splitDetails: Array<{ __typename?: 'SplitAllocation', participant: string, ratio: number, amount: number }> } | null }> } };
+
 export type UpdateExpenseMutationVariables = Exact<{
   input: UpdateExpenseInput;
 }>;
@@ -499,7 +558,9 @@ export type UpsertGroupSplitTemplateMutationVariables = Exact<{
 
 export type UpsertGroupSplitTemplateMutation = { __typename?: 'Mutation', upsertGroupSplitTemplate: { __typename?: 'SplitTemplate', id: string, groupId: string, category: string, templateName: string, splitDetails: Array<{ __typename?: 'SplitAllocation', participant: string, ratio: number }> } };
 
-export type GetHouseholdSettlementsQueryVariables = Exact<{ [key: string]: never; }>;
+export type GetHouseholdSettlementsQueryVariables = Exact<{
+  period?: InputMaybe<SettlementPeriod>;
+}>;
 
 
 export type GetHouseholdSettlementsQuery = { __typename?: 'Query', householdSettlements: Array<{ __typename?: 'HouseholdSettlement', groupId: string, groupName: string, balances: Array<{ __typename?: 'SettlementBalance', memberName: string, amount: number }>, transfers: Array<{ __typename?: 'SettlementTransfer', fromMember: string, toMember: string, amount: number }>, expenseGroups: Array<{ __typename?: 'ExpenseGroupSettlement', expenseGroup: string, totalExpenses: number, balances: Array<{ __typename?: 'SettlementBalance', memberName: string, amount: number }>, transfers: Array<{ __typename?: 'SettlementTransfer', fromMember: string, toMember: string, amount: number }> }>, payments: Array<{ __typename?: 'SettlementPayment', id: string, groupId: string, expenseGroup: string | null, fromMember: string, toMember: string, amount: number, note: string | null, settledAt: string }> }> };

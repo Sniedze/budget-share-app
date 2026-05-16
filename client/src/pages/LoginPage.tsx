@@ -36,7 +36,12 @@ export const LoginPage = (): JSX.Element => {
       await login(email.trim(), password, rememberMe);
       navigate(from, { replace: true });
     } catch (authError) {
-      setError(authError instanceof Error ? authError.message : 'Login failed.');
+      const message = authError instanceof Error ? authError.message : 'Login failed.';
+      setError(
+        message === 'Failed to fetch'
+          ? 'Cannot reach the API. From the repo root run: npm run server'
+          : message,
+      );
     }
   };
 

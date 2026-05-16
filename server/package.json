@@ -7,7 +7,11 @@
   },
   "scripts": {
     "test": "node ./scripts/run-tests.mjs",
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file-if-exists=../.env src/index.ts",
+    "create-demo-user": "tsx scripts/create-demo-user.ts",
+    "seed-account": "tsx scripts/seed-account.ts",
+    "reset-password": "tsx scripts/reset-password.ts",
+    "debug-settlements": "tsx scripts/debug-settlements-query.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "lint": "eslint src --max-warnings 0",

@@ -1,3 +1,4 @@
+import '../loadEnv.js';
 import mysql from 'mysql2/promise';
 import type { RowDataPacket } from 'mysql2';
 import { resolveDbConfig } from './config.js';
@@ -366,10 +367,42 @@ export const migrateSchema = async (): Promise<void> => {
       `);
   }
 
+  const [groupColumns] = await db.query<ColumnCheckRow[]>(
+    `
+        SELECT COLUMN_NAME AS columnName
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'groups'
+          AND COLUMN_NAME = 'created_at'
+      `,
+  );
+  if (groupColumns.length === 0) {
+    await db.execute(`
+        ALTER TABLE \`groups\`
+        ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      `);
+  }
+
   await ensureIndex('expenses', 'idx_expenses_group_transaction', 'group_id, transaction_date DESC');
   await ensureIndex('expenses', 'idx_expenses_creator_transaction', 'created_by_user_id, transaction_date DESC');
   await ensureIndex('group_members', 'idx_group_members_email', 'email');
   await ensureIndex('group_invitations', 'idx_group_invitations_email_status', 'email, status');
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS settlement_payments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_id INT NOT NULL,
+    expense_group VARCHAR(64) NULL,
+    from_member VARCHAR(255) NOT NULL,
+    to_member VARCHAR(255) NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    note VARCHAR(500) NULL,
+    settled_at DATE NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_settlement_payments_group
+      FOREIGN KEY (group_id) REFERENCES \`groups\`(id)
+      ON DELETE CASCADE
+  )
+    `);
   await ensureIndex('settlement_payments', 'idx_settlement_payments_group_settled', 'group_id, settled_at DESC');
   await ensureIndex('audit_logs', 'idx_audit_logs_entity', 'entity_type, entity_id');
   await ensureIndex('user_refresh_sessions', 'idx_user_refresh_sessions_user', 'user_id');
@@ -379,4 +412,7 @@ export const migrateSchema = async (): Promise<void> => {
     '../modules/groups/invitations.js'
   );
   await backfillAcceptedInvitationsForExistingMembers();
+
+  const { purgeOldAuditLogs } = await import('../modules/audit/service.js');
+  await purgeOldAuditLogs();
 };

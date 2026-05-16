@@ -1,12 +1,28 @@
 import { ApolloClient, HttpLink, InMemoryCache } from '@apollo/client';
-import {
-  getGraphqlErrorCode,
-  GraphqlErrorCode,
-  type GraphqlErrorShape,
-} from './graphqlErrorCodes';
+import { isUnauthenticatedGraphqlError, type GraphqlErrorShape } from './graphqlErrorCodes';
 
 const DEFAULT_GRAPHQL_URL = 'http://localhost:4000/graphql';
-const GRAPHQL_URL = import.meta.env.VITE_GRAPHQL_URL?.trim() || DEFAULT_GRAPHQL_URL;
+
+/** In dev, prefer the local API unless explicitly configured. Production Docker uses `/graphql` via .env. */
+const resolveGraphqlUrl = (): string => {
+  const configured = import.meta.env.VITE_GRAPHQL_URL?.trim();
+  if (import.meta.env.DEV) {
+    if (configured && configured.startsWith('http')) {
+      return configured;
+    }
+    return DEFAULT_GRAPHQL_URL;
+  }
+  return configured || DEFAULT_GRAPHQL_URL;
+};
+
+const GRAPHQL_URL = resolveGraphqlUrl();
+
+const toFetchErrorMessage = (error: unknown): string => {
+  if (error instanceof TypeError && error.message === 'Failed to fetch') {
+    return `Cannot reach the API at ${GRAPHQL_URL}. Start it with: npm run server`;
+  }
+  return error instanceof Error ? error.message : 'Request failed.';
+};
 
 type GraphqlResponseBody = {
   errors?: GraphqlErrorShape[];
@@ -20,13 +36,7 @@ const isAuthErrorResponse = async (response: Response): Promise<boolean> => {
   }
   try {
     const body = (await response.clone().json()) as GraphqlResponseBody;
-    return Boolean(
-      body.errors?.some(
-        (error) =>
-          getGraphqlErrorCode(error) === GraphqlErrorCode.UNAUTHENTICATED ||
-          error.message?.includes('Authentication required'),
-      ),
-    );
+    return Boolean(body.errors?.some((error) => isUnauthenticatedGraphqlError(error)));
   } catch {
     return false;
   }
@@ -68,7 +78,12 @@ const authAwareFetch: typeof fetch = async (input, init) => {
     credentials: 'include',
     headers: originalHeaders,
   };
-  const initialResponse = await fetch(input, requestInit);
+  let initialResponse: Response;
+  try {
+    initialResponse = await fetch(input, requestInit);
+  } catch (error) {
+    throw new Error(toFetchErrorMessage(error));
+  }
 
   const isRefreshRequest =
     typeof requestInit.body === 'string' && requestInit.body.includes('refreshSession');

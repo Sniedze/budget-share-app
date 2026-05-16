@@ -1,16 +1,16 @@
 import styled from 'styled-components';
 import { Card } from '../../components/ui';
-import { colors, radii, spacing } from '../../styles/tokens';
+import { colors, gradients, radii, spacing } from '../../styles/tokens';
 import { BUDGET_TOP_LEVEL_CATEGORIES } from '../expenses';
 
 export const DEFAULT_CATEGORY_OPTIONS = [...BUDGET_TOP_LEVEL_CATEGORIES];
 
 export const CATEGORY_DOT_COLORS = [
   '#22c55e',
-  '#3b82f6',
+  '#0891b2',
   '#f97316',
   '#a855f7',
-  '#14b8a6',
+  '#06b6d4',
   '#ec4899',
   '#64748b',
 ];
@@ -32,12 +32,10 @@ export const SummaryGrid = styled.div`
 
 export const SummaryCard = styled(Card)<{ $variant?: 'accent' }>`
   min-height: 96px;
-  background: ${({ $variant }) =>
-    $variant === 'accent' ? 'linear-gradient(135deg, #5b4ef4 0%, #4131d4 100%)' : colors.surface};
+  background: ${({ $variant }) => ($variant === 'accent' ? gradients.primary : colors.surface)};
   color: ${({ $variant }) => ($variant === 'accent' ? '#ffffff' : colors.textPrimary)};
   border: 1px solid ${({ $variant }) => ($variant === 'accent' ? 'transparent' : colors.border)};
-  box-shadow: ${({ $variant }) =>
-    $variant === 'accent' ? '0 10px 24px rgba(67, 56, 202, 0.28)' : 'none'};
+  box-shadow: ${({ $variant }) => ($variant === 'accent' ? `0 10px 24px ${colors.primaryShadowStrong}` : 'none')};
 `;
 
 export const SummaryLabel = styled.div`
@@ -114,9 +112,9 @@ export const MetricValue = styled.span<{ $tone?: 'default' | 'blue' | 'green' | 
   font-size: 18px;
   font-weight: 700;
   color: ${({ $tone }) => {
-    if ($tone === 'blue') return '#2563eb';
-    if ($tone === 'green') return '#16a34a';
-    if ($tone === 'red') return '#dc2626';
+    if ($tone === 'blue') return colors.primary;
+    if ($tone === 'green') return colors.success;
+    if ($tone === 'red') return colors.danger;
     return colors.textPrimary;
   }};
 `;
@@ -161,11 +159,10 @@ export const PillTab = styled.button<{ $active: boolean }>`
   padding: 8px 14px;
   font-size: 13px;
   font-weight: 600;
-  color: ${({ $active }) => ($active ? '#ffffff' : colors.textMuted)};
-  background: ${({ $active }) => ($active ? '#c7d2fe' : 'transparent')};
-  color: ${({ $active }) => ($active ? '#3730a3' : colors.textMuted)};
+  color: ${({ $active }) => ($active ? colors.primaryLightText : colors.textMuted)};
+  background: ${({ $active }) => ($active ? colors.primaryLightBg : 'transparent')};
   &:hover {
-    background: ${({ $active }) => ($active ? '#c7d2fe' : colors.background)};
+    background: ${({ $active }) => ($active ? colors.primaryLightBg : colors.background)};
   }
 `;
 
@@ -185,9 +182,9 @@ export const Callout = styled.div`
   align-items: flex-start;
   padding: ${spacing.md};
   border-radius: ${radii.md};
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1e3a5f;
+  background: ${colors.calloutBg};
+  border: 1px solid ${colors.calloutBorder};
+  color: ${colors.calloutText};
   font-size: 13px;
   line-height: 1.45;
   margin-top: ${spacing.md};
@@ -285,8 +282,8 @@ export const Pill = styled.span`
   border-radius: ${radii.full};
   font-size: 12px;
   font-weight: 600;
-  background: #dbeafe;
-  color: #1e40af;
+  background: ${colors.primaryLightBg};
+  color: ${colors.primaryLightText};
 `;
 
 export const StatusPill = styled.span<{ $variant: 'under' | 'over' }>`

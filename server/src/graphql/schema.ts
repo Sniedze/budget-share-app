@@ -10,6 +10,12 @@ export const typeDefs = `#graphql
     Incoming
   }
 
+  enum SettlementPeriod {
+    CurrentMonth
+    Last6Months
+    Last12Months
+  }
+
   type Expense {
     id: ID!
     title: String!
@@ -287,7 +293,7 @@ export const typeDefs = `#graphql
     groups: [Group!]!
     myInvitations: [GroupInvitation!]!
     groupSplitTemplates(groupId: ID!): [SplitTemplate!]!
-    householdSettlements: [HouseholdSettlement!]!
+    householdSettlements(period: SettlementPeriod): [HouseholdSettlement!]!
   }
 
   type Mutation {

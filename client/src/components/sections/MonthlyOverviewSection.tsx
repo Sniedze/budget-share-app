@@ -45,7 +45,7 @@ const SummaryRow = styled.tr`
   transition: background 0.15s ease-in-out;
 
   &:hover {
-    background: #eef2ff;
+    background: ${colors.primaryLighterBg};
   }
 `;
 

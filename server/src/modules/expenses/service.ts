@@ -106,10 +106,6 @@ const rowCurrency = (row: { currency?: string | null }): string => {
   return APP_CURRENCY;
 };
 
-const roundToCents = (value: number): number => {
-  return Math.round(value * 100) / 100;
-};
-
 const validateAmount = (amount: number): void => {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Expense amount must be greater than zero.');

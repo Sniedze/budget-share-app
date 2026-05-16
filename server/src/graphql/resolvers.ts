@@ -64,9 +64,13 @@ export const resolvers = {
       const user = requireAuth(context);
       return listSplitTemplates(args.groupId, user.email);
     },
-    householdSettlements: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
+    householdSettlements: async (
+      _parent: unknown,
+      args: { period?: string | null },
+      context: GraphqlContext,
+    ) => {
       const user = requireAuth(context);
-      return listHouseholdSettlements(user.email, user.id);
+      return listHouseholdSettlements(user.email, user.id, args.period);
     },
   },
   Mutation: {

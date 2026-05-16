@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import { colors, spacing } from '../../styles/tokens';
+import { colors, gradients, spacing } from '../../styles/tokens';
 import { Card } from './Card';
 import { Button } from './Button';
 
@@ -7,7 +7,7 @@ export const AuthPage = styled.main`
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: linear-gradient(180deg, #e7ecfa 0%, #dfe6f8 100%);
+  background: ${gradients.authPage};
   padding: ${spacing.xl};
 `;
 
@@ -45,9 +45,9 @@ export const AuthEyebrow = styled.span`
   font-size: 24px;
   font-weight: 700;
   color: #ffffff;
-  background: linear-gradient(145deg, #4f46e5, #4338ca);
+  background: ${gradients.authEyebrow};
   border-radius: 999px;
-  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.35);
+  box-shadow: 0 8px 18px ${colors.primaryShadowStrong};
 `;
 
 export const FieldLabel = styled.label`
@@ -75,10 +75,10 @@ export const AuthTabButton = styled(Button)<{ $active?: boolean }>`
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: ${({ $active }) => ($active ? 'linear-gradient(145deg, #4f46e5, #4338ca)' : '#e5e7eb')};
-  color: ${({ $active }) => ($active ? '#ffffff' : '#4b5563')};
+  background: ${({ $active }) => ($active ? gradients.authEyebrow : colors.border)};
+  color: ${({ $active }) => ($active ? '#ffffff' : colors.textMuted)};
 
   &:hover {
-    background: ${({ $active }) => ($active ? 'linear-gradient(145deg, #4338ca, #3730a3)' : '#d1d5db')};
+    background: ${({ $active }) => ($active ? gradients.authEyebrowHover : '#d1d5db')};
   }
 `;

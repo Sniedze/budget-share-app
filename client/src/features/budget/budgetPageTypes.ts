@@ -1,3 +1,5 @@
+import type { Expense } from '../expenses';
+
 export type MonthlyBreakdownRow = {
   key: string;
   label: string;
@@ -25,4 +27,21 @@ export type CategoryTrendRow = {
   avg: number;
   trend: 'up' | 'down' | 'stable';
   trendLabel: string;
+};
+
+export type CategoryBudgetDisplayRow = {
+  name: string;
+  cap: number;
+  spent: number;
+  pct: number;
+  over: boolean;
+  trend: 'up' | 'down' | 'stable';
+  trendLabel: string;
+  remaining: number;
+  dot: string;
+};
+
+export type RecentTransactionRow = {
+  expense: Expense;
+  remaining: number;
 };

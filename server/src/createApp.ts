@@ -9,19 +9,25 @@ import { createGraphqlContext, type GraphqlContext } from './graphql/context.js'
 import { checkDbConnection, ensureSchema, migrateSchema } from './db/mysql.js';
 import { graphqlRateLimiter } from './middleware/graphqlRateLimit.js';
 import { graphqlCsrfGuard } from './middleware/graphqlCsrfGuard.js';
-import { assignRequestContext, getCurrentRequestId } from './middleware/requestContext.js';
+import { assignRequestContext } from './middleware/requestContext.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { createCorsOptions } from './config/corsOptions.js';
 import { formatGraphqlError } from './graphql/formatGraphqlError.js';
 
+/** Default high enough for nested queries (e.g. settlements) with Apollo Client `__typename` fields. */
+const DEFAULT_MAX_RECURSIVE_SELECTIONS = 100;
+
 const parseMaxRecursiveSelections = (): number | false => {
-  const raw = process.env.GRAPHQL_MAX_RECURSIVE_SELECTIONS;
-  if (!raw || raw.trim().length === 0) {
-    return 30;
+  const raw = process.env.GRAPHQL_MAX_RECURSIVE_SELECTIONS?.trim();
+  if (!raw || raw.length === 0) {
+    return DEFAULT_MAX_RECURSIVE_SELECTIONS;
+  }
+  if (raw === 'false' || raw === '0') {
+    return false;
   }
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    return 30;
+    return DEFAULT_MAX_RECURSIVE_SELECTIONS;
   }
   return Math.floor(parsed);
 };

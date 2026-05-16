@@ -64,11 +64,11 @@ This is genuinely good shipping. With the security posture and observability in 
 |---|---|---|
 | 1.4 | Hardcoded DB creds in `docker-compose.yml` | **✓ Resolved** — required-env interpolation `${VAR:?required}`, `.env.example` present |
 | 1.5 | Hardcoded GraphQL URL | **✓ Resolved** — `import.meta.env.VITE_GRAPHQL_URL` read with localhost fallback for dev (`apolloClient.ts:3-4`) |
-| 1.6 | `Authorization` parsing via `split(' ')` | **✗ Still open** — `context.ts:20` unchanged. Bearer parsing is now a fallback (cookies first) but the parsing is still loose. |
-| 1.7 | Substring-coupled auth-error detection | **✗ Still open** — `apolloClient.ts:22` still checks `error.message?.includes('Authentication required')`. The GraphQL `extensions.code` enum hasn't been introduced. The "Duplicate transaction:" prefix coupling in `graphqlErrors.ts` is also unchanged. |
-| 1.8 | Server throws plain `Error` everywhere; no `extensions.code` | **✗ Still open** — every service still uses `throw new Error(string)`. The new `formatError` (`createApp.ts:41-49`) stamps `requestId` but doesn't add a typed `code`. Apollo's default `extensions.code` (e.g. `INTERNAL_SERVER_ERROR`) is what clients see today. |
+| 1.6 | `Authorization` parsing via `split(' ')` | **✓ Resolved** — `context.ts` uses `^Bearer\s+(\S+)$` regex; cookies preferred, bearer fallback. |
+| 1.7 | Substring-coupled auth-error detection | **◐ Partially resolved** — `apolloClient.ts` uses `extensions.code` (`UNAUTHENTICATED`). Import duplicate detection still accepts legacy `Duplicate transaction:` prefix when `errorCode` is absent. |
+| 1.8 | Server throws plain `Error` everywhere; no `extensions.code` | **◐ Partially resolved** — `AppError` + `formatGraphqlError` scrub unknown errors and stamp `requestId`. Many services still `throw new Error`; migrate incrementally to `appError(ErrorCode.*, ...)`. |
 | 1.9 | No central logger | **◐ Partially resolved** — `server/src/logger.ts` exists, emits structured JSON, logs request completion + authz denials + 5xx via `errorHandler`. Still uses `console.log/error/warn` underneath rather than pino/winston, has no log-level filtering via env, and doesn't log GraphQL resolver errors (only HTTP-level errors and select authz denials). |
-| 1.16 | No `helmet` / CSP / HSTS | **✗ Still open** — no `helmet` middleware in `createApp.ts`. With cookies now in play, this is more important than before. |
+| 1.16 | No `helmet` / CSP / HSTS | **✓ Resolved** — `helmet()` in `createApp.ts` (CSP disabled for GraphQL playground compatibility in dev). |
 | 1.17 | No body-size limit | **✓ Resolved** — `express.json({ limit: process.env.JSON_BODY_LIMIT ?? '512kb' })` (`createApp.ts:58-59`) |
 
 ### Medium (16) — partial progress, most remain
@@ -83,12 +83,12 @@ This is genuinely good shipping. With the security posture and observability in 
 | 1.15 | Login rate limit IP-only | **✗ Still open** — `graphqlRateLimit.ts` still keys on IP only. |
 | 1.18 | `audit_logs.actor_email NOT NULL` vs `actor_user_id NULL` | **✗ Still open** — schema unchanged (`db/mysql.ts:127-138`). |
 | 1.19 | `/health` doesn't check DB | **✗ Still open** — `createApp.ts:61-63` still returns OK unconditionally. |
-| 2.1 | Oversized page files | **✗ Still open** — `ImportPage.tsx` is still 2,631 lines; `BudgetPage.tsx` 1,340 lines. |
+| 2.1 | Oversized page files | **✓ Resolved** — `ImportPage.tsx` and `BudgetPage.tsx` are thin shells; logic lives in `features/import/*` and `features/budget/*` + section components. |
 | 2.2 | Three sources of truth (Apollo / state / localStorage) | **✗ Still open** — `features/budget/storage.ts` + `ImportPage.tsx` localStorage helpers unchanged. |
-| 2.3 | `listHouseholdSettlements` duplicates `listGroups` work | **✗ Still open** — same shape (`groups/service.ts:891-998`). |
-| 2.4 | `refetchQueries` everywhere | **✗ Still open** — `useExpenseActions.ts` unchanged. The import loop still fires one mutation + one refetch per row. |
+| 2.3 | `listHouseholdSettlements` duplicates `listGroups` work | **✓ Resolved** — `loadAccessibleGroupsWithMembers` loads only settlement-scoped groups + members. |
+| 2.4 | `refetchQueries` everywhere | **◐ Partially resolved** — `refetchGroups(client)` after household expense mutations/import; cache updates for expenses. Import still uses per-row mutations (batched mutation still open). |
 | 2.5 | `ME` is `network-only` on every mount | **✗ Still open** — `AuthContext.tsx:48`. Necessary for the cookie/session model but worth revisiting (see new 1.A). |
-| 2.6 | No error boundary | **◐ Partially resolved** — `<Suspense fallback>` was added in `App.tsx:50`, but a real `<ErrorBoundary>` (catching throws, not lazy-load promises) is still missing. |
+| 2.6 | No error boundary | **✓ Resolved** — `ErrorBoundary` wraps the app in `main.tsx`. |
 | 2.7 | No route code splitting | **✓ Resolved** — `App.tsx:1-21` uses `React.lazy` for every page + a `<Suspense>` wrapper. |
 | 2.8 | `<AuthBootstrap>` splash flicker | **✗ Still open** — `App.tsx:RequireAuth/PublicOnly` still render `<div>Loading...</div>`. |
 
@@ -96,8 +96,8 @@ This is genuinely good shipping. With the security posture and observability in 
 
 | # | Finding | Status |
 |---|---|---|
-| 3.1 | N+1 `isGroupMember` | **✗ Still open** — `expenses/service.ts:230-266` unchanged; still one `SELECT` per group-scoped expense. |
-| 3.3 | Missing indexes on foreign keys | **✗ Still open** — `db/mysql.ts` ensure/migrate still only creates `uniq_expense_creator_dedup`. No index on `expenses(group_id, transaction_date)`, `group_members(email)`, `group_invitations(email, status)`, `settlement_payments(group_id, settled_at)`, or `audit_logs(entity_type, entity_id)`. |
+| 3.1 | N+1 `isGroupMember` | **✓ Resolved** — `loadMemberGroupIds` prefetches membership once per request. |
+| 3.3 | Missing indexes on foreign keys | **✓ Resolved** — `ensureIndex` in `db/mysql.ts` for expenses, group_members, invitations, settlements, audit_logs, refresh sessions. |
 | 3.7 | `Promise.all(INSERT)` for members/invitations | **✓ Resolved** — `groups/service.ts:539-580, 700-748` now uses `buildBulkInsertPlaceholders` for a single multi-row insert. |
 | 3.9 | Recharts in main bundle | **✓ Resolved** — `vite.config.ts manualChunks` splits recharts into its own chunk; commit `cbf83fa` defers recharts on the home page. |
 
@@ -109,11 +109,11 @@ This is genuinely good shipping. With the security posture and observability in 
 
 | # | Finding | Status |
 |---|---|---|
-| 5.1 | No tests | **✓ Resolved** — `cookies.test.ts`, `graphqlCsrfGuard.test.ts`, `requestContext.test.ts`, `graphqlAuthHttp.integration.test.ts`. Coverage is auth/CSRF/request-context focused; expense math (split allocation, dedup hash, settlements) is still untested — see new 5.A. |
-| 5.2 | No root README | **✗ Still open** — root has `PROJECT_RULES.md`, `SECURITY.md`, `.env.example` (very good) but no `README.md`. |
-| 5.3 | No build/lint/test CI | **✓ Resolved** — `.github/workflows/ci.yml` builds both apps and runs server tests + smoke test against a real MySQL service. Lint job not present; see new 5.B. |
+| 5.1 | No tests | **✓ Resolved** — auth/CSRF/integration tests plus `transactionDedup.test.ts`, `splitAllocation.test.ts`, `settlementTransfers.test.ts`, `settlementPeriod.test.ts`. |
+| 5.2 | No root README | **✓ Resolved** — root `README.md` with layout, local dev, deploy, tests. |
+| 5.3 | No build/lint/test CI | **✓ Resolved** — CI builds client + server, runs server tests + smoke test, and `npm run lint` for both apps. |
 | 5.4 | No `.nvmrc` | **✓ Resolved** (per `SECURITY.md`). |
-| 5.5 | No server ESLint | **✗ Still open** — `server/` has no `.eslintrc.*`, no `lint` script. |
+| 5.5 | No server ESLint | **✓ Resolved** — `server/eslint.config.js` + `npm run lint`. |
 
 ### Modern code (4 high) — two partial, two open
 
@@ -277,16 +277,16 @@ If a library attaches a malicious `statusCode = "1000"` string, `Number("1000") 
 
 The previous top-10 list is mostly done. Here's what's left, ordered by impact ÷ effort.
 
-1. **Add `helmet`** (1.16). One line. Free defense-in-depth. ~5 minutes.
-2. **Add `extensions.code` enum to GraphQL errors** (1.7, 1.8) — `AppError extends GraphQLError`, update `formatError` to scrub unknown errors. Replaces substring matching client-side. ~Half a day.
-3. **Index foreign keys** (3.3). One migration. ~One hour.
-4. **Fix N+1 `isGroupMember`** (3.1). One pre-fetch + `Set.has`. ~One hour.
-5. **Add money-math tests** (1.H): `transactionDedup`, `toStoredSplitDetails`, `buildOptimizedTransfers`. ~Half a day.
-6. **Replace `refetchQueries` with `update(cache, ...)` + fragments** (2.4, 3.6, 6.2 partially). Also add a batched `addExpenses` mutation for import. ~Half a day.
-7. **Split `ImportPage.tsx`** (2.1) into `features/import/*` + `useImportPageState`. ~One day.
-8. **Add server ESLint** with `@typescript-eslint/eqeqeq`, `no-floating-promises`, `strict-boolean-expressions` (5.5, 1.D). ~Two hours.
-9. **Add root `README.md`** (5.2) — quickstart, env table, layout. ~One hour.
-10. **Drop the hardcoded DB-cred fallbacks in `db/mysql.ts`** (1.E). Fail fast in non-dev. ~10 minutes.
+1. **Finish `AppError` migration** (1.8) — replace remaining `throw new Error` in services with `appError(ErrorCode.*, ...)`. ~Half a day.
+2. **Batched import mutation** (2.4) — single `importExpenses` round-trip; drop per-row refetch patterns. ~Half a day.
+3. **Persist budget + merchant rules in DB** (2.2) — replace `localStorage` in `features/budget/storage.ts` and import rules. ~One to two days.
+4. **Email-as-identity → user IDs** (1.11) — `group_members.user_id` as auth key. Large migration.
+5. **Per-device logout** (1.B) — refresh session rows vs revoke-all `refresh_token_version`.
+6. **Adopt GraphQL codegen on client** (6.2) — typed operations beyond generated schema types.
+7. **Login rate limit by email** (1.15) — composite key IP + normalized email.
+8. **DB health in `/health`** (1.19) — lightweight `SELECT 1`.
+9. **Dev-only DB fallbacks** (1.E) — already fail-fast in production via `resolveDbConfig`; document in README.
+10. **Email invitation delivery status** (A.2) — `email_status` on invitations or outbox table.
 
 Stretch: split `AuthContext`, add error boundary, swap `me` to use a non-secret session-hint cookie, adopt Zod for the rest of the inputs, generate GraphQL types with codegen.
 
