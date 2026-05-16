@@ -781,7 +781,7 @@ export const useHouseholdPageState = () => {
       return;
     }
     setTemplateError(null);
-    const category = normalizedTemplateCategory;
+    const category = editingTemplateCategory ?? normalizedTemplateCategory;
 
     if (!category) {
       setTemplateError('Expense group category is required.');
