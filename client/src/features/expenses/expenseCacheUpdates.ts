@@ -2,6 +2,23 @@ import type { ApolloCache } from '@apollo/client';
 import { GET_EXPENSES } from './graphql';
 import type { Expense, GetExpensesResponse } from './types';
 
+export const mergeImportedExpensesIntoCache = (cache: ApolloCache, expenses: Expense[]): void => {
+  if (expenses.length === 0) {
+    return;
+  }
+  cache.updateQuery<GetExpensesResponse>({ query: GET_EXPENSES }, (existing) => {
+    const knownIds = new Set(existing?.expenses.map((row) => row.id) ?? []);
+    const toAdd = expenses.filter((expense) => !knownIds.has(expense.id));
+    if (toAdd.length === 0) {
+      return existing;
+    }
+    if (!existing) {
+      return { expenses: toAdd };
+    }
+    return { expenses: [...toAdd, ...existing.expenses] };
+  });
+};
+
 export const addExpenseToCache = (cache: ApolloCache, expense: Expense | null | undefined): void => {
   if (!expense) {
     return;

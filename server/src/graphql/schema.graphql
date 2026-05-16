@@ -1,5 +1,4 @@
-export const typeDefs = `#graphql
-  enum SplitType {
+enum SplitType {
     Personal
     Shared
     Custom
@@ -308,4 +307,3 @@ export const typeDefs = `#graphql
     declineExpenseGroupParticipation(groupId: ID!, category: String!): Boolean!
     deleteExpenseGroup(groupId: ID!, category: String!): Boolean!
   }
-`;

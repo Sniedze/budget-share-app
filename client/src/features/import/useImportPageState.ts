@@ -1,13 +1,15 @@
-import { useQuery } from '@apollo/client/react';
+import { useMutation, useQuery } from '@apollo/client/react';
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DEFAULT_EXPENSE_CATEGORIES,
   DEFAULT_INCOME_CATEGORIES,
   GET_EXPENSES,
-  getMutationErrorMessage,
-  isBackendDuplicateExpenseError,
+  IMPORT_EXPENSES,
+  isDuplicateImportResult,
   isOutgoingExpense,
-  useExpenseActions,
+  mergeImportedExpensesIntoCache,
+  type AddExpenseInput,
+  type Expense,
   type GetExpensesResponse,
   type SplitType,
 } from '../expenses';
@@ -53,13 +55,23 @@ import {
   importRuleMatchText,
   reapplyMerchantRulesToRows,
 } from './merchantRules';
+import type { ImportExpensesMutation } from '../../graphql/generated/graphql';
 import type { ImportedRow, ImportMerchantRule, ParsedStatementData, SavedColumnMapping } from './types';
 
 export const useImportPageState = () => {
   const { user } = useAuth();
   const { data: expensesData } = useQuery<GetExpensesResponse>(GET_EXPENSES);
   const { data: groupsData } = useQuery<{ groups: GroupSummary[] }>(GET_GROUPS);
-  const { addExpense, isMutating } = useExpenseActions();
+  const [importExpensesMutation, { loading: isImporting }] = useMutation<ImportExpensesMutation>(IMPORT_EXPENSES, {
+    update(cache, { data }) {
+      const created =
+        data?.importExpenses.results
+          .filter((row) => row.success && row.expense)
+          .map((row) => row.expense as Expense) ?? [];
+      mergeImportedExpensesIntoCache(cache, created);
+    },
+    refetchQueries: [{ query: GET_GROUPS }],
+  });
   const [rows, setRows] = useState<ImportedRow[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
   const [importInfo, setImportInfo] = useState<string | null>(null);
@@ -853,33 +865,48 @@ export const useImportPageState = () => {
       }
     }
 
-    const successfulIds = new Set<string>();
-    const failedRows: string[] = [];
-    let backendDuplicateFailures = 0;
+    const importRows = selectedRows.map((row) => {
+      const isIncoming = row.flow === 'in';
+      const expense: AddExpenseInput = {
+        title: buildExpenseTitleForImport(row),
+        amount: normalizeAmountValue(row.amount),
+        transactionDate: row.transactionDate,
+        category: row.category,
+        split: isIncoming ? 'Personal' : row.split,
+        groupId: isIncoming ? undefined : row.split === 'Shared' ? row.groupId : undefined,
+        expenseGroup: isIncoming ? undefined : row.split === 'Shared' ? row.expenseGroup : undefined,
+        currency: APP_CURRENCY_CODE,
+        flow: isIncoming ? 'Incoming' : 'Outgoing',
+      };
+      return { clientRowId: row.id, ...expense };
+    });
 
-    for (const row of selectedRows) {
-      try {
-        const isIncoming = row.flow === 'in';
-        await addExpense({
-          title: buildExpenseTitleForImport(row),
-          amount: normalizeAmountValue(row.amount),
-          transactionDate: row.transactionDate,
-          category: row.category,
-          split: isIncoming ? 'Personal' : row.split,
-          groupId: isIncoming ? undefined : row.split === 'Shared' ? row.groupId : undefined,
-          expenseGroup: isIncoming ? undefined : row.split === 'Shared' ? row.expenseGroup : undefined,
-          currency: APP_CURRENCY_CODE,
-          flow: isIncoming ? 'Incoming' : 'Outgoing',
-        });
-        successfulIds.add(row.id);
-      } catch (error) {
-        const message = getMutationErrorMessage(error);
-        if (isBackendDuplicateExpenseError(message)) {
-          backendDuplicateFailures += 1;
-        }
-        failedRows.push(`${buildExpenseTitleForImport(row)}: ${message}`);
+    let payload: ImportExpensesMutation['importExpenses'];
+    try {
+      const response = await importExpensesMutation({ variables: { input: { rows: importRows } } });
+      if (!response.data?.importExpenses) {
+        setImportError('Import failed.');
+        return;
       }
+      payload = response.data.importExpenses;
+    } catch {
+      setImportError('Import failed.');
+      return;
     }
+
+    const successfulIds = new Set(
+      payload.results.filter((entry) => entry.success).map((entry) => entry.clientRowId),
+    );
+    const failedRows = payload.results
+      .filter((entry) => !entry.success)
+      .map((entry) => {
+        const row = selectedRows.find((candidate) => candidate.id === entry.clientRowId);
+        const label = row ? buildExpenseTitleForImport(row) : entry.clientRowId;
+        return `${label}: ${entry.errorMessage ?? 'Import failed.'}`;
+      });
+    const backendDuplicateFailures = payload.results.filter(
+      (entry) => !entry.success && isDuplicateImportResult(entry),
+    ).length;
 
     if (backendDuplicateFailures > 0) {
       setImportBackendDuplicateFailureCount(backendDuplicateFailures);
@@ -890,11 +917,11 @@ export const useImportPageState = () => {
 
     setRows((previous) => previous.filter((row) => !successfulIds.has(row.id)));
     if (failedRows.length === 0) {
-      setImportInfo(`Imported ${successfulIds.size} expense(s) successfully.`);
+      setImportInfo(`Imported ${payload.importedCount} expense(s) successfully.`);
       return;
     }
 
-    setImportInfo(`Imported ${successfulIds.size} expense(s). ${failedRows.length} failed.`);
+    setImportInfo(`Imported ${payload.importedCount} expense(s). ${payload.failedCount} failed.`);
     setImportError(`Failed rows -> ${failedRows.slice(0, 5).join(' | ')}${failedRows.length > 5 ? ' | ...' : ''}`);
   };
 
@@ -967,7 +994,7 @@ export const useImportPageState = () => {
     expenseGroupByHousehold,
     duplicateStats,
     fileDuplicateWarning,
-    isMutating,
+    isMutating: isImporting,
     onFileChange,
     onDropFile,
     onApplyManualMapping,

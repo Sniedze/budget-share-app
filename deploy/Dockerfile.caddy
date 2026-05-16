@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1
 # Build the SPA bundle, then ship it inside a Caddy image that handles HTTPS automatically.
 FROM node:20-bookworm-slim AS client-builder
+WORKDIR /app
+COPY client/package.json client/package-lock.json ./client/
+COPY server/src/graphql/schema.graphql ./server/src/graphql/schema.graphql
 WORKDIR /app/client
-COPY client/package.json client/package-lock.json ./
 RUN npm ci
 COPY client/ ./
 ARG VITE_GRAPHQL_URL=/graphql

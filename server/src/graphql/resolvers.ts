@@ -1,5 +1,6 @@
 import {
   createExpense,
+  importExpenses,
   listExpenses,
   deleteExpense,
   updateExpense,
@@ -23,19 +24,20 @@ import {
 import { login, logoutSession, refreshSession, register } from '../modules/auth/service.js';
 import { clearSessionCookies, getRefreshTokenFromCookies, setSessionCookies } from '../modules/auth/cookies.js';
 import { appError, ErrorCode } from './appError.js';
-import type {
-  CreateExpenseInput,
-  DeleteExpenseInput,
-  UpdateExpenseInput,
-} from '../modules/expenses/types.js';
+import {
+  parseCreateExpenseInput,
+  parseDeleteExpenseId,
+  parseImportExpenseRows,
+  parseUpdateExpenseInput,
+} from '../modules/expenses/validation.js';
 import type { GraphqlContext } from './context.js';
 import { requireAuth } from './authz.js';
-import type {
-  CreateGroupInput,
-  RecordSettlementPaymentInput,
-  UpdateGroupInput,
-  UpsertSplitTemplateInput,
-} from '../modules/groups/types.js';
+import {
+  parseCreateGroupInput,
+  parseRecordSettlementPaymentInput,
+  parseUpdateGroupInput,
+  parseUpsertSplitTemplateInput,
+} from '../modules/groups/validation.js';
 import type { LoginInput, RegisterInput } from '../modules/auth/types.js';
 
 export const resolvers = {
@@ -68,25 +70,29 @@ export const resolvers = {
     },
   },
   Mutation: {
-    addExpense: async (_parent: unknown, args: { input: CreateExpenseInput }, context: GraphqlContext) => {
+    addExpense: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return createExpense(args.input, { userId: user.id, email: user.email });
+      return createExpense(parseCreateExpenseInput(args.input), { userId: user.id, email: user.email });
     },
-    deleteExpense: async (_parent: unknown, args: { input: DeleteExpenseInput }, context: GraphqlContext) => {
+    importExpenses: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return deleteExpense(args.input.id, { userId: user.id, email: user.email });
+      return importExpenses(parseImportExpenseRows(args.input), { userId: user.id, email: user.email });
     },
-    updateExpense: async (_parent: unknown, args: { input: UpdateExpenseInput }, context: GraphqlContext) => {
+    deleteExpense: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return updateExpense(args.input, { userId: user.id, email: user.email });
+      return deleteExpense(parseDeleteExpenseId(args.input), { userId: user.id, email: user.email });
     },
-    createGroup: async (_parent: unknown, args: { input: CreateGroupInput }, context: GraphqlContext) => {
+    updateExpense: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return createGroup(args.input, user.email);
+      return updateExpense(parseUpdateExpenseInput(args.input), { userId: user.id, email: user.email });
     },
-    updateGroup: async (_parent: unknown, args: { input: UpdateGroupInput }, context: GraphqlContext) => {
+    createGroup: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return updateGroup(args.input, { userId: user.id, email: user.email });
+      return createGroup(parseCreateGroupInput(args.input), user.email);
+    },
+    updateGroup: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
+      const user = requireAuth(context);
+      return updateGroup(parseUpdateGroupInput(args.input), { userId: user.id, email: user.email });
     },
     register: async (_parent: unknown, args: { input: RegisterInput }, context: GraphqlContext) => {
       const payload = await register(args.input);
@@ -120,21 +126,13 @@ export const resolvers = {
       clearSessionCookies(context.res);
       return true;
     },
-    upsertGroupSplitTemplate: async (
-      _parent: unknown,
-      args: { input: UpsertSplitTemplateInput },
-      context: GraphqlContext,
-    ) => {
+    upsertGroupSplitTemplate: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return upsertSplitTemplate(args.input, user.email);
+      return upsertSplitTemplate(parseUpsertSplitTemplateInput(args.input), user.email);
     },
-    recordSettlementPayment: async (
-      _parent: unknown,
-      args: { input: RecordSettlementPaymentInput },
-      context: GraphqlContext,
-    ) => {
+    recordSettlementPayment: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return recordSettlementPayment(args.input, user.email);
+      return recordSettlementPayment(parseRecordSettlementPaymentInput(args.input), user.email);
     },
     acceptGroupInvitation: async (
       _parent: unknown,

@@ -21,8 +21,15 @@ import {
   ytdExpensesThrough,
   ytdIncomingThrough,
   ytdIncomeFromMonthlyEstimate,
+  pad2,
 } from './selectors';
-import { loadAssumptions, loadMonthBudgets, saveAssumptions, saveMonthBudgets } from './storage';
+import {
+  loadAssumptions,
+  loadMonthBudgets,
+  saveAssumptions,
+  saveMonthBudgets,
+  type BudgetAssumptions,
+} from './storage';
 import { CATEGORY_DOT_COLORS, DEFAULT_CATEGORY_OPTIONS } from './budgetPageStyles';
 import type { CategoryTrendRow, MonthlyBreakdownRow, MonthlyBreakdownTotals } from './budgetPageTypes';
 import {
@@ -30,10 +37,6 @@ import {
   toBudgetTopLevelCategory,
   type GetExpensesResponse,
 } from '../expenses';
-
-function pad2(n: number): string {
-  return String(n).padStart(2, '0');
-}
 
 export const useBudgetPageState = () => {
   const { user } = useAuth();
@@ -47,7 +50,7 @@ export const useBudgetPageState = () => {
   /** Bumps when month budgets or assumptions are saved so we re-read localStorage. */
   const [budgetStorageTick, setBudgetStorageTick] = useState(0);
 
-  const [draftAssumptions, setDraftAssumptions] = useState(() => loadAssumptions(userId));
+  const [draftAssumptions, setDraftAssumptions] = useState<BudgetAssumptions>(() => loadAssumptions(userId));
   const [draftCategoryBudgets, setDraftCategoryBudgets] = useState<Record<string, string>>({});
 
   const { data, loading, error } = useQuery<GetExpensesResponse>(GET_EXPENSES);

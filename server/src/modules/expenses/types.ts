@@ -49,6 +49,24 @@ export type DeleteExpenseInput = {
   id: string;
 };
 
+export type ImportExpenseRowInput = CreateExpenseInput & {
+  clientRowId: string;
+};
+
+export type ImportExpenseRowResult = {
+  clientRowId: string;
+  success: boolean;
+  expense?: Expense;
+  errorCode?: string;
+  errorMessage?: string;
+};
+
+export type ImportExpensesResult = {
+  results: ImportExpenseRowResult[];
+  importedCount: number;
+  failedCount: number;
+};
+
 export type UpdateExpenseInput = {
   id: string;
   title: string;
