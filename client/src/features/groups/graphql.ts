@@ -159,6 +159,12 @@ export const DECLINE_EXPENSE_GROUP_PARTICIPATION = gql`
   }
 `;
 
+export const DELETE_EXPENSE_GROUP = gql`
+  mutation DeleteExpenseGroup($groupId: ID!, $category: String!) {
+    deleteExpenseGroup(groupId: $groupId, category: $category)
+  }
+`;
+
 export const UPSERT_GROUP_SPLIT_TEMPLATE = gql`
   mutation UpsertGroupSplitTemplate($input: UpsertSplitTemplateInput!) {
     upsertGroupSplitTemplate(input: $input) {

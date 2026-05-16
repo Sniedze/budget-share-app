@@ -14,7 +14,11 @@ export {
   getTotalAmount,
   getTrendData,
 } from './selectors/expenseAnalytics';
-export { buildMerchantSuggestions } from './selectors/merchantSuggestions';
+export {
+  buildMerchantSuggestions,
+  getMerchantSuggestionPatch,
+  resolveExpenseGroupFromSuggestion,
+} from './selectors/merchantSuggestions';
 export type { MerchantSuggestion } from './selectors/merchantSuggestions';
 export {
   BUDGET_TOP_LEVEL_CATEGORIES,

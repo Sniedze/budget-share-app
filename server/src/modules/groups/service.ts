@@ -1072,6 +1072,30 @@ export const upsertSplitTemplate = async (
   };
 };
 
+export const deleteExpenseGroup = async (
+  groupId: string,
+  category: string,
+  userEmail: string,
+): Promise<boolean> => {
+  const numericGroupId = Number(groupId);
+  if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid groupId.');
+  }
+  const normalizedCategory = category.trim();
+  if (!normalizedCategory) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Expense group category is required.');
+  }
+
+  await assertActiveGroupMembership(numericGroupId, userEmail, 'deleteExpenseGroup');
+
+  const [result] = await db.execute<ResultSetHeader>(
+    'DELETE FROM group_split_templates WHERE group_id = ? AND category = ?',
+    [numericGroupId, normalizedCategory],
+  );
+
+  return result.affectedRows > 0;
+};
+
 export const listHouseholdSettlements = async (
   userEmail: string,
   viewerUserId: string,

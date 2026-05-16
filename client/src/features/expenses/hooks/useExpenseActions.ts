@@ -1,5 +1,6 @@
 import { useMutation } from '@apollo/client/react';
 import type { DocumentNode } from 'graphql';
+import { GET_GROUPS } from '../../groups/graphql';
 import { addExpenseToCache, removeExpenseFromCache, updateExpenseInCache } from '../expenseCacheUpdates';
 import { ADD_EXPENSE, DELETE_EXPENSE, UPDATE_EXPENSE } from '../graphql';
 import type { AddExpenseInput, Expense, UpdateExpenseInput } from '../types';
@@ -18,7 +19,8 @@ type UseExpenseActionsOptions = {
 };
 
 export const useExpenseActions = (options?: UseExpenseActionsOptions) => {
-  const refetchQueries = options?.refetchQueries?.map((query) => ({ query })) ?? [];
+  const refetchDocuments = [GET_GROUPS, ...(options?.refetchQueries ?? [])];
+  const refetchQueries = refetchDocuments.map((query) => ({ query }));
 
   const [add, { loading: adding }] = useMutation<AddExpenseMutationData>(ADD_EXPENSE, {
     update(cache, { data }) {

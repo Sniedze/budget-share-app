@@ -7,6 +7,7 @@ import { CreateExpenseGroupModal } from './household/CreateExpenseGroupModal';
 import { CreateHouseholdModal } from './household/CreateHouseholdModal';
 import { PendingInvitationsPanel } from './household/PendingInvitationsPanel';
 import { useHouseholdPageState } from './household/useHouseholdPageState';
+import { resolveExpenseGroupFromSuggestion } from '../features/expenses';
 import { formatAppCurrency } from '../format/currency';
 import { splitExpenseTitleForDisplay } from '../format/expenseTitle';
 import { colors, spacing } from '../styles/tokens';
@@ -126,13 +127,20 @@ export const HouseholdPage = (): JSX.Element => {
     openEditHouseholdModal,
     openTemplateModal,
     splitTemplates,
+    ALL_HOUSEHOLD_EXPENSE_GROUPS,
+    isViewingAllExpenseGroups,
+    expenseCountByGroupCategory,
     setActiveExpenseGroupCategory,
     activeExpenseGroupExpenses,
     activeExpenseGroupTotals,
     openEditTemplateModal,
-    isInActiveExpenseGroup,
-    declineActiveExpenseGroup,
-    decliningExpenseGroup,
+    templateSuccessMessage,
+    canOptOutOfEditingTemplate,
+    linkedExpenseCountForEditingTemplate,
+    confirmOptOutOfEditingTemplate,
+    confirmDeleteEditingTemplate,
+    isDecliningExpenseGroup,
+    isDeletingExpenseGroup,
     isModalOpen,
     editingHouseholdId,
     groupName,
@@ -290,85 +298,107 @@ export const HouseholdPage = (): JSX.Element => {
             {!loading && !error && activeGroup && splitTemplates.length === 0 ? (
               <MutedText>No expense groups yet. Create your first one.</MutedText>
             ) : null}
-            {splitTemplates.map((template) => (
+            {activeGroup ? (
+              <GroupCard
+                $active={isViewingAllExpenseGroups}
+                onClick={() => setActiveExpenseGroupCategory(ALL_HOUSEHOLD_EXPENSE_GROUPS)}
+              >
+                <Row>
+                  <strong>All expenses</strong>
+                  <Badge $variant="accent">{activeGroup.expenses.length}</Badge>
+                </Row>
+                <MutedText>Every household expense, including from Personal Finances.</MutedText>
+              </GroupCard>
+            ) : null}
+            {splitTemplates.map((template) => {
+              const expenseCount =
+                expenseCountByGroupCategory.get(template.category.trim().toLowerCase()) ?? 0;
+              return (
               <GroupCard
                 key={template.id}
-                $active={template.category === activeExpenseGroup?.category}
+                $active={!isViewingAllExpenseGroups && template.category === activeExpenseGroup?.category}
                 onClick={() => setActiveExpenseGroupCategory(template.category)}
               >
                 <Row>
                   <strong>{template.category}</strong>
-                  <Badge $variant="accent">{template.splitDetails.length} members</Badge>
+                  <Badge $variant="accent">
+                    {expenseCount} {expenseCount === 1 ? 'expense' : 'expenses'}
+                  </Badge>
                 </Row>
                 <MutedText>{template.splitDetails.map((item) => item.participant).join(', ')}</MutedText>
               </GroupCard>
-            ))}
+            );
+            })}
           </GroupList>
 
           {activeGroup ? (
             <Card>
               <Row>
                 <ExpenseGroupHeading>
-                  {activeExpenseGroup ? `${activeExpenseGroup.category} Expense Group` : 'Select Expense Group'}
+                  {isViewingAllExpenseGroups
+                    ? 'All household expenses'
+                    : activeExpenseGroup
+                      ? `${activeExpenseGroup.category} Expense Group`
+                      : 'Select Expense Group'}
                 </ExpenseGroupHeading>
-                {activeExpenseGroup ? (
+                {isViewingAllExpenseGroups || activeExpenseGroup ? (
                   <Row>
-                    {isInActiveExpenseGroup ? (
+                    {!isViewingAllExpenseGroups && activeExpenseGroup ? (
                       <Button
                         type="button"
-                        $variant="danger"
+                        $variant="secondary"
                         $size="sm"
-                        disabled={decliningExpenseGroup}
-                        onClick={() => void declineActiveExpenseGroup()}
+                        onClick={() => openEditTemplateModal(activeExpenseGroup)}
                       >
-                        {decliningExpenseGroup ? 'Opting out...' : 'Opt out of expense group'}
+                        Edit Expense Group
                       </Button>
                     ) : null}
                     <Button
                       type="button"
                       $variant="secondary"
                       $size="sm"
-                      onClick={() => openEditTemplateModal(activeExpenseGroup)}
-                    >
-                      Edit Expense Group
-                    </Button>
-                    <Button
-                      type="button"
-                      $variant="secondary"
-                      $size="sm"
-                      onClick={() => openAddExpenseModal(activeExpenseGroup.category)}
+                      onClick={() => openAddExpenseModal(activeExpenseGroup?.category)}
                     >
                       + Add Expense
                     </Button>
                   </Row>
                 ) : null}
               </Row>
-              {activeExpenseGroup ? (
+              {isViewingAllExpenseGroups || activeExpenseGroup ? (
                 <>
-                  <ExpenseGroupsGrid>
-                    <ExpenseGroupCard>
-                      <strong>Members</strong>
-                      <ExpenseGroupMembersGrid>
-                        {activeExpenseGroup.splitDetails.map((allocation) => (
-                          <ExpenseGroupMemberCard key={`${activeExpenseGroup.id}-${allocation.participant}`}>
-                            <strong>{allocation.participant}</strong>
-                            <MutedText style={{ margin: 0 }}>{allocation.ratio}% share</MutedText>
-                          </ExpenseGroupMemberCard>
-                        ))}
-                      </ExpenseGroupMembersGrid>
-                    </ExpenseGroupCard>
-                    <ExpenseGroupCard>
-                      <strong>Summary</strong>
-                      <MutedText style={{ margin: 0 }}>Expenses: {activeExpenseGroupExpenses.length}</MutedText>
-                      <MutedText style={{ margin: 0 }}>
-                        Total spent: {formatAppCurrency(activeExpenseGroupTotals.total)}
-                      </MutedText>
-                      <MutedText style={{ margin: 0 }}>
-                        Your share: {formatAppCurrency(activeExpenseGroupTotals.yourShare)}
-                      </MutedText>
-                    </ExpenseGroupCard>
-                  </ExpenseGroupsGrid>
-                  <SectionSubtitle>Expense Group Expenses</SectionSubtitle>
+                  {isViewingAllExpenseGroups ? (
+                    <MutedText>
+                      Expenses added on Personal Finances appear here when split type is Shared and a household is
+                      selected.
+                    </MutedText>
+                  ) : activeExpenseGroup ? (
+                    <ExpenseGroupsGrid>
+                      <ExpenseGroupCard>
+                        <strong>Members</strong>
+                        <ExpenseGroupMembersGrid>
+                          {activeExpenseGroup.splitDetails.map((allocation) => (
+                            <ExpenseGroupMemberCard key={`${activeExpenseGroup.id}-${allocation.participant}`}>
+                              <strong>{allocation.participant}</strong>
+                              <MutedText style={{ margin: 0 }}>{allocation.ratio}% share</MutedText>
+                            </ExpenseGroupMemberCard>
+                          ))}
+                        </ExpenseGroupMembersGrid>
+                      </ExpenseGroupCard>
+                      <ExpenseGroupCard>
+                        <strong>Summary</strong>
+                        <MutedText style={{ margin: 0 }}>Expenses: {activeExpenseGroupExpenses.length}</MutedText>
+                        <MutedText style={{ margin: 0 }}>
+                          Total spent: {formatAppCurrency(activeExpenseGroupTotals.total)}
+                        </MutedText>
+                        <MutedText style={{ margin: 0 }}>
+                          Your share: {formatAppCurrency(activeExpenseGroupTotals.yourShare)}
+                        </MutedText>
+                      </ExpenseGroupCard>
+                    </ExpenseGroupsGrid>
+                  ) : null}
+                  <SectionSubtitle>
+                    {isViewingAllExpenseGroups ? 'All Expenses' : 'Expense Group Expenses'}
+                  </SectionSubtitle>
                   <TableWrapper>
                     <Table>
                       <Thead>
@@ -377,6 +407,7 @@ export const HouseholdPage = (): JSX.Element => {
                           <Th>Merchant</Th>
                           <Th>Description</Th>
                           <Th>Category</Th>
+                          {isViewingAllExpenseGroups ? <Th>Expense Group</Th> : null}
                           <Th>Paid By</Th>
                           <Th>Total</Th>
                           <Th>Expense Ratio</Th>
@@ -393,17 +424,22 @@ export const HouseholdPage = (): JSX.Element => {
                             <Td>{merchant}</Td>
                             <Td>{description || '—'}</Td>
                             <Td>{expense.category}</Td>
+                            {isViewingAllExpenseGroups ? (
+                              <Td>{expense.expenseGroup ?? expense.category}</Td>
+                            ) : null}
                             <Td>{expense.paidBy}</Td>
                             <Td>{formatAppCurrency(expense.total)}</Td>
                             <Td>{getExpenseRatioLabel(
                               expense.total,
                               expense.yourShare,
-                              activeExpenseGroup?.splitDetails.find(
-                                (allocation) =>
-                                  currentUserName !== null &&
-                                  allocation.participant.trim().toLowerCase() ===
-                                    currentUserName.trim().toLowerCase(),
-                              )?.ratio,
+                              isViewingAllExpenseGroups
+                                ? undefined
+                                : activeExpenseGroup?.splitDetails.find(
+                                    (allocation) =>
+                                      currentUserName !== null &&
+                                      allocation.participant.trim().toLowerCase() ===
+                                        currentUserName.trim().toLowerCase(),
+                                  )?.ratio,
                             )}</Td>
                             <Td>{formatAppCurrency(expense.yourShare)}</Td>
                             <Td>{expense.isPrivate ? 'Yes' : '—'}</Td>
@@ -412,7 +448,11 @@ export const HouseholdPage = (): JSX.Element => {
                         })}
                         {activeExpenseGroupExpenses.length === 0 ? (
                           <Tr key="no-expense-group-expenses">
-                            <Td colSpan={9}>No expenses for this expense group yet.</Td>
+                            <Td colSpan={isViewingAllExpenseGroups ? 10 : 9}>
+                              {isViewingAllExpenseGroups
+                                ? 'No household expenses yet. Add one here or on Personal Finances with split type Shared.'
+                                : 'No expenses for this expense group yet.'}
+                            </Td>
                           </Tr>
                         ) : null}
                       </Tbody>
@@ -495,9 +535,13 @@ export const HouseholdPage = (): JSX.Element => {
         onMerchantChange={(merchant) => {
           setExpenseTitle(merchant);
           const matched = merchantCategoryLookup.get(merchant.trim().toLowerCase());
-          if (matched) {
-            setExpenseCategory(matched.category);
-            setExpenseGroup(matched.expenseGroup ?? matched.category);
+          if (!matched) {
+            return;
+          }
+          setExpenseCategory(matched.category);
+          const resolvedGroup = resolveExpenseGroupFromSuggestion(matched, expenseGroupOptions);
+          if (resolvedGroup) {
+            setExpenseGroup(resolvedGroup);
           }
         }}
         onMerchantKeyDown={onMerchantSearchEnter}
@@ -528,10 +572,17 @@ export const HouseholdPage = (): JSX.Element => {
         selectedTemplateMembersCount={selectedTemplateMembersCount}
         templateMembers={templateMembers}
         templateError={templateError}
+        templateSuccessMessage={templateSuccessMessage}
         isTemplateSubmitDisabled={isTemplateSubmitDisabled}
         isSavingTemplate={savingTemplate}
+        isDecliningExpenseGroup={isDecliningExpenseGroup}
+        isDeletingExpenseGroup={isDeletingExpenseGroup}
+        canOptOutOfExpenseGroup={canOptOutOfEditingTemplate}
+        linkedExpenseCount={linkedExpenseCountForEditingTemplate}
         onClose={closeTemplateModal}
         onSubmit={onCreateExpenseGroup}
+        onConfirmOptOut={confirmOptOutOfEditingTemplate}
+        onConfirmDelete={confirmDeleteEditingTemplate}
         onTemplateCategoryChange={setTemplateCategory}
         onCustomTemplateCategoryChange={setCustomTemplateCategory}
         onSplitModeEqual={() => setTemplateSplitMode('equal')}
