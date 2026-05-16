@@ -2,6 +2,7 @@ import { ApolloClient, HttpLink, InMemoryCache } from '@apollo/client';
 import {
   getGraphqlErrorCode,
   GraphqlErrorCode,
+  isUnauthenticatedGraphqlError,
   type GraphqlErrorShape,
 } from './graphqlErrorCodes';
 
@@ -40,13 +41,7 @@ const isAuthErrorResponse = async (response: Response): Promise<boolean> => {
   }
   try {
     const body = (await response.clone().json()) as GraphqlResponseBody;
-    return Boolean(
-      body.errors?.some(
-        (error) =>
-          getGraphqlErrorCode(error) === GraphqlErrorCode.UNAUTHENTICATED ||
-          error.message?.includes('Authentication required'),
-      ),
-    );
+    return Boolean(body.errors?.some((error) => isUnauthenticatedGraphqlError(error)));
   } catch {
     return false;
   }
