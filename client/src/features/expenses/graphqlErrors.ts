@@ -24,6 +24,17 @@ export const getMutationErrorMessage = (error: unknown): string => {
   return 'Import failed';
 };
 
+export const isDuplicateImportResult = (result: {
+  errorCode?: string | null;
+  errorMessage?: string | null;
+}): boolean => {
+  if (result.errorCode === 'DUPLICATE_TRANSACTION') {
+    return true;
+  }
+  const message = result.errorMessage?.trim() ?? '';
+  return message.startsWith(BACKEND_DUPLICATE_EXPENSE_PREFIX);
+};
+
 export const isBackendDuplicateExpenseError = (error: unknown): boolean => {
   if (error instanceof Error) {
     const err = error as Error & { graphQLErrors?: ReadonlyArray<GraphqlErrorShape> };

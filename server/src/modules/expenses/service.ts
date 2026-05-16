@@ -2,10 +2,14 @@ import type {
   CreateExpenseInput,
   Expense,
   ExpenseFlow,
+  ImportExpenseRowInput,
+  ImportExpenseRowResult,
+  ImportExpensesResult,
   SplitAllocation,
   SplitType,
   UpdateExpenseInput,
 } from './types.js';
+import { AppError } from '../../graphql/appError.js';
 import { db } from '../../db/mysql.js';
 import { logAuditEvent } from '../audit/service.js';
 import { appError, ErrorCode } from '../../graphql/appError.js';
@@ -197,6 +201,181 @@ const assertGroupMember = (groupId: number, memberGroupIds: Set<number>): void =
   }
 };
 
+const MAX_IMPORT_EXPENSE_ROWS = 1000;
+
+type TemplateSplitSource = Array<{ participant: string; ratio: number }>;
+
+type CreateExpenseBatchContext = {
+  memberGroupIds: Set<number>;
+  templateCache: Map<string, TemplateSplitSource | undefined>;
+};
+
+const templateCacheKey = (groupId: number, category: string, expenseGroup: string | null): string =>
+  `${groupId}:${expenseGroup ?? category}`;
+
+const loadTemplateSplitSource = async (
+  groupId: number,
+  category: string,
+  expenseGroup: string | null,
+  cache: Map<string, TemplateSplitSource | undefined>,
+): Promise<TemplateSplitSource | undefined> => {
+  const key = templateCacheKey(groupId, category, expenseGroup);
+  if (cache.has(key)) {
+    return cache.get(key);
+  }
+
+  const [templateRows] = await db.query<TemplateRow[]>(
+    `
+      SELECT split_details
+      FROM group_split_templates
+      WHERE group_id = ? AND category = ?
+      LIMIT 1
+    `,
+    [groupId, expenseGroup ?? category],
+  );
+  const templateRow = templateRows[0];
+  let parsed: TemplateSplitSource | undefined;
+  if (templateRow?.split_details) {
+    try {
+      const raw = JSON.parse(templateRow.split_details) as Array<{ participant: string; ratio: number }>;
+      if (Array.isArray(raw) && raw.length > 0) {
+        parsed = raw;
+      }
+    } catch {
+      parsed = undefined;
+    }
+  }
+  cache.set(key, parsed);
+  return parsed;
+};
+
+const mapExpenseRow = (row: ExpenseRow | undefined, fallback: Expense): Expense => {
+  if (!row) {
+    return fallback;
+  }
+  return {
+    id: String(row.id),
+    title: row.title,
+    amount: Number(row.amount),
+    currency: rowCurrency(row),
+    createdAt: toIsoString(row.created_at),
+    transactionDate: toIsoString(row.transaction_date),
+    category: row.category,
+    expenseGroup: row.expense_group ?? undefined,
+    split: normalizeSplit(row.split_type),
+    splitDetails: parseSplitDetails(row.split_details),
+    groupId: row.group_id === null ? undefined : String(row.group_id),
+    createdByUserId: row.created_by_user_id === null ? undefined : String(row.created_by_user_id),
+    paidByUserId: row.paid_by_user_id === null ? undefined : String(row.paid_by_user_id),
+    isPrivate: rowIsPrivate(row),
+    flow: normalizeExpenseFlow(row.expense_flow),
+  };
+};
+
+const createExpenseWithContext = async (
+  input: CreateExpenseInput,
+  actor: { userId: string; email: string },
+  batch: CreateExpenseBatchContext,
+): Promise<Expense> => {
+  validateAmount(input.amount);
+  const title = validateExpenseTitle(input.title);
+  const flow = normalizeExpenseFlow(input.flow);
+  if (flow === 'Incoming' && input.groupId) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Income entries cannot be assigned to a household.');
+  }
+
+  const category = normalizeCategory(input.category);
+  let expenseGroup = flow === 'Incoming' ? null : normalizeExpenseGroup(input.expenseGroup);
+  let split: SplitType = flow === 'Incoming' ? 'Personal' : normalizeSplit(input.split);
+  let groupId = flow === 'Incoming' ? null : input.groupId ? Number(input.groupId) : null;
+  let sourceSplitDetails = flow === 'Incoming' ? undefined : input.splitDetails;
+  if (groupId !== null && !expenseGroup) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Expense group is required for household expenses.');
+  }
+
+  if (groupId !== null && sourceSplitDetails === undefined) {
+    const templateSplit = await loadTemplateSplitSource(
+      groupId,
+      category,
+      expenseGroup,
+      batch.templateCache,
+    );
+    if (templateSplit) {
+      sourceSplitDetails = templateSplit;
+      split = 'Custom';
+    }
+  }
+
+  const splitDetails = toStoredSplitDetails(input.amount, sourceSplitDetails);
+  validateSplitConsistency(split, splitDetails, true);
+  const splitDetailsJson = splitDetails.length > 0 ? JSON.stringify(splitDetails) : null;
+  if (groupId !== null) {
+    assertGroupMember(groupId, batch.memberGroupIds);
+  }
+  const paidByUserId = input.paidByUserId ? Number(input.paidByUserId) : Number(actor.userId);
+  const isPrivate = flow === 'Incoming' ? false : groupId !== null && Boolean(input.isPrivate);
+  const currency = normalizeExpenseCurrency(input.currency);
+  const transactionDedupHash = computeTransactionDedupHash(
+    input.transactionDate,
+    input.amount,
+    title,
+    flow,
+  );
+
+  let result: ResultSetHeader;
+  try {
+    [result] = await db.execute<ResultSetHeader>(
+      'INSERT INTO expenses (title, amount, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private, currency, expense_flow) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        title,
+        input.amount,
+        input.transactionDate,
+        category,
+        expenseGroup,
+        split,
+        splitDetailsJson,
+        groupId,
+        Number(actor.userId),
+        paidByUserId,
+        transactionDedupHash,
+        isPrivate ? 1 : 0,
+        currency,
+        flow,
+      ],
+    );
+  } catch (error) {
+    if (isMysqlDuplicateKeyError(error)) {
+      throw appError(ErrorCode.DUPLICATE_TRANSACTION, DUPLICATE_TRANSACTION_MESSAGE);
+    }
+    throw error;
+  }
+
+  const fallback: Expense = {
+    id: String(result.insertId),
+    title,
+    amount: input.amount,
+    currency,
+    createdAt: new Date().toISOString(),
+    transactionDate: new Date(input.transactionDate).toISOString(),
+    category,
+    expenseGroup: expenseGroup ?? undefined,
+    split,
+    splitDetails,
+    groupId: groupId === null ? undefined : String(groupId),
+    createdByUserId: actor.userId,
+    paidByUserId: String(paidByUserId),
+    isPrivate,
+    flow,
+  };
+
+  const [rows] = await db.query<ExpenseRow[]>(
+    'SELECT id, title, amount, currency, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private, expense_flow FROM expenses WHERE id = ? LIMIT 1',
+    [result.insertId],
+  );
+
+  return mapExpenseRow(rows[0], fallback);
+};
+
 const canAccessExpense = (row: ExpenseRow, userId: string, memberGroupIds: Set<number>): boolean => {
   if (row.group_id === null) {
     return row.created_by_user_id !== null && String(row.created_by_user_id) === userId;
@@ -247,134 +426,81 @@ export const createExpense = async (
   input: CreateExpenseInput,
   actor: { userId: string; email: string },
 ): Promise<Expense> => {
-  validateAmount(input.amount);
-  const title = validateExpenseTitle(input.title);
-  const flow = normalizeExpenseFlow(input.flow);
-  if (flow === 'Incoming' && input.groupId) {
-    throw appError(ErrorCode.BAD_USER_INPUT, 'Income entries cannot be assigned to a household.');
-  }
-
-  const category = normalizeCategory(input.category);
-  let expenseGroup = flow === 'Incoming' ? null : normalizeExpenseGroup(input.expenseGroup);
-  let split: SplitType = flow === 'Incoming' ? 'Personal' : normalizeSplit(input.split);
-  let groupId = flow === 'Incoming' ? null : input.groupId ? Number(input.groupId) : null;
-  let sourceSplitDetails = flow === 'Incoming' ? undefined : input.splitDetails;
-  if (groupId !== null && !expenseGroup) {
-    throw appError(ErrorCode.BAD_USER_INPUT, 'Expense group is required for household expenses.');
-  }
-
-  if (groupId !== null && sourceSplitDetails === undefined) {
-    const [templateRows] = await db.query<TemplateRow[]>(
-      `
-        SELECT split_details
-        FROM group_split_templates
-        WHERE group_id = ? AND category = ?
-        LIMIT 1
-      `,
-      [groupId, expenseGroup ?? category],
-    );
-    const templateRow = templateRows[0];
-    if (templateRow?.split_details) {
-      try {
-        const parsed = JSON.parse(templateRow.split_details) as Array<{ participant: string; ratio: number }>;
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          sourceSplitDetails = parsed;
-          split = 'Custom';
-        }
-      } catch {
-        // Ignore invalid template payload and continue with direct input.
-      }
-    }
-  }
-
-  const splitDetails = toStoredSplitDetails(input.amount, sourceSplitDetails);
-  validateSplitConsistency(split, splitDetails, true);
-  const splitDetailsJson = splitDetails.length > 0 ? JSON.stringify(splitDetails) : null;
   const memberGroupIds = await loadMemberGroupIds(actor.email);
-  if (groupId !== null) {
-    assertGroupMember(groupId, memberGroupIds);
-  }
-  const paidByUserId = input.paidByUserId ? Number(input.paidByUserId) : Number(actor.userId);
-  const isPrivate = flow === 'Incoming' ? false : groupId !== null && Boolean(input.isPrivate);
-  const currency = normalizeExpenseCurrency(input.currency);
-  const transactionDedupHash = computeTransactionDedupHash(
-    input.transactionDate,
-    input.amount,
-    title,
-    flow,
-  );
+  return createExpenseWithContext(input, actor, {
+    memberGroupIds,
+    templateCache: new Map(),
+  });
+};
 
-  let result: ResultSetHeader;
-  try {
-    [result] = await db.execute<ResultSetHeader>(
-      'INSERT INTO expenses (title, amount, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private, currency, expense_flow) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        title,
-        input.amount,
-        input.transactionDate,
-        category,
-        expenseGroup,
-        split,
-        splitDetailsJson,
-        groupId,
-        Number(actor.userId),
-        paidByUserId,
-        transactionDedupHash,
-        isPrivate ? 1 : 0,
-        currency,
-        flow,
-      ],
-    );
-  } catch (error) {
-    if (isMysqlDuplicateKeyError(error)) {
-      throw appError(ErrorCode.DUPLICATE_TRANSACTION, DUPLICATE_TRANSACTION_MESSAGE);
-    }
-    throw error;
-  }
-
-  const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, title, amount, currency, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private, expense_flow FROM expenses WHERE id = ? LIMIT 1',
-    [result.insertId],
-  );
-
-  const row = rows[0];
-
-  if (!row) {
+const toImportRowError = (error: unknown): Pick<ImportExpenseRowResult, 'errorCode' | 'errorMessage'> => {
+  if (error instanceof AppError) {
+    const code = error.extensions?.code;
     return {
-      id: String(result.insertId),
-      title,
-      amount: input.amount,
-      currency,
-      createdAt: new Date().toISOString(),
-      transactionDate: new Date(input.transactionDate).toISOString(),
-      category,
-      expenseGroup: expenseGroup ?? undefined,
-      split,
-      splitDetails,
-      groupId: groupId === null ? undefined : String(groupId),
-      createdByUserId: actor.userId,
-      paidByUserId: String(paidByUserId),
-      isPrivate,
-      flow,
+      errorCode: typeof code === 'string' ? code : ErrorCode.INTERNAL_SERVER_ERROR,
+      errorMessage: error.message,
     };
   }
-
+  if (error instanceof Error) {
+    return {
+      errorCode: ErrorCode.INTERNAL_SERVER_ERROR,
+      errorMessage: error.message,
+    };
+  }
   return {
-    id: String(row.id),
-    title: row.title,
-    amount: Number(row.amount),
-    currency: rowCurrency(row),
-    createdAt: toIsoString(row.created_at),
-    transactionDate: toIsoString(row.transaction_date),
-    category: row.category,
-    expenseGroup: row.expense_group ?? undefined,
-    split: normalizeSplit(row.split_type),
-    splitDetails: parseSplitDetails(row.split_details),
-    groupId: row.group_id === null ? undefined : String(row.group_id),
-    createdByUserId: row.created_by_user_id === null ? undefined : String(row.created_by_user_id),
-    paidByUserId: row.paid_by_user_id === null ? undefined : String(row.paid_by_user_id),
-    isPrivate: rowIsPrivate(row),
-    flow: normalizeExpenseFlow(row.expense_flow),
+    errorCode: ErrorCode.INTERNAL_SERVER_ERROR,
+    errorMessage: 'Import failed.',
+  };
+};
+
+export const importExpenses = async (
+  rows: ImportExpenseRowInput[],
+  actor: { userId: string; email: string },
+): Promise<ImportExpensesResult> => {
+  if (rows.length === 0) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'At least one expense row is required.');
+  }
+  if (rows.length > MAX_IMPORT_EXPENSE_ROWS) {
+    throw appError(
+      ErrorCode.BAD_USER_INPUT,
+      `Cannot import more than ${MAX_IMPORT_EXPENSE_ROWS} expenses at once.`,
+    );
+  }
+
+  const batch: CreateExpenseBatchContext = {
+    memberGroupIds: await loadMemberGroupIds(actor.email),
+    templateCache: new Map(),
+  };
+
+  const results: ImportExpenseRowResult[] = [];
+  for (const row of rows) {
+    const { clientRowId, ...input } = row;
+    const trimmedId = clientRowId.trim();
+    if (trimmedId.length === 0) {
+      results.push({
+        clientRowId,
+        success: false,
+        ...toImportRowError(appError(ErrorCode.BAD_USER_INPUT, 'clientRowId is required.')),
+      });
+      continue;
+    }
+    try {
+      const expense = await createExpenseWithContext(input, actor, batch);
+      results.push({ clientRowId: trimmedId, success: true, expense });
+    } catch (error) {
+      results.push({
+        clientRowId: trimmedId,
+        success: false,
+        ...toImportRowError(error),
+      });
+    }
+  }
+
+  const importedCount = results.filter((entry) => entry.success).length;
+  return {
+    results,
+    importedCount,
+    failedCount: results.length - importedCount,
   };
 };
 

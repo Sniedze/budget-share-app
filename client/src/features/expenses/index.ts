@@ -5,7 +5,10 @@ export {
   BACKEND_DUPLICATE_EXPENSE_PREFIX,
   getMutationErrorMessage,
   isBackendDuplicateExpenseError,
+  isDuplicateImportResult,
 } from './graphqlErrors';
+export { IMPORT_EXPENSES } from './graphql';
+export { mergeImportedExpensesIntoCache } from './expenseCacheUpdates';
 export { useExpenseActions } from './hooks/useExpenseActions';
 export {
   getBreakdownData,

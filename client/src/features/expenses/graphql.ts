@@ -21,6 +21,25 @@ export const ADD_EXPENSE = gql`
   }
 `;
 
+export const IMPORT_EXPENSES = gql`
+  ${EXPENSE_FIELDS}
+  mutation ImportExpenses($input: ImportExpensesInput!) {
+    importExpenses(input: $input) {
+      importedCount
+      failedCount
+      results {
+        clientRowId
+        success
+        errorCode
+        errorMessage
+        expense {
+          ...ExpenseFields
+        }
+      }
+    }
+  }
+`;
+
 export const UPDATE_EXPENSE = gql`
   ${EXPENSE_FIELDS}
   mutation UpdateExpense($input: UpdateExpenseInput!) {

@@ -1,5 +1,6 @@
 import {
   createExpense,
+  importExpenses,
   listExpenses,
   deleteExpense,
   updateExpense,
@@ -71,6 +72,14 @@ export const resolvers = {
     addExpense: async (_parent: unknown, args: { input: CreateExpenseInput }, context: GraphqlContext) => {
       const user = requireAuth(context);
       return createExpense(args.input, { userId: user.id, email: user.email });
+    },
+    importExpenses: async (
+      _parent: unknown,
+      args: { input: { rows: Array<CreateExpenseInput & { clientRowId: string }> } },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      return importExpenses(args.input.rows, { userId: user.id, email: user.email });
     },
     deleteExpense: async (_parent: unknown, args: { input: DeleteExpenseInput }, context: GraphqlContext) => {
       const user = requireAuth(context);
