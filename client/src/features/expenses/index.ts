@@ -18,6 +18,13 @@ export {
   getTrendData,
 } from './selectors/expenseAnalytics';
 export {
+  buildMembersByGroupId,
+  getExpenseAttributableAmount,
+  getExpensePersonalContribution,
+  getExpenseSharedContribution,
+} from './selectors/expenseAttribution';
+export type { ExpenseViewerContext } from './selectors/expenseAttribution';
+export {
   buildMerchantSuggestions,
   getMerchantSuggestionPatch,
   resolveExpenseGroupFromSuggestion,

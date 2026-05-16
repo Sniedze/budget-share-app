@@ -1,5 +1,12 @@
 import { formatAppCurrency } from '../../../format/currency';
+import type { GroupMember } from '../../groups/types';
 import type { Expense } from '../types';
+import {
+  type ExpenseViewerContext,
+  getExpenseAttributableAmount,
+  getExpensePersonalContribution,
+  getExpenseSharedContribution,
+} from './expenseAttribution';
 
 export type TrendPoint = {
   month: string;
@@ -69,21 +76,37 @@ const formatActiveGroupsHint = (groups: GroupNameInput[]): string => {
   return `${shown}, +${remaining} more`;
 };
 
-export const getDashboardStats = (expenses: Expense[], groups: GroupNameInput[]): DashboardStat[] => {
+type DashboardStatsInput = {
+  expenses: Expense[];
+  groups: GroupNameInput[];
+  viewer: ExpenseViewerContext;
+  membersByGroupId: Map<string, GroupMember[]>;
+};
+
+export const getDashboardStats = ({
+  expenses,
+  groups,
+  viewer,
+  membersByGroupId,
+}: DashboardStatsInput): DashboardStat[] => {
   const monthExpenses = expenses.filter(isCurrentMonthExpense);
-  const totalAmount = getTotalAmount(monthExpenses);
-  const personalAmount = monthExpenses
-    .filter((expense) => !expense.groupId)
-    .reduce((sum, expense) => sum + expense.amount, 0);
-  const sharedAmount = monthExpenses
-    .filter((expense) => Boolean(expense.groupId))
-    .reduce((sum, expense) => sum + expense.amount, 0);
+  let personalAmount = 0;
+  let sharedAmount = 0;
+
+  for (const expense of monthExpenses) {
+    personalAmount += getExpensePersonalContribution(expense, viewer);
+    sharedAmount += getExpenseSharedContribution(expense, viewer, membersByGroupId);
+  }
+
+  const totalAmount = Number((personalAmount + sharedAmount).toFixed(2));
+  personalAmount = Number(personalAmount.toFixed(2));
+  sharedAmount = Number(sharedAmount.toFixed(2));
 
   return [
     {
       label: 'Total This Month',
       value: formatAppCurrency(totalAmount),
-      hint: 'All tracked expenses',
+      hint: 'Your personal spending plus your household share',
     },
     {
       label: 'Personal Expenses',
@@ -103,13 +126,20 @@ export const getDashboardStats = (expenses: Expense[], groups: GroupNameInput[])
   ];
 };
 
-export const getTrendData = (expenses: Expense[]): TrendPoint[] => {
+type AttributedAnalyticsInput = {
+  expenses: Expense[];
+  viewer: ExpenseViewerContext;
+  membersByGroupId: Map<string, GroupMember[]>;
+};
+
+export const getTrendData = ({ expenses, viewer, membersByGroupId }: AttributedAnalyticsInput): TrendPoint[] => {
   const byMonth = new Map<string, number>();
 
   for (const expense of expenses) {
     const date = new Date(expense.transactionDate);
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    byMonth.set(monthKey, (byMonth.get(monthKey) ?? 0) + expense.amount);
+    const attributable = getExpenseAttributableAmount(expense, viewer, membersByGroupId);
+    byMonth.set(monthKey, (byMonth.get(monthKey) ?? 0) + attributable);
   }
 
   const sorted = Array.from(byMonth.entries()).sort(([a], [b]) => a.localeCompare(b));
@@ -124,12 +154,13 @@ export const getTrendData = (expenses: Expense[]): TrendPoint[] => {
   });
 };
 
-export const getBreakdownData = (expenses: Expense[]): BreakdownPoint[] => {
+export const getBreakdownData = ({ expenses, viewer, membersByGroupId }: AttributedAnalyticsInput): BreakdownPoint[] => {
   const byTitle = new Map<string, number>();
 
   for (const expense of expenses) {
     const key = expense.category.trim() || 'Other';
-    byTitle.set(key, (byTitle.get(key) ?? 0) + expense.amount);
+    const attributable = getExpenseAttributableAmount(expense, viewer, membersByGroupId);
+    byTitle.set(key, (byTitle.get(key) ?? 0) + attributable);
   }
 
   const sorted = Array.from(byTitle.entries())
@@ -146,7 +177,11 @@ export const getBreakdownData = (expenses: Expense[]): BreakdownPoint[] => {
   return [...top, { name: 'Other', value: Number(otherValue.toFixed(2)) }];
 };
 
-export const getMonthlyOverview = (expenses: Expense[]): MonthlyOverviewPoint[] => {
+export const getMonthlyOverview = ({
+  expenses,
+  viewer,
+  membersByGroupId,
+}: AttributedAnalyticsInput): MonthlyOverviewPoint[] => {
   const byMonth = new Map<
     string,
     { total: number; personal: number; shared: number; categories: Map<string, number> }
@@ -157,14 +192,15 @@ export const getMonthlyOverview = (expenses: Expense[]): MonthlyOverviewPoint[] 
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     const current = byMonth.get(monthKey) ?? { total: 0, personal: 0, shared: 0, categories: new Map<string, number>() };
 
-    current.total += expense.amount;
-    if (expense.groupId) {
-      current.shared += expense.amount;
-    } else {
-      current.personal += expense.amount;
-    }
+    const personalContribution = getExpensePersonalContribution(expense, viewer);
+    const sharedContribution = getExpenseSharedContribution(expense, viewer, membersByGroupId);
+    const attributable = personalContribution + sharedContribution;
+
+    current.total += attributable;
+    current.personal += personalContribution;
+    current.shared += sharedContribution;
     const categoryName = expense.category.trim() || 'Other';
-    current.categories.set(categoryName, (current.categories.get(categoryName) ?? 0) + expense.amount);
+    current.categories.set(categoryName, (current.categories.get(categoryName) ?? 0) + attributable);
     byMonth.set(monthKey, current);
   }
 
