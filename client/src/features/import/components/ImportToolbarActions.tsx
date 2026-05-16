@@ -5,8 +5,10 @@ import { Actions } from '../importPageStyles';
 type ImportToolbarActionsProps = {
   rows: ImportedRow[];
   manualMappingData: ParsedStatementData | null;
+  canRemapColumns: boolean;
   isMutating: boolean;
   onRemoveImportedFile: () => void;
+  onRequestColumnRemap: () => void;
   toggleAll: (selected: boolean) => void;
   onApproveSelected: () => void;
 };
@@ -14,8 +16,10 @@ type ImportToolbarActionsProps = {
 export const ImportToolbarActions = ({
   rows,
   manualMappingData,
+  canRemapColumns,
   isMutating,
   onRemoveImportedFile,
+  onRequestColumnRemap,
   toggleAll,
   onApproveSelected,
 }: ImportToolbarActionsProps): JSX.Element => {
@@ -28,6 +32,15 @@ export const ImportToolbarActions = ({
         disabled={rows.length === 0 && !manualMappingData}
       >
         Remove file
+      </Button>
+      <Button
+        type="button"
+        $variant="secondary"
+        onClick={onRequestColumnRemap}
+        disabled={!canRemapColumns || Boolean(manualMappingData)}
+        title="Re-select which CSV columns map to merchant, description, and amount"
+      >
+        Remap columns
       </Button>
       <Button type="button" $variant="secondary" onClick={() => toggleAll(true)} disabled={rows.length === 0}>
         Select all

@@ -44,7 +44,8 @@ import {
 } from './parseStatement';
 import { useImportMerchantRules } from './useImportMerchantRules';
 import type { ImportExpensesMutation } from '../../graphql/generated/graphql';
-import type { ImportedRow, ParsedStatementData } from './types';
+import { columnMappingIndicesToForm, suggestRemapIndices } from './remapHelpers';
+import type { ImportRemapContext, ImportedRow, ParsedStatementData } from './types';
 
 const clearManualMappingState = () => ({
   manualMappingData: null as ParsedStatementData | null,
@@ -85,6 +86,8 @@ export const useImportPageState = () => {
   const [manualAmountIndex, setManualAmountIndex] = useState('');
   const [manualDescriptionIndex, setManualDescriptionIndex] = useState('');
   const [manualCurrencyIndex, setManualCurrencyIndex] = useState('');
+  const [remapContext, setRemapContext] = useState<ImportRemapContext | null>(null);
+  const [isRemappingColumns, setIsRemappingColumns] = useState(false);
   const [customCategories] = useState<string[]>(() => loadCustomImportCategories());
   const [uploadedFileName, setUploadedFileName] = useState('');
   const [isDragActive, setIsDragActive] = useState(false);
@@ -163,6 +166,8 @@ export const useImportPageState = () => {
       return;
     }
     if (result.kind === 'manual') {
+      setIsRemappingColumns(false);
+      setRemapContext(null);
       setManualMappingData(result.manualData);
       setManualMappingSignatures(result.signatures);
       setManualDateIndex(result.initialIndices.dateIndex);
@@ -175,6 +180,8 @@ export const useImportPageState = () => {
     }
     setRows(result.rows);
     setImportInfo(result.info);
+    setRemapContext(result.remapContext);
+    setIsRemappingColumns(false);
     const cleared = clearManualMappingState();
     setManualMappingData(cleared.manualMappingData);
     setManualMappingSignatures(cleared.manualMappingSignatures);
@@ -285,7 +292,42 @@ export const useImportPageState = () => {
     }
     setImportBackendDuplicateFailureCount(0);
     applyParseResult(result);
-    setManualDescriptionIndex('');
+  };
+
+  const onRequestColumnRemap = () => {
+    if (!remapContext) {
+      return;
+    }
+    const suggested = suggestRemapIndices(remapContext.appliedMapping, rows);
+    const form = columnMappingIndicesToForm(suggested);
+    setManualMappingData(remapContext.statementData);
+    setManualMappingSignatures(remapContext.signatures);
+    setManualDateIndex(form.dateIndex);
+    setManualMerchantIndex(form.merchantIndex);
+    setManualAmountIndex(form.amountIndex);
+    setManualDescriptionIndex(form.descriptionIndex);
+    setManualCurrencyIndex(form.currencyIndex);
+    setIsRemappingColumns(true);
+    setImportError(null);
+    const swapped =
+      suggested.merchantIndex !== remapContext.appliedMapping.merchantIndex ||
+      suggested.descriptionIndex !== remapContext.appliedMapping.descriptionIndex;
+    setImportInfo(
+      swapped
+        ? 'Merchant and description columns looked swapped — we pre-selected a fix. Confirm below and click Apply mapping.'
+        : 'Choose which CSV column is the merchant (payee name). Then click Apply mapping.',
+    );
+  };
+
+  const onSwapMerchantDescriptionColumns = () => {
+    if (!manualMerchantIndex || !manualDescriptionIndex) {
+      setImportError('Select both Merchant and Description columns before swapping.');
+      return;
+    }
+    const merchant = manualMerchantIndex;
+    setManualMerchantIndex(manualDescriptionIndex);
+    setManualDescriptionIndex(merchant);
+    setImportError(null);
   };
 
   const updateRow = (id: string, patch: Partial<ImportedRow>) => {
@@ -424,6 +466,8 @@ export const useImportPageState = () => {
     setImportError(null);
     setImportInfo(null);
     setImportBackendDuplicateFailureCount(0);
+    setRemapContext(null);
+    setIsRemappingColumns(false);
     const cleared = clearManualMappingState();
     setManualMappingData(cleared.manualMappingData);
     setManualMappingSignatures(cleared.manualMappingSignatures);
@@ -473,6 +517,8 @@ export const useImportPageState = () => {
     importInfo,
     importBackendDuplicateFailureCount,
     manualMappingData,
+    isRemappingColumns,
+    remapContext,
     manualDateIndex,
     setManualDateIndex,
     manualMerchantIndex,
@@ -500,6 +546,8 @@ export const useImportPageState = () => {
     onFileChange,
     onDropFile,
     onApplyManualMapping,
+    onRequestColumnRemap,
+    onSwapMerchantDescriptionColumns,
     updateRow,
     toggleAll,
     upsertRuleFromRow: handleUpsertRuleFromRow,

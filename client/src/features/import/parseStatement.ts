@@ -27,7 +27,14 @@ import { computeAmountColumnAssumeAllOutgoing } from './amountParse';
 import { buildImportedRows } from './buildImportedRows';
 import { loadSavedMappings, saveMappingForSignature } from './importStorage';
 import type { MerchantHistoryEntry } from './importRowReview';
-import type { ImportMerchantRule, ImportedRow, ParsedStatementData, SavedColumnMapping } from './types';
+import type {
+  ImportColumnMappingIndices,
+  ImportMerchantRule,
+  ImportRemapContext,
+  ImportedRow,
+  ParsedStatementData,
+  SavedColumnMapping,
+} from './types';
 
 export type StatementGrid = {
   originalHeader: string[];
@@ -51,11 +58,36 @@ export type ParseStatementSuccess = {
   kind: 'success';
   rows: ImportedRow[];
   info: string;
+  remapContext: ImportRemapContext;
   persistMapping?: {
     signatures: string[];
     mapping: SavedColumnMapping;
   };
 };
+
+const mappingToIndices = (mapping: SavedColumnMapping): ImportColumnMappingIndices => ({
+  dateIndex: mapping.dateIndex,
+  merchantIndex: mapping.merchantIndex,
+  amountIndex: mapping.amountIndex,
+  currencyIndex: mapping.currencyIndex ?? -1,
+  descriptionIndex: mapping.descriptionIndex ?? -1,
+});
+
+const buildRemapContext = (grid: StatementGrid, mapping: SavedColumnMapping): ImportRemapContext => ({
+  statementData: { header: grid.originalHeader, dataRows: grid.dataRows },
+  signatures: [grid.headerSignature, grid.fileSignature],
+  appliedMapping: mappingToIndices(mapping),
+});
+
+export const buildRemapContextFromManual = (
+  manualData: ParsedStatementData,
+  signatures: string[],
+  indices: ImportColumnMappingIndices,
+): ImportRemapContext => ({
+  statementData: manualData,
+  signatures,
+  appliedMapping: indices,
+});
 
 export type ParseStatementManualMapping = {
   kind: 'manual';
@@ -267,11 +299,18 @@ export const parseStatementFromGrid = (
         rememberedMapping.merchantIndex,
         rememberedMapping.descriptionIndex,
       );
-      persistMappingIfNeeded(ctx.userScope, grid, rememberedMapping, resolvedDateIndex, resolvedDescriptionIdx);
+      const mappingForRemap = persistMappingIfNeeded(
+        ctx.userScope,
+        grid,
+        rememberedMapping,
+        resolvedDateIndex,
+        resolvedDescriptionIdx,
+      );
       return {
         kind: 'success',
         rows: ctx.finalizeRows(validRows),
         info: `Parsed ${validRows.length} transaction(s) using remembered column mapping.`,
+        remapContext: buildRemapContext(grid, mappingForRemap),
       };
     }
   }
@@ -379,10 +418,19 @@ export const parseStatementFromGrid = (
     };
   }
 
+  const mappingForRemap: SavedColumnMapping = persistMapping?.mapping ?? {
+    dateIndex,
+    merchantIndex,
+    amountIndex: preferredAmountIndex,
+    ...(descriptionIndex >= 0 ? { descriptionIndex } : {}),
+    ...(fallbackCurrencyIndex >= 0 ? { currencyIndex: fallbackCurrencyIndex } : {}),
+  };
+
   return {
     kind: 'success',
     rows: ctx.finalizeRows(validRows),
     info: `${hasSavedLayoutsButNoneMatch ? 'Headers didn’t match a saved layout; this one was mapped from scratch and saved alongside your others.\n\n' : ''}Parsed ${validRows.length} transaction(s). Review and approve import.`,
+    remapContext: buildRemapContext(grid, mappingForRemap),
     persistMapping,
   };
 };
@@ -454,9 +502,18 @@ export const parseManualMapping = (
     saveMappingForSignature(`anonymous:manual:${Date.now()}`, manualMappingPayload);
   }
 
+  const appliedIndices: ImportColumnMappingIndices = {
+    dateIndex: indices.dateIndex,
+    merchantIndex: indices.merchantIndex,
+    amountIndex: indices.amountIndex,
+    currencyIndex: indices.currencyIndex,
+    descriptionIndex: indices.descriptionIndex,
+  };
+
   return {
     kind: 'success',
     rows: ctx.finalizeRows(validRows),
     info: `Parsed ${validRows.length} transaction(s) using manual column mapping.`,
+    remapContext: buildRemapContextFromManual(manualData, signatures, appliedIndices),
   };
 };

@@ -48,6 +48,7 @@ export const ImportPage = (): JSX.Element => {
           {state.manualMappingData ? (
             <ImportManualMappingSection
               manualMappingData={state.manualMappingData}
+              isRemappingColumns={state.isRemappingColumns}
               manualDateIndex={state.manualDateIndex}
               setManualDateIndex={state.setManualDateIndex}
               manualMerchantIndex={state.manualMerchantIndex}
@@ -59,6 +60,7 @@ export const ImportPage = (): JSX.Element => {
               manualCurrencyIndex={state.manualCurrencyIndex}
               setManualCurrencyIndex={state.setManualCurrencyIndex}
               onApplyManualMapping={state.onApplyManualMapping}
+              onSwapMerchantDescriptionColumns={state.onSwapMerchantDescriptionColumns}
             />
           ) : null}
 
@@ -89,8 +91,10 @@ export const ImportPage = (): JSX.Element => {
           <ImportToolbarActions
             rows={state.rows}
             manualMappingData={state.manualMappingData}
+            canRemapColumns={state.remapContext !== null && state.rows.length > 0}
             isMutating={state.isMutating}
             onRemoveImportedFile={state.onRemoveImportedFile}
+            onRequestColumnRemap={state.onRequestColumnRemap}
             toggleAll={state.toggleAll}
             onApproveSelected={state.onApproveSelected}
           />
