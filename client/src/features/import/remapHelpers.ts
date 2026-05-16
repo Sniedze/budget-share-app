@@ -1,4 +1,31 @@
-import type { ImportColumnMappingIndices, ImportedRow } from './types';
+import type { ImportColumnMappingIndices, ImportedRow, ParsedStatementData } from './types';
+
+/** Dropdown label: bank header plus a sample cell from the file. */
+export const formatStatementColumnOption = (
+  header: string,
+  columnIndex: number,
+  dataRows: string[][],
+): string => {
+  const headerLabel = header.trim() || `Column ${columnIndex + 1}`;
+  const sampleRow = dataRows.find((row) => (row[columnIndex] ?? '').trim().length > 0);
+  const sample = sampleRow?.[columnIndex]?.trim() ?? '';
+  if (!sample) {
+    return headerLabel;
+  }
+  const preview = sample.length > 48 ? `${sample.slice(0, 48)}…` : sample;
+  return `${headerLabel} (e.g. ${preview})`;
+};
+
+export const getStatementColumnPreview = (
+  data: ParsedStatementData,
+  columnIndex: number,
+): string => {
+  if (columnIndex < 0) {
+    return '';
+  }
+  const sampleRow = data.dataRows.find((row) => (row[columnIndex] ?? '').trim().length > 0);
+  return sampleRow?.[columnIndex]?.trim() ?? '';
+};
 
 export type ColumnMappingFormState = {
   dateIndex: string;

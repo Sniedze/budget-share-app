@@ -100,7 +100,7 @@ export const ImportPage = (): JSX.Element => {
           />
         </Panel>
 
-        {state.rows.length > 0 ? (
+        {state.rows.length > 0 && !state.manualMappingData ? (
           <ImportRowsTable
             rows={state.rows}
             categoryOptions={state.categoryOptions}
