@@ -128,7 +128,7 @@ export const getBreakdownData = (expenses: Expense[]): BreakdownPoint[] => {
   const byTitle = new Map<string, number>();
 
   for (const expense of expenses) {
-    const key = expense.title.trim() || 'Other';
+    const key = expense.category.trim() || 'Other';
     byTitle.set(key, (byTitle.get(key) ?? 0) + expense.amount);
   }
 
