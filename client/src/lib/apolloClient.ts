@@ -1,10 +1,5 @@
 import { ApolloClient, HttpLink, InMemoryCache } from '@apollo/client';
-import {
-  getGraphqlErrorCode,
-  GraphqlErrorCode,
-  isUnauthenticatedGraphqlError,
-  type GraphqlErrorShape,
-} from './graphqlErrorCodes';
+import { isUnauthenticatedGraphqlError, type GraphqlErrorShape } from './graphqlErrorCodes';
 
 const DEFAULT_GRAPHQL_URL = 'http://localhost:4000/graphql';
 
