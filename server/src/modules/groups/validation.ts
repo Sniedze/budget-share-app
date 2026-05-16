@@ -89,5 +89,15 @@ export const parseUpdateGroupInput = (value: unknown): UpdateGroupInput => {
 export const parseUpsertSplitTemplateInput = (value: unknown): UpsertSplitTemplateInput =>
   parseWithSchema(upsertSplitTemplateInputSchema, value, 'split template');
 
-export const parseRecordSettlementPaymentInput = (value: unknown): RecordSettlementPaymentInput =>
-  parseWithSchema(recordSettlementPaymentInputSchema, value, 'settlement');
+export const parseRecordSettlementPaymentInput = (value: unknown): RecordSettlementPaymentInput => {
+  const parsed = parseWithSchema(recordSettlementPaymentInputSchema, value, 'settlement');
+  return {
+    groupId: parsed.groupId,
+    expenseGroup: parsed.expenseGroup ?? undefined,
+    fromMember: parsed.fromMember,
+    toMember: parsed.toMember,
+    amount: parsed.amount,
+    note: parsed.note ?? undefined,
+    settledAt: parsed.settledAt,
+  };
+};

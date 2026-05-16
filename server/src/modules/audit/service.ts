@@ -1,3 +1,4 @@
+import type { ResultSetHeader } from 'mysql2';
 import { db } from '../../db/mysql.js';
 
 type LogAuditEventInput = {
@@ -29,14 +30,14 @@ export const purgeOldAuditLogs = async (): Promise<number> => {
   if (retentionDays === null) {
     return 0;
   }
-  const [result] = await db.execute(
+  const [result] = await db.execute<ResultSetHeader>(
     `
       DELETE FROM audit_logs
       WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
     `,
     [retentionDays],
   );
-  return typeof result.affectedRows === 'number' ? result.affectedRows : 0;
+  return result.affectedRows;
 };
 
 export const logAuditEvent = async (input: LogAuditEventInput): Promise<void> => {
