@@ -7,7 +7,6 @@ import {
   ColumnMappingLabel,
   ColumnMappingRow,
   ColumnMappingSelect,
-  InlineInput,
   MappingSectionTitle,
 } from '../importPageStyles';
 
@@ -124,7 +123,6 @@ export const ImportManualMappingSection = ({
             </ColumnMappingLabel>
             <ColumnMappingSelect
               id={`import-map-${field.key}`}
-              as={InlineInput}
               value={field.value}
               onChange={(event) => field.onChange(event.currentTarget.value)}
             >
