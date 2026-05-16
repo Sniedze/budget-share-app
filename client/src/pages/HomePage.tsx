@@ -5,6 +5,7 @@ import { MonthlyOverviewSection, RecentExpensesSection, StatsSection } from '../
 import { Sidebar } from '../components/sections/Sidebar';
 import { AppLayout, HeaderRow, HeaderText, MutedText, PageSurface, SectionSubtitle, SectionTitle, UserMenu } from '../components/ui';
 import { APP_CURRENCY_CODE } from '../format/currency';
+import { useAuth } from '../features/auth';
 import {
   DEFAULT_EXPENSE_CATEGORIES,
   GET_EXPENSES,
@@ -12,12 +13,13 @@ import {
   getMerchantSuggestionPatch,
   getBreakdownData,
   getDashboardStats,
+  getMonthlyOverview,
   getTrendData,
   ExpenseForm,
   outgoingExpensesOnly,
   useExpenseActions,
 } from '../features/expenses';
-import { getMonthlyOverview } from '../features/expenses/selectors/expenseAnalytics';
+import { buildMembersByGroupId } from '../features/expenses/selectors/expenseAttribution';
 import type { Expense, GetExpensesResponse, SplitAllocationInput, SplitType } from '../features/expenses';
 import { GET_GROUPS, GET_GROUP_SPLIT_TEMPLATES } from '../features/groups';
 import type { GroupSummary, SplitTemplate } from '../features/groups';
@@ -104,6 +106,7 @@ const toFormValuesFromExpense = (expense: Expense): ExpenseFormValues => ({
 });
 
 export const HomePage = (): JSX.Element => {
+  const { user } = useAuth();
   const [formValues, setFormValues] = useState<ExpenseFormValues>(() => getInitialFormValues());
   const [queuedExpenses, setQueuedExpenses] = useState<ExpenseFormValues[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -131,17 +134,43 @@ export const HomePage = (): JSX.Element => {
   const expenses = useMemo(() => data?.expenses ?? [], [data]);
   const outgoingExpenses = useMemo(() => outgoingExpensesOnly(expenses), [expenses]);
   const householdOptions = useMemo(() => groupsData?.groups ?? [], [groupsData?.groups]);
+  const membersByGroupId = useMemo(() => buildMembersByGroupId(householdOptions), [householdOptions]);
+  const expenseViewer = useMemo(
+    () =>
+      user
+        ? { userId: user.id, fullName: user.fullName, email: user.email }
+        : null,
+    [user],
+  );
+  const attributedAnalyticsInput = useMemo(
+    () =>
+      expenseViewer
+        ? { expenses: outgoingExpenses, viewer: expenseViewer, membersByGroupId }
+        : null,
+    [expenseViewer, membersByGroupId, outgoingExpenses],
+  );
   const stats = useMemo(
     () =>
-      getDashboardStats(
-        outgoingExpenses,
-        householdOptions.map((group) => ({ name: group.name })),
-      ),
-    [outgoingExpenses, householdOptions],
+      attributedAnalyticsInput
+        ? getDashboardStats({
+            ...attributedAnalyticsInput,
+            groups: householdOptions.map((group) => ({ name: group.name })),
+          })
+        : [],
+    [attributedAnalyticsInput, householdOptions],
   );
-  const trendData = useMemo(() => getTrendData(outgoingExpenses), [outgoingExpenses]);
-  const breakdownData = useMemo(() => getBreakdownData(outgoingExpenses), [outgoingExpenses]);
-  const monthlyOverview = useMemo(() => getMonthlyOverview(outgoingExpenses), [outgoingExpenses]);
+  const trendData = useMemo(
+    () => (attributedAnalyticsInput ? getTrendData(attributedAnalyticsInput) : []),
+    [attributedAnalyticsInput],
+  );
+  const breakdownData = useMemo(
+    () => (attributedAnalyticsInput ? getBreakdownData(attributedAnalyticsInput) : []),
+    [attributedAnalyticsInput],
+  );
+  const monthlyOverview = useMemo(
+    () => (attributedAnalyticsInput ? getMonthlyOverview(attributedAnalyticsInput) : []),
+    [attributedAnalyticsInput],
+  );
   const sortedCategoryOptions = useMemo(
     () => [...DEFAULT_EXPENSE_CATEGORIES].sort((left, right) => left.localeCompare(right)),
     [],
@@ -374,7 +403,7 @@ export const HomePage = (): JSX.Element => {
           <HeaderText>
             <SectionTitle>Personal Finances</SectionTitle>
             <SectionSubtitle>
-              Overview of your expenses and spending patterns. Household-linked entries use split type Shared.
+              Personal expenses are split type Personal only. Shared expenses show your share of household spending.
             </SectionSubtitle>
           </HeaderText>
           <UserMenu />
