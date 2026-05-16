@@ -34,6 +34,10 @@ type GroupSplitTemplatesQueryData = {
   groupSplitTemplates: SplitTemplate[];
 };
 
+type DeleteExpenseGroupMutationData = {
+  deleteExpenseGroup: boolean;
+};
+
 type DraftExpenseGroup = {
   category: string;
   customCategory: string;
@@ -107,10 +111,13 @@ export const useHouseholdPageState = () => {
       awaitRefetchQueries: true,
     },
   );
-  const [deleteExpenseGroupMutation, { loading: isDeletingExpenseGroup }] = useMutation(DELETE_EXPENSE_GROUP, {
-    refetchQueries: [{ query: GET_GROUPS }],
-    awaitRefetchQueries: true,
-  });
+  const [deleteExpenseGroupMutation, { loading: isDeletingExpenseGroup }] = useMutation<DeleteExpenseGroupMutationData>(
+    DELETE_EXPENSE_GROUP,
+    {
+      refetchQueries: [{ query: GET_GROUPS }],
+      awaitRefetchQueries: true,
+    },
+  );
   const groups = useMemo(() => data?.groups ?? [], [data?.groups]);
   const [activeGroupId, setActiveGroupId] = useState('');
   const [isModalOpen, setModalOpen] = useState(false);
