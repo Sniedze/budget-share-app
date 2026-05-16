@@ -52,6 +52,13 @@ const ExpenseCategorySelect = styled.select`
   min-width: 140px;
 `;
 
+const CategoryReadOnly = styled.p`
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: ${colors.textPrimary};
+`;
+
 const RatioPresetRow = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -280,28 +287,35 @@ export const CreateExpenseGroupModal = ({
                 <FieldLabel>
                   Expense Group Category <RequiredMark>*</RequiredMark>
                 </FieldLabel>
-                <ExpenseCategorySelect
-                  value={templateCategory}
-                  onChange={(event) => onTemplateCategoryChange(event.target.value)}
-                  disabled={Boolean(editingTemplateCategory)}
-                >
-                  {createTemplateCategoryOptions.map((categoryOption) => (
-                    <option key={categoryOption} value={categoryOption}>
-                      {categoryOption}
-                    </option>
-                  ))}
-                  <option value="__custom__">Custom subcategory...</option>
-                </ExpenseCategorySelect>
-                {templateCategory === '__custom__' ? (
-                  <Input
-                    value={customTemplateCategory}
-                    onChange={(event) => onCustomTemplateCategoryChange(event.target.value)}
-                    placeholder="e.g., Kids activities"
-                  />
-                ) : null}
-                {existingTemplateForSelectedCategory ? (
+                {editingTemplateCategory ? (
+                  <CategoryReadOnly>{editingTemplateCategory}</CategoryReadOnly>
+                ) : (
+                  <>
+                    <ExpenseCategorySelect
+                      value={templateCategory}
+                      onChange={(event) => onTemplateCategoryChange(event.target.value)}
+                    >
+                      {createTemplateCategoryOptions.map((categoryOption) => (
+                        <option key={categoryOption} value={categoryOption}>
+                          {categoryOption}
+                        </option>
+                      ))}
+                      <option value="__custom__">Custom subcategory...</option>
+                    </ExpenseCategorySelect>
+                    {templateCategory === '__custom__' ? (
+                      <Input
+                        value={customTemplateCategory}
+                        onChange={(event) => onCustomTemplateCategoryChange(event.target.value)}
+                        placeholder="e.g., Kids activities"
+                      />
+                    ) : null}
+                  </>
+                )}
+                {editingTemplateCategory || existingTemplateForSelectedCategory ? (
                   <MutedText style={{ margin: 0 }}>
-                    This expense group already exists. Saving will update its split configuration.
+                    {editingTemplateCategory
+                      ? 'Category cannot be changed when editing. Saving will update the split configuration.'
+                      : 'This expense group already exists. Saving will update its split configuration.'}
                   </MutedText>
                 ) : null}
               </SectionBlock>
