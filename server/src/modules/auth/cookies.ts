@@ -78,16 +78,13 @@ export const setSessionCookies = (
       `${REFRESH_COOKIE_NAME}=${encodeURIComponent(refreshToken)}; ${flags}`,
     );
   }
-  setSessionHintCookie(res);
+  setSessionHintCookie(res, options);
 };
 
-export const setSessionHintCookie = (res: Response): void => {
+export const setSessionHintCookie = (res: Response, options: SessionCookieOptions): void => {
   const flags = sessionHintFlags();
-  const maxAge = REFRESH_TOKEN_TTL_SECONDS;
-  res.appendHeader(
-    'Set-Cookie',
-    `${SESSION_HINT_COOKIE_NAME}=1; ${flags}; Max-Age=${maxAge}`,
-  );
+  const maxAgePart = options.remember ? `; Max-Age=${REFRESH_TOKEN_TTL_SECONDS}` : '';
+  res.appendHeader('Set-Cookie', `${SESSION_HINT_COOKIE_NAME}=1; ${flags}${maxAgePart}`);
 };
 
 export const clearSessionCookies = (res: Response): void => {

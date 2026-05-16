@@ -69,6 +69,15 @@ describe('auth cookies', () => {
     assert.match(res.setCookies[0], new RegExp(`Max-Age=${ACCESS_TOKEN_TTL_SECONDS}`));
     assert.match(res.setCookies[1], new RegExp(`^${REFRESH_COOKIE_NAME}=r`));
     assert.doesNotMatch(res.setCookies[1], /Max-Age=/);
+    assert.match(res.setCookies[2], new RegExp(`^${SESSION_HINT_COOKIE_NAME}=1`));
+    assert.doesNotMatch(res.setCookies[2], /Max-Age=/);
+  });
+
+  it('setSessionCookies with remember sets Max-Age on session hint', () => {
+    const res = createCaptureRes();
+    setSessionCookies(res, 'a', 'r', { remember: true });
+    assert.match(res.setCookies[2], new RegExp(`^${SESSION_HINT_COOKIE_NAME}=1`));
+    assert.match(res.setCookies[2], new RegExp(`Max-Age=${REFRESH_TOKEN_TTL_SECONDS}`));
   });
 
   it('clearSessionCookies clears both cookies with Max-Age=0', () => {
