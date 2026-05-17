@@ -18,7 +18,7 @@ import {
 type ImportUploadSectionProps = {
   isDragActive: boolean;
   uploadedFileName: string;
-  fileInputRef: RefObject<HTMLInputElement>;
+  fileInputRef: RefObject<HTMLInputElement | null>;
   onDragActiveChange: (active: boolean) => void;
   onDropFile: (event: DragEvent<HTMLDivElement>) => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
