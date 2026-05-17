@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../features/auth';
 import {
@@ -15,6 +15,7 @@ import {
   GET_GROUPS,
   GET_GROUP_SPLIT_TEMPLATES,
   mergeGroupIntoCache,
+  refetchGroups,
   UPDATE_GROUP,
   UPSERT_GROUP_SPLIT_TEMPLATE,
   type GetGroupSplitTemplatesQueryResult,
@@ -75,6 +76,7 @@ export const ALL_HOUSEHOLD_EXPENSE_GROUPS = '__all__';
 
 export const useHouseholdPageState = () => {
   const { user } = useAuth();
+  const client = useApolloClient();
   const { data, loading, error } = useQuery<GetGroupsQueryResult>(GET_GROUPS);
   const { data: expensesData } = useQuery<GetExpensesResponse>(GET_EXPENSES);
   const { addExpense, isMutating: isCreatingExpense } = useExpenseActions();
@@ -88,22 +90,23 @@ export const useHouseholdPageState = () => {
       mergeGroupIntoCache(cache, data?.updateGroup ?? null);
     },
   });
+  const refreshHouseholdGroups = useCallback(() => {
+    void refetchGroups(client);
+  }, [client]);
+
   const [upsertTemplateMutation, { loading: savingTemplate }] = useMutation(UPSERT_GROUP_SPLIT_TEMPLATE, {
-    refetchQueries: [{ query: GET_GROUPS }],
-    awaitRefetchQueries: true,
+    onCompleted: refreshHouseholdGroups,
   });
   const [declineExpenseGroupMutation, { loading: isDecliningExpenseGroup }] = useMutation(
     DECLINE_EXPENSE_GROUP_PARTICIPATION,
     {
-      refetchQueries: [{ query: GET_GROUPS }],
-      awaitRefetchQueries: true,
+      onCompleted: refreshHouseholdGroups,
     },
   );
   const [deleteExpenseGroupMutation, { loading: isDeletingExpenseGroup }] = useMutation<DeleteExpenseGroupMutation>(
     DELETE_EXPENSE_GROUP,
     {
-      refetchQueries: [{ query: GET_GROUPS }],
-      awaitRefetchQueries: true,
+      onCompleted: refreshHouseholdGroups,
     },
   );
   const groups = useMemo(() => data?.groups ?? [], [data?.groups]);
