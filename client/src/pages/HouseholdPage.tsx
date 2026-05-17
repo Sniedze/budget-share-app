@@ -276,7 +276,10 @@ export const HouseholdPage = (): JSX.Element => {
                 <strong>{activeGroup.members.length}</strong>
               </StatCard>
             </StatGrid>
-            <PendingInvitationsPanel invitations={activeGroup.pendingInvitations ?? []} />
+            <PendingInvitationsPanel
+              groupId={activeGroup.id}
+              invitations={activeGroup.pendingInvitations ?? []}
+            />
           </HouseholdSummaryCard>
         ) : null}
 

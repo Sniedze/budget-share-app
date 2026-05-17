@@ -268,6 +268,7 @@ export type Mutation = {
   recordSettlementPayment: SettlementPayment;
   refreshSession: AuthPayload;
   register: AuthPayload;
+  resendGroupInvitation: GroupPendingInvitation;
   saveUserWorkspaceSettings: UserWorkspaceSettings;
   updateExpense: Maybe<Expense>;
   updateGroup: Group;
@@ -339,6 +340,12 @@ export type MutationRefreshSessionArgs = {
 
 export type MutationRegisterArgs = {
   input: RegisterInput;
+};
+
+
+export type MutationResendGroupInvitationArgs = {
+  email: Scalars['String']['input'];
+  groupId: Scalars['ID']['input'];
 };
 
 
@@ -668,6 +675,14 @@ export type DeclineGroupInvitationMutationVariables = Exact<{
 
 
 export type DeclineGroupInvitationMutation = { __typename?: 'Mutation', declineGroupInvitation: { __typename?: 'GroupInvitation', id: string, status: GroupInvitationStatus } };
+
+export type ResendGroupInvitationMutationVariables = Exact<{
+  groupId: Scalars['ID']['input'];
+  email: Scalars['String']['input'];
+}>;
+
+
+export type ResendGroupInvitationMutation = { __typename?: 'Mutation', resendGroupInvitation: { __typename?: 'GroupPendingInvitation', email: string, name: string, status: GroupInvitationStatus, emailDeliveryStatus: InvitationEmailDeliveryStatus | null } };
 
 export type DeclineExpenseGroupParticipationMutationVariables = Exact<{
   groupId: Scalars['ID']['input'];

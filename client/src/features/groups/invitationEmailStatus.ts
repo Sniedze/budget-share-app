@@ -4,6 +4,14 @@ export type InvitationEmailDeliveryStatusLabel =
   | 'EmailFailed'
   | 'EmailSkipped';
 
+export const canResendInvitationEmail = (
+  status: InvitationEmailDeliveryStatusLabel | null | undefined,
+): boolean =>
+  status === 'EmailFailed' ||
+  status === 'EmailSkipped' ||
+  status === 'PendingEmail' ||
+  status == null;
+
 export const invitationEmailStatusLabel = (
   status: InvitationEmailDeliveryStatusLabel | null | undefined,
 ): string => {
