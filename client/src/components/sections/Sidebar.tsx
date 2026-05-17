@@ -1,6 +1,7 @@
 import { HandCoins, Inbox, LayoutDashboard, LineChart, Users, Upload, type LucideIcon } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import styled from 'styled-components';
+import { PERSONAL_FINANCES_PATH } from '../../routes';
 import { colors, gradients, radii, spacing } from '../../styles/tokens';
 
 const Aside = styled.aside`
@@ -14,10 +15,25 @@ const Aside = styled.aside`
   }
 `;
 
-const Brand = styled.div`
+const BrandLink = styled(NavLink)`
   display: flex;
   align-items: center;
   gap: 10px;
+  text-decoration: none;
+  color: inherit;
+  border-radius: ${radii.sm};
+  padding: 4px;
+  margin: -4px;
+  transition: background-color 120ms ease;
+
+  &:hover {
+    background: ${colors.background};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${colors.primary};
+    outline-offset: 2px;
+  }
 `;
 
 const BrandIcon = styled.div`
@@ -119,7 +135,7 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { label: 'Personal Finances', Icon: LayoutDashboard, to: '/' },
+  { label: 'Personal Finances', Icon: LayoutDashboard, to: PERSONAL_FINANCES_PATH },
   { label: 'Budget & Forecast', Icon: LineChart, to: '/budget' },
   { label: 'Household', Icon: Users, to: '/groups' },
   { label: 'Invitations', Icon: Inbox, to: '/invitations' },
@@ -130,19 +146,19 @@ const navItems: NavItem[] = [
 export const Sidebar = (): JSX.Element => {
   return (
     <Aside>
-      <Brand>
+      <BrandLink to={PERSONAL_FINANCES_PATH} end aria-label="BudgetShare — Personal Finances">
         <BrandIcon aria-hidden>B</BrandIcon>
         <BrandText>
           <h2>BudgetShare</h2>
           <p>Household budgeting</p>
         </BrandText>
-      </Brand>
+      </BrandLink>
 
       <Nav>
         <NavList>
           {navItems.map((item) => (
             <li key={item.label}>
-              <NavItemLink to={item.to} end={item.to === '/'}>
+              <NavItemLink to={item.to} end={item.to === PERSONAL_FINANCES_PATH}>
                 <NavIcon aria-hidden>
                   <item.Icon size={12} strokeWidth={2} />
                 </NavIcon>

@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { PageLoading } from './components/ui';
 import { useAuth } from './features/auth';
+import { PERSONAL_FINANCES_PATH } from './routes';
 
 const HouseholdPage = lazy(() =>
   import('./pages/HouseholdPage').then((module) => ({ default: module.HouseholdPage })),
@@ -37,14 +38,12 @@ const RequireAuth = ({ children }: { children: JSX.Element }): JSX.Element => {
 };
 
 const PublicOnly = ({ children }: { children: JSX.Element }): JSX.Element => {
-  const location = useLocation();
-  const from = (location.state as { from?: { pathname?: string } } | undefined)?.from?.pathname ?? '/';
   const { isAuthenticated, isInitializing } = useAuth();
   if (isInitializing) {
     return <PageLoading />;
   }
   if (isAuthenticated) {
-    return <Navigate to={from} replace />;
+    return <Navigate to={PERSONAL_FINANCES_PATH} replace />;
   }
   return children;
 };

@@ -1,6 +1,7 @@
 import { FormEvent, useId, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth';
+import { PERSONAL_FINANCES_PATH } from '../routes';
 import {
   AuthActions,
   AuthForm,
@@ -12,16 +13,8 @@ import {
   RequiredMark,
 } from '../components/ui';
 
-type LocationState = {
-  from?: {
-    pathname: string;
-  };
-};
-
 export const LoginPage = (): JSX.Element => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const from = (location.state as LocationState | undefined)?.from?.pathname ?? '/';
   const { login, isAuthenticating } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,7 +29,7 @@ export const LoginPage = (): JSX.Element => {
     setError(null);
     try {
       await login(email.trim(), password, rememberMe);
-      navigate(from, { replace: true });
+      navigate(PERSONAL_FINANCES_PATH, { replace: true });
     } catch (authError) {
       const message = authError instanceof Error ? authError.message : 'Login failed.';
       setError(
