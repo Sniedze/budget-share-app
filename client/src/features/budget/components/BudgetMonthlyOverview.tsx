@@ -15,6 +15,7 @@ import {
 } from '../budgetPageStyles';
 
 type BudgetMonthlyOverviewProps = {
+  formatAmount?: import('../budgetPageTypes').FormatBudgetAmount;
   viewYear: number;
   viewMonthIndex: number;
   monthPickerValue: string;
@@ -26,6 +27,7 @@ type BudgetMonthlyOverviewProps = {
 };
 
 export const BudgetMonthlyOverview = ({
+  formatAmount = formatAppCurrency,
   viewYear,
   viewMonthIndex,
   monthPickerValue,
@@ -52,15 +54,15 @@ export const BudgetMonthlyOverview = ({
       <OverviewMetrics>
         <MetricBlock>
           <MetricLabel>Total budgeted</MetricLabel>
-          <MetricValue>{formatAppCurrency(totalBudgeted)}</MetricValue>
+          <MetricValue>{formatAmount(totalBudgeted)}</MetricValue>
         </MetricBlock>
         <MetricBlock>
           <MetricLabel>Total spent</MetricLabel>
-          <MetricValue $tone="blue">{formatAppCurrency(totalSpentMonth)}</MetricValue>
+          <MetricValue $tone="blue">{formatAmount(totalSpentMonth)}</MetricValue>
         </MetricBlock>
         <MetricBlock>
           <MetricLabel>Remaining</MetricLabel>
-          <MetricValue $tone={remainingBudget >= 0 ? 'green' : 'red'}>{formatAppCurrency(remainingBudget)}</MetricValue>
+          <MetricValue $tone={remainingBudget >= 0 ? 'green' : 'red'}>{formatAmount(remainingBudget)}</MetricValue>
         </MetricBlock>
       </OverviewMetrics>
       <ProgressTrack>

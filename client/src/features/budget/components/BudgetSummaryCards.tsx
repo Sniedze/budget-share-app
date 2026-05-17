@@ -1,8 +1,10 @@
 import { formatAppCurrency } from '../../../format/currency';
+import type { FormatBudgetAmount } from '../budgetPageTypes';
 import { ytdRangeLabel } from '../selectors';
 import { SummaryCard, SummaryGrid, SummaryHint, SummaryLabel, SummaryValue } from '../budgetPageStyles';
 
 type BudgetSummaryCardsProps = {
+  formatAmount?: FormatBudgetAmount;
   balanceNow: number;
   balanceDeltaYtd: number;
   projectedEnd: number;
@@ -14,6 +16,7 @@ type BudgetSummaryCardsProps = {
 };
 
 export const BudgetSummaryCards = ({
+  formatAmount = formatAppCurrency,
   balanceNow,
   balanceDeltaYtd,
   projectedEnd,
@@ -27,28 +30,28 @@ export const BudgetSummaryCards = ({
     <SummaryGrid>
       <SummaryCard $variant="accent">
         <SummaryLabel>Current balance</SummaryLabel>
-        <SummaryValue>{formatAppCurrency(balanceNow)}</SummaryValue>
+        <SummaryValue>{formatAmount(balanceNow)}</SummaryValue>
         <SummaryHint>
           {balanceDeltaYtd >= 0 ? '+' : ''}
-          {formatAppCurrency(balanceDeltaYtd)} YTD cash flow
+          {formatAmount(balanceDeltaYtd)} YTD cash flow
         </SummaryHint>
       </SummaryCard>
       <SummaryCard>
         <SummaryLabel>Projected (year end)</SummaryLabel>
-        <SummaryValue>{formatAppCurrency(projectedEnd)}</SummaryValue>
+        <SummaryValue>{formatAmount(projectedEnd)}</SummaryValue>
         <SummaryHint>Based on income estimate &amp; spend trend</SummaryHint>
       </SummaryCard>
       <SummaryCard>
         <SummaryLabel>YTD income</SummaryLabel>
-        <SummaryValue style={{ color: '#16a34a' }}>+{formatAppCurrency(ytdIncCombined)}</SummaryValue>
+        <SummaryValue style={{ color: '#16a34a' }}>+{formatAmount(ytdIncCombined)}</SummaryValue>
         <SummaryHint>
-          {ytdRangeLabel(now)} · imported {formatAppCurrency(ytdIncomingActual)} + estimate{' '}
-          {formatAppCurrency(ytdIncEstimate)}
+          {ytdRangeLabel(now)} · imported {formatAmount(ytdIncomingActual)} + estimate{' '}
+          {formatAmount(ytdIncEstimate)}
         </SummaryHint>
       </SummaryCard>
       <SummaryCard>
         <SummaryLabel>YTD expenses</SummaryLabel>
-        <SummaryValue style={{ color: '#dc2626' }}>-{formatAppCurrency(ytdExp)}</SummaryValue>
+        <SummaryValue style={{ color: '#dc2626' }}>-{formatAmount(ytdExp)}</SummaryValue>
         <SummaryHint>{ytdRangeLabel(now)}</SummaryHint>
       </SummaryCard>
     </SummaryGrid>

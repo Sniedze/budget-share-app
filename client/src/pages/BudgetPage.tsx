@@ -1,5 +1,6 @@
 import { Sidebar } from '../components/sections/Sidebar';
 import { AppLayout, MutedText, PageSurface } from '../components/ui';
+import { spacing } from '../styles/tokens';
 import {
   BudgetCategoryList,
   BudgetDetailedViews,
@@ -23,7 +24,15 @@ export const BudgetPage = (): JSX.Element => {
         {state.loading ? <MutedText>Loading…</MutedText> : null}
         {state.error ? <MutedText>Error: {state.error.message}</MutedText> : null}
 
+        {state.mixedCurrencyWarning ? (
+          <MutedText style={{ marginBottom: spacing.md }}>
+            This year includes expenses in more than one currency. Totals and charts use {state.budgetCurrency} only;
+            other currencies still appear in recent transactions.
+          </MutedText>
+        ) : null}
+
         <BudgetSummaryCards
+          formatAmount={state.formatBudgetAmount}
           balanceNow={state.balanceNow}
           balanceDeltaYtd={state.balanceDeltaYtd}
           projectedEnd={state.projectedEnd}
@@ -35,6 +44,7 @@ export const BudgetPage = (): JSX.Element => {
         />
 
         <BudgetMonthlyOverview
+          formatAmount={state.formatBudgetAmount}
           viewYear={state.viewYear}
           viewMonthIndex={state.viewMonthIndex}
           monthPickerValue={state.monthPickerValue}
@@ -46,6 +56,7 @@ export const BudgetPage = (): JSX.Element => {
         />
 
         <BudgetDetailedViews
+          formatAmount={state.formatBudgetAmount}
           detailTab={state.detailTab}
           setDetailTab={state.setDetailTab}
           viewYear={state.viewYear}
@@ -55,13 +66,14 @@ export const BudgetPage = (): JSX.Element => {
         />
 
         <BudgetForecastCharts
+          formatAmount={state.formatBudgetAmount}
           chartTab={state.chartTab}
           setChartTab={state.setChartTab}
           chartRowsMonthly={state.chartRowsMonthly}
           yearTotals={state.yearTotals}
         />
 
-        <BudgetCategoryList categoryRows={state.categoryRows} />
+        <BudgetCategoryList formatAmount={state.formatBudgetAmount} categoryRows={state.categoryRows} />
 
         {state.budgetModalOpen ? (
           <BudgetSettingsModal

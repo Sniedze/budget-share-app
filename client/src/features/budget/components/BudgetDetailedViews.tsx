@@ -5,6 +5,7 @@ import { BudgetMonthlyBreakdownTable } from './BudgetMonthlyBreakdownTable';
 import { BudgetRecentTransactionsTable } from './BudgetRecentTransactionsTable';
 
 type BudgetDetailedViewsProps = {
+  formatAmount?: import('../budgetPageTypes').FormatBudgetAmount;
   detailTab: 'recent' | 'months' | 'trends';
   setDetailTab: (tab: 'recent' | 'months' | 'trends') => void;
   viewYear: number;
@@ -19,6 +20,7 @@ type BudgetDetailedViewsProps = {
 };
 
 export const BudgetDetailedViews = ({
+  formatAmount,
   detailTab,
   setDetailTab,
   viewYear,
@@ -46,6 +48,7 @@ export const BudgetDetailedViews = ({
       {detailTab === 'recent' ? <BudgetRecentTransactionsTable rows={sortedRecentTx} /> : null}
       {detailTab === 'months' ? (
         <BudgetMonthlyBreakdownTable
+          formatAmount={formatAmount}
           viewYear={viewYear}
           rows={monthlyBreakdown.rows}
           totals={monthlyBreakdown.totals}
@@ -53,6 +56,7 @@ export const BudgetDetailedViews = ({
       ) : null}
       {detailTab === 'trends' ? (
         <BudgetCategoryTrendsTable
+          formatAmount={formatAmount}
           viewYear={viewYear}
           monthIndices={categoryTrends.monthIndices}
           labels={categoryTrends.labels}

@@ -20,6 +20,7 @@ type YearTotalRow = {
 };
 
 type BudgetForecastChartsProps = {
+  formatAmount?: import('../budgetPageTypes').FormatBudgetAmount;
   chartTab: 'monthly' | 'yearly';
   setChartTab: (tab: 'monthly' | 'yearly') => void;
   chartRowsMonthly: ForecastChartRow[];
@@ -27,6 +28,7 @@ type BudgetForecastChartsProps = {
 };
 
 export const BudgetForecastCharts = ({
+  formatAmount = formatAppCurrency,
   chartTab,
   setChartTab,
   chartRowsMonthly,
@@ -54,7 +56,7 @@ export const BudgetForecastCharts = ({
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(value) => (value == null ? '—' : formatAppCurrency(Number(value)))} />
+                <Tooltip formatter={(value) => (value == null ? '—' : formatAmount(Number(value)))} />
                 <Legend />
                 <Area
                   type="monotone"
@@ -105,7 +107,7 @@ export const BudgetForecastCharts = ({
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="year" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(value) => formatAppCurrency(Number(value ?? 0))} />
+                <Tooltip formatter={(value) => formatAmount(Number(value ?? 0))} />
                 <Legend />
                 <Area
                   type="monotone"

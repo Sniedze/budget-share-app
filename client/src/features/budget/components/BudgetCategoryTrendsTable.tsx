@@ -6,6 +6,7 @@ import type { CategoryTrendRow } from '../budgetPageTypes';
 import { Dot, MiniTrend } from '../budgetPageStyles';
 
 type BudgetCategoryTrendsTableProps = {
+  formatAmount?: import('../budgetPageTypes').FormatBudgetAmount;
   viewYear: number;
   monthIndices: number[];
   labels: string[];
@@ -14,6 +15,7 @@ type BudgetCategoryTrendsTableProps = {
 };
 
 export const BudgetCategoryTrendsTable = ({
+  formatAmount = formatAppCurrency,
   viewYear,
   monthIndices,
   labels,
@@ -52,12 +54,12 @@ export const BudgetCategoryTrendsTable = ({
               </Td>
               {r.monthAmounts.map((amt, i) => (
                 <Td key={`${r.cat}-${monthIndices[i]}`} style={{ textAlign: 'right' }}>
-                  {formatAppCurrency(amt)}
+                  {formatAmount(amt)}
                 </Td>
               ))}
-              <Td style={{ textAlign: 'right' }}>{r.cap > 0 ? formatAppCurrency(r.cap) : '—'}</Td>
+              <Td style={{ textAlign: 'right' }}>{r.cap > 0 ? formatAmount(r.cap) : '—'}</Td>
               <Td style={{ textAlign: 'right', color: '#0891b2', fontWeight: 600 }}>
-                {formatAppCurrency(r.ytd)}
+                {formatAmount(r.ytd)}
               </Td>
               <Td
                 style={{
@@ -66,7 +68,7 @@ export const BudgetCategoryTrendsTable = ({
                   color: r.cap > 0 && r.avg > r.cap ? '#dc2626' : '#16a34a',
                 }}
               >
-                {formatAppCurrency(r.avg)}
+                {formatAmount(r.avg)}
               </Td>
               <Td>
                 <MiniTrend $trend={r.trend}>
@@ -80,12 +82,12 @@ export const BudgetCategoryTrendsTable = ({
             <Td>Total</Td>
             {columnTotals.map((t, i) => (
               <Td key={`tot-${monthIndices[i]}`} style={{ textAlign: 'right' }}>
-                {formatAppCurrency(t)}
+                {formatAmount(t)}
               </Td>
             ))}
             <Td>—</Td>
             <Td style={{ textAlign: 'right', color: '#0891b2' }}>
-              {formatAppCurrency(rows.reduce((s, r) => s + r.ytd, 0))}
+              {formatAmount(rows.reduce((s, r) => s + r.ytd, 0))}
             </Td>
             <Td>—</Td>
             <Td>—</Td>
