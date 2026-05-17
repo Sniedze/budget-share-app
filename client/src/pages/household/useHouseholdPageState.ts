@@ -33,8 +33,8 @@ type DraftExpenseGroup = {
 type TemplateSplitMode = 'equal' | 'ratio_50_50' | 'ratio_60_40' | 'ratio_70_30' | 'custom';
 
 const DEFAULT_MEMBERS: GroupMember[] = [
-  { name: 'You', email: 'you@example.com', ratio: 0 },
-  { name: '', email: '', ratio: 0 },
+  { userId: null, name: 'You', email: 'you@example.com', ratio: 0 },
+  { userId: null, name: '', email: '', ratio: 0 },
 ];
 
 const PREDEFINED_EXPENSE_CATEGORIES = [

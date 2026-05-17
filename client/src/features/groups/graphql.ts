@@ -16,6 +16,7 @@ export const GET_GROUPS = gql`
         emailDeliveryStatus
       }
       members {
+        userId
         name
         email
         ratio
@@ -66,6 +67,7 @@ export const CREATE_GROUP = gql`
         emailDeliveryStatus
       }
       members {
+        userId
         name
         email
         ratio
@@ -101,6 +103,7 @@ export const UPDATE_GROUP = gql`
         emailDeliveryStatus
       }
       members {
+        userId
         name
         email
         ratio

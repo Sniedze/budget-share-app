@@ -220,7 +220,10 @@ export const resolvers = {
       context: GraphqlContext,
     ) => {
       const user = requireAuth(context);
-      return declineExpenseGroupParticipation(args.groupId, args.category, user.email);
+      return declineExpenseGroupParticipation(args.groupId, args.category, {
+        userId: user.id,
+        email: user.email,
+      });
     },
     deleteExpenseGroup: async (
       _parent: unknown,

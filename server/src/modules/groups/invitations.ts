@@ -360,7 +360,7 @@ export const declineGroupInvitation = async (
 export const declineExpenseGroupParticipation = async (
   groupId: string,
   category: string,
-  userEmail: string,
+  viewer: GroupViewer,
 ): Promise<boolean> => {
   const numericGroupId = Number(groupId);
   if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
@@ -371,15 +371,17 @@ export const declineExpenseGroupParticipation = async (
     throw appError(ErrorCode.BAD_USER_INPUT, 'Expense group category is required.');
   }
 
-  const normalizedEmail = userEmail.trim().toLowerCase();
+  await assertActiveGroupMembership(numericGroupId, viewer, 'declineExpenseGroupParticipation');
+
   const [memberRows] = await db.query<Array<{ name: string } & RowDataPacket>>(
     `
       SELECT name
       FROM group_members
-      WHERE group_id = ? AND email = ?
+      WHERE group_id = ?
+        AND ${groupMemberMatchesViewerClause()}
       LIMIT 1
     `,
-    [numericGroupId, normalizedEmail],
+    [numericGroupId, ...groupMemberMatchesViewerParams(viewer)],
   );
   const member = memberRows[0];
   if (!member) {

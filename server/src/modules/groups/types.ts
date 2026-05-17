@@ -1,4 +1,5 @@
 export type GroupMember = {
+  userId?: string;
   name: string;
   email: string;
   ratio: number;
