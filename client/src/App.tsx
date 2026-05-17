@@ -2,7 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { PageLoading } from './components/ui';
 import { useAuth } from './features/auth';
-import { PERSONAL_FINANCES_PATH } from './routes';
+import { ACCOUNT_SETTINGS_PATH, PERSONAL_FINANCES_PATH } from './routes';
 
 const HouseholdPage = lazy(() =>
   import('./pages/HouseholdPage').then((module) => ({ default: module.HouseholdPage })),
@@ -23,6 +23,9 @@ const SettlementsPage = lazy(() =>
 );
 const InvitationsPage = lazy(() =>
   import('./pages/InvitationsPage').then((module) => ({ default: module.InvitationsPage })),
+);
+const AccountSettingsPage = lazy(() =>
+  import('./pages/AccountSettingsPage').then((module) => ({ default: module.AccountSettingsPage })),
 );
 
 const RequireAuth = ({ children }: { children: JSX.Element }): JSX.Element => {
@@ -113,6 +116,14 @@ const App = (): JSX.Element => {
           element={
             <RequireAuth>
               <InvitationsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path={ACCOUNT_SETTINGS_PATH}
+          element={
+            <RequireAuth>
+              <AccountSettingsPage />
             </RequireAuth>
           }
         />
