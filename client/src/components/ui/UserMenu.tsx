@@ -23,7 +23,7 @@ const ProfileIcon = styled.span`
 `;
 
 export const UserMenu = (): JSX.Element => {
-  const { user, logout } = useAuth();
+  const { user, logout, logoutAllDevices } = useAuth();
   if (!user) {
     return <></>;
   }
@@ -35,6 +35,9 @@ export const UserMenu = (): JSX.Element => {
       <MutedText>{user.fullName}</MutedText>
       <Button type="button" $variant="secondary" $size="sm" onClick={() => void logout()}>
         Log out
+      </Button>
+      <Button type="button" $variant="secondary" $size="sm" onClick={() => void logoutAllDevices()}>
+        All devices
       </Button>
     </Wrapper>
   );

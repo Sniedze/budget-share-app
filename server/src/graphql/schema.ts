@@ -401,6 +401,7 @@ export const typeDefs = `#graphql
     login(input: LoginInput!): AuthPayload!
     refreshSession(input: RefreshSessionInput!): AuthPayload!
     logout: Boolean!
+    logoutAllDevices: Boolean!
     upsertGroupSplitTemplate(input: UpsertSplitTemplateInput!): SplitTemplate!
     recordSettlementPayment(input: RecordSettlementPaymentInput!): SettlementPayment!
     acceptGroupInvitation(id: ID!): GroupInvitation!

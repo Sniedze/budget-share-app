@@ -59,7 +59,7 @@ const writeSetting = async (userId: number, key: string, value: unknown): Promis
 
 const readBudgetAssumptions = async (userId: number): Promise<BudgetAssumptions> => {
   const raw = await readSetting(userId, userSettingKeys.budgetAssumptions);
-  const parsed = parseJson<Partial<BudgetAssumptions>>(raw, {});
+  const parsed = parseJson<Partial<BudgetAssumptions>>(raw, DEFAULT_BUDGET_ASSUMPTIONS);
   return {
     startingBalance: Number(parsed.startingBalance) || 0,
     monthlyIncomeEstimate: Number(parsed.monthlyIncomeEstimate) || 0,

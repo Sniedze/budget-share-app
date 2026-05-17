@@ -21,7 +21,7 @@ import {
   deleteExpenseGroup,
   upsertSplitTemplate,
 } from '../modules/groups/service.js';
-import { login, logoutSession, refreshSession, register } from '../modules/auth/service.js';
+import { login, logoutSession, refreshSession, register, revokeRefreshTokens } from '../modules/auth/service.js';
 import { clearSessionCookies, getRefreshTokenFromCookies, setSessionCookies } from '../modules/auth/cookies.js';
 import { appError, ErrorCode } from './appError.js';
 import {
@@ -149,6 +149,12 @@ export const resolvers = {
     logout: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
       const refreshToken = getRefreshTokenFromCookies(context.req);
       await logoutSession(refreshToken);
+      clearSessionCookies(context.res);
+      return true;
+    },
+    logoutAllDevices: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
+      const user = requireAuth(context);
+      await revokeRefreshTokens(user.id);
       clearSessionCookies(context.res);
       return true;
     },
