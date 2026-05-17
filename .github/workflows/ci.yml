@@ -18,11 +18,12 @@ jobs:
         with:
           node-version: 20
 
-      - name: Client install, lint, and build
+      - name: Client install, lint, test, and build
         working-directory: client
         run: |
           npm ci
           npm run lint
+          npm run test
           npm run build
 
       - name: Server install, lint, and build

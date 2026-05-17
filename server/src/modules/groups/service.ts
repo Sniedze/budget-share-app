@@ -1,4 +1,5 @@
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { buildBulkInsertPlaceholders } from '../../db/queryHelpers.js';
 import { db } from '../../db/mysql.js';
 import type {
   CreateGroupInput,
@@ -296,9 +297,6 @@ const toSettlementDateString = (value: Date | string | null | undefined): string
   }
   return date.toISOString().slice(0, 10);
 };
-const buildBulkInsertPlaceholders = (rows: number, width: number): string =>
-  Array.from({ length: rows }, () => `(${Array.from({ length: width }, () => '?').join(', ')})`).join(', ');
-
 const resolveExpenseSettlementShares = (
   expense: SettlementExpenseRow,
   members: GroupMember[],
@@ -789,25 +787,7 @@ export const updateGroup = async (input: UpdateGroupInput, actor: GroupViewer): 
     `,
     [numericGroupId],
   );
-  const [membershipRows] = await db.query<RowDataPacket[]>(
-    `
-      SELECT id
-      FROM group_members
-      WHERE group_id = ?
-        AND ${groupMemberMatchesViewerClause()}
-      LIMIT 1
-    `,
-    [numericGroupId, ...groupMemberMatchesViewerParams(actor)],
-  );
-  if (membershipRows.length === 0) {
-    logAuthzDenied('group_access_denied', {
-      groupId: String(numericGroupId),
-      email: normalizedActorEmail,
-      userId: actor.userId,
-      action: 'updateGroup',
-    });
-    throw appError(ErrorCode.FORBIDDEN, 'Not authorized for this group.');
-  }
+  await assertActiveGroupMembership(numericGroupId, actor, 'updateGroup');
 
   const actorInMembers = members.some((member) => member.email === normalizedActorEmail);
   if (!actorInMembers) {
@@ -1427,26 +1407,7 @@ export const recordSettlementPayment = async (
   if (!Number.isFinite(groupId) || groupId <= 0) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid groupId.');
   }
-  const normalizedEmail = normalizeMemberEmail(viewer.email);
-  const [membershipRows] = await db.query<RowDataPacket[]>(
-    `
-      SELECT id
-      FROM group_members
-      WHERE group_id = ?
-        AND ${groupMemberMatchesViewerClause()}
-      LIMIT 1
-    `,
-    [groupId, ...groupMemberMatchesViewerParams(viewer)],
-  );
-  if (membershipRows.length === 0) {
-    logAuthzDenied('group_access_denied', {
-      groupId: String(groupId),
-      email: normalizedEmail,
-      userId: viewer.userId,
-      action: 'recordSettlementPayment',
-    });
-    throw appError(ErrorCode.FORBIDDEN, 'Not authorized for this group.');
-  }
+  await assertActiveGroupMembership(groupId, viewer, 'recordSettlementPayment');
 
   const fromMember = input.fromMember.trim();
   const toMember = input.toMember.trim();

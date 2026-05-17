@@ -23,3 +23,7 @@ export const queryMany = async <T extends RowDataPacket = RowDataPacket>(
   const [rows] = await db.query<T[]>(sql, params);
   return rows;
 };
+
+/** `(?, ?), (?, ?)` for multi-row INSERT ... VALUES. */
+export const buildBulkInsertPlaceholders = (rows: number, width: number): string =>
+  Array.from({ length: rows }, () => `(${Array.from({ length: width }, () => '?').join(', ')})`).join(', ');
