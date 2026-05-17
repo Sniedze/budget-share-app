@@ -56,6 +56,16 @@ export type CreateGroupInput = {
   name: Scalars['String']['input'];
 };
 
+/** Settlement totals for one ISO 4217 currency within a household. */
+export type CurrencySettlementScope = {
+  __typename?: 'CurrencySettlementScope';
+  balances: Array<SettlementBalance>;
+  currency: Scalars['String']['output'];
+  expenseGroups: Array<ExpenseGroupSettlement>;
+  totalExpenses: Scalars['Float']['output'];
+  transfers: Array<SettlementTransfer>;
+};
+
 export type DeleteExpenseInput = {
   id: Scalars['ID']['input'];
 };
@@ -161,9 +171,12 @@ export type GroupPendingInvitation = {
 export type HouseholdSettlement = {
   __typename?: 'HouseholdSettlement';
   balances: Array<SettlementBalance>;
+  currencyScopes: Array<CurrencySettlementScope>;
   expenseGroups: Array<ExpenseGroupSettlement>;
   groupId: Scalars['ID']['output'];
   groupName: Scalars['String']['output'];
+  /** True when period expenses use more than one currency; use currencyScopes for accurate totals. */
+  mixedCurrencyWarning: Scalars['Boolean']['output'];
   payments: Array<SettlementPayment>;
   transfers: Array<SettlementTransfer>;
 };
@@ -713,7 +726,7 @@ export type GetHouseholdSettlementsQueryVariables = Exact<{
 }>;
 
 
-export type GetHouseholdSettlementsQuery = { __typename?: 'Query', householdSettlements: Array<{ __typename?: 'HouseholdSettlement', groupId: string, groupName: string, balances: Array<{ __typename?: 'SettlementBalance', memberName: string, amount: number }>, transfers: Array<{ __typename?: 'SettlementTransfer', fromMember: string, toMember: string, amount: number }>, expenseGroups: Array<{ __typename?: 'ExpenseGroupSettlement', expenseGroup: string, totalExpenses: number, balances: Array<{ __typename?: 'SettlementBalance', memberName: string, amount: number }>, transfers: Array<{ __typename?: 'SettlementTransfer', fromMember: string, toMember: string, amount: number }> }>, payments: Array<{ __typename?: 'SettlementPayment', id: string, groupId: string, expenseGroup: string | null, fromMember: string, toMember: string, amount: number, note: string | null, settledAt: string }> }> };
+export type GetHouseholdSettlementsQuery = { __typename?: 'Query', householdSettlements: Array<{ __typename?: 'HouseholdSettlement', groupId: string, groupName: string, mixedCurrencyWarning: boolean, balances: Array<{ __typename?: 'SettlementBalance', memberName: string, amount: number }>, transfers: Array<{ __typename?: 'SettlementTransfer', fromMember: string, toMember: string, amount: number }>, expenseGroups: Array<{ __typename?: 'ExpenseGroupSettlement', expenseGroup: string, totalExpenses: number, balances: Array<{ __typename?: 'SettlementBalance', memberName: string, amount: number }>, transfers: Array<{ __typename?: 'SettlementTransfer', fromMember: string, toMember: string, amount: number }> }>, payments: Array<{ __typename?: 'SettlementPayment', id: string, groupId: string, expenseGroup: string | null, fromMember: string, toMember: string, amount: number, note: string | null, settledAt: string }>, currencyScopes: Array<{ __typename?: 'CurrencySettlementScope', currency: string, totalExpenses: number, balances: Array<{ __typename?: 'SettlementBalance', memberName: string, amount: number }>, transfers: Array<{ __typename?: 'SettlementTransfer', fromMember: string, toMember: string, amount: number }>, expenseGroups: Array<{ __typename?: 'ExpenseGroupSettlement', expenseGroup: string, totalExpenses: number, balances: Array<{ __typename?: 'SettlementBalance', memberName: string, amount: number }>, transfers: Array<{ __typename?: 'SettlementTransfer', fromMember: string, toMember: string, amount: number }> }> }> }> };
 
 export type RecordSettlementPaymentMutationVariables = Exact<{
   input: RecordSettlementPaymentInput;

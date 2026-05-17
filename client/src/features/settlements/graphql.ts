@@ -37,6 +37,33 @@ export const GET_HOUSEHOLD_SETTLEMENTS = gql`
         note
         settledAt
       }
+      mixedCurrencyWarning
+      currencyScopes {
+        currency
+        totalExpenses
+        balances {
+          memberName
+          amount
+        }
+        transfers {
+          fromMember
+          toMember
+          amount
+        }
+        expenseGroups {
+          expenseGroup
+          totalExpenses
+          balances {
+            memberName
+            amount
+          }
+          transfers {
+            fromMember
+            toMember
+            amount
+          }
+        }
+      }
     }
   }
 `;

@@ -3,7 +3,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth';
 import { GET_GROUPS } from '../groups/graphql';
 import type { GetGroupsQueryResult } from '../groups/types';
-import { formatAppCurrency } from '../../format/currency';
+import { formatAppCurrency, formatCurrency } from '../../format/currency';
 import { GET_HOUSEHOLD_SETTLEMENTS, RECORD_SETTLEMENT_PAYMENT } from './graphql';
 import {
   formatSettlementPeriodLabel,
@@ -60,6 +60,7 @@ export const useSettlementsPageState = () => {
   const [settledAt, setSettledAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [formError, setFormError] = useState<string | null>(null);
   const [showRecordForm, setShowRecordForm] = useState(false);
+  const [settlementCurrency, setSettlementCurrency] = useState<string | null>(null);
 
   useEffect(() => {
     if (!households.length) {
@@ -77,29 +78,65 @@ export const useSettlementsPageState = () => {
   );
 
   useEffect(() => {
-    if (!activeHousehold || scope === '__household__') {
+    if (!activeHousehold) {
+      setSettlementCurrency(null);
       return;
     }
-    const hasGroup = activeHousehold.expenseGroups.some((group) => group.expenseGroup === scope);
+    const scopes = activeHousehold.currencyScopes ?? [];
+    setSettlementCurrency((current) => {
+      if (current && scopes.some((scope) => scope.currency === current)) {
+        return current;
+      }
+      return scopes[0]?.currency ?? null;
+    });
+  }, [activeHousehold]);
+
+  const activeCurrencyScope = useMemo(() => {
+    if (!activeHousehold?.currencyScopes?.length) {
+      return null;
+    }
+    return (
+      activeHousehold.currencyScopes.find((scope) => scope.currency === settlementCurrency) ??
+      activeHousehold.currencyScopes[0]
+    );
+  }, [activeHousehold, settlementCurrency]);
+
+  const settlementBalancesSource = activeCurrencyScope ?? activeHousehold;
+
+  useEffect(() => {
+    if (!settlementBalancesSource || scope === '__household__') {
+      return;
+    }
+    const hasGroup = settlementBalancesSource.expenseGroups.some(
+      (group) => group.expenseGroup === scope,
+    );
     if (!hasGroup) {
       setScope('__household__');
     }
-  }, [activeHousehold, scope]);
+  }, [settlementBalancesSource, scope]);
 
   const activeScopeGroup = useMemo(
-    () => activeHousehold?.expenseGroups.find((item) => item.expenseGroup === scope),
-    [activeHousehold?.expenseGroups, scope],
+    () => settlementBalancesSource?.expenseGroups.find((item) => item.expenseGroup === scope),
+    [settlementBalancesSource?.expenseGroups, scope],
   );
 
   const balances = useMemo(
-    () => (activeScopeGroup ? activeScopeGroup.balances : activeHousehold?.balances ?? []),
-    [activeScopeGroup, activeHousehold],
+    () => (activeScopeGroup ? activeScopeGroup.balances : settlementBalancesSource?.balances ?? []),
+    [activeScopeGroup, settlementBalancesSource],
   );
   const transfers = useMemo(
-    () => (activeScopeGroup ? activeScopeGroup.transfers : activeHousehold?.transfers ?? []),
-    [activeScopeGroup, activeHousehold],
+    () => (activeScopeGroup ? activeScopeGroup.transfers : settlementBalancesSource?.transfers ?? []),
+    [activeScopeGroup, settlementBalancesSource],
   );
   const payments = useMemo(() => activeHousehold?.payments ?? [], [activeHousehold]);
+
+  const mixedCurrencyWarning = Boolean(activeHousehold?.mixedCurrencyWarning);
+  const settlementCurrencyCodes = useMemo(
+    () => activeHousehold?.currencyScopes?.map((scope) => scope.currency) ?? [],
+    [activeHousehold?.currencyScopes],
+  );
+  const formatSettlementAmount = (value: number): string =>
+    settlementCurrency ? formatCurrency(value, settlementCurrency) : formatAppCurrency(value);
 
   const memberNames = useMemo(() => balances.map((entry) => entry.memberName), [balances]);
   const viewerName = useMemo(
@@ -141,7 +178,7 @@ export const useSettlementsPageState = () => {
     const mailto = buildSettlementReminderMailto({
       toEmail: debtorEmail,
       debtorName: transfer.fromMember,
-      amountFormatted: formatAppCurrency(transfer.amount),
+      amountFormatted: formatSettlementAmount(transfer.amount),
       householdName: activeHousehold.groupName,
       periodLabel,
       dueDateLabel,
@@ -164,7 +201,7 @@ export const useSettlementsPageState = () => {
       return 'No household selected.';
     }
     const confirmed = window.confirm(
-      `Mark ${formatAppCurrency(transfer.amount)} as paid from ${transfer.fromMember} to ${transfer.toMember}?\n\nThis records a settlement payment for ${activeHousehold.groupName}.`,
+      `Mark ${formatSettlementAmount(transfer.amount)} as paid from ${transfer.fromMember} to ${transfer.toMember}?\n\nThis records a settlement payment for ${activeHousehold.groupName}.`,
     );
     if (!confirmed) {
       return null;
@@ -233,6 +270,12 @@ export const useSettlementsPageState = () => {
     error,
     households,
     activeHousehold,
+    mixedCurrencyWarning,
+    settlementCurrency,
+    setSettlementCurrency,
+    settlementCurrencyCodes,
+    formatSettlementAmount,
+    scopeExpenseGroups: settlementBalancesSource?.expenseGroups ?? [],
     activeGroupId,
     setActiveGroupId,
     scope,

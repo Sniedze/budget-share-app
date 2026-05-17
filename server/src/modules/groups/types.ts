@@ -108,6 +108,14 @@ export type ExpenseGroupSettlement = {
   transfers: SettlementTransfer[];
 };
 
+export type CurrencySettlementScope = {
+  currency: string;
+  totalExpenses: number;
+  balances: SettlementBalance[];
+  transfers: SettlementTransfer[];
+  expenseGroups: ExpenseGroupSettlement[];
+};
+
 export type SettlementPayment = {
   id: string;
   groupId: string;
@@ -126,6 +134,8 @@ export type HouseholdSettlement = {
   transfers: SettlementTransfer[];
   expenseGroups: ExpenseGroupSettlement[];
   payments: SettlementPayment[];
+  mixedCurrencyWarning: boolean;
+  currencyScopes: CurrencySettlementScope[];
 };
 
 export type RecordSettlementPaymentInput = {
