@@ -5,6 +5,13 @@ import { appError, ErrorCode } from '../../graphql/appError.js';
 import { logAuthzDenied } from '../../logger.js';
 import { updateInvitationEmailDeliveryStatus } from '../email/invitationEmailStatus.js';
 import { sendHouseholdMemberInviteEmails } from '../email/sendMemberNotifications.js';
+import {
+  type GroupViewer,
+  groupMemberMatchesViewerClause,
+  groupMemberMatchesViewerParams,
+  normalizeMemberEmail,
+  parseViewerUserId,
+} from './memberIdentity.js';
 import type {
   GroupInvitation,
   GroupInvitationStatus,
@@ -104,21 +111,27 @@ export const deleteInvitationsNotInEmails = async (
 
 export const assertActiveGroupMembership = async (
   groupId: number,
-  userEmail: string,
+  viewer: GroupViewer,
   action: string,
 ): Promise<void> => {
-  const normalizedEmail = userEmail.trim().toLowerCase();
+  const normalizedEmail = normalizeMemberEmail(viewer.email);
   const [memberRows] = await db.query<RowDataPacket[]>(
     `
       SELECT id
       FROM group_members
-      WHERE group_id = ? AND email = ?
+      WHERE group_id = ?
+        AND ${groupMemberMatchesViewerClause()}
       LIMIT 1
     `,
-    [groupId, normalizedEmail],
+    [groupId, ...groupMemberMatchesViewerParams(viewer)],
   );
   if (memberRows.length === 0) {
-    logAuthzDenied('group_access_denied', { groupId: String(groupId), email: normalizedEmail, action });
+    logAuthzDenied('group_access_denied', {
+      groupId: String(groupId),
+      email: normalizedEmail,
+      userId: viewer.userId,
+      action,
+    });
     throw appError(ErrorCode.FORBIDDEN, 'Not authorized for this group.');
   }
 
@@ -225,14 +238,14 @@ const removeMemberFromHousehold = async (groupId: number, email: string, memberN
 
 export const acceptGroupInvitation = async (
   invitationId: string,
-  userEmail: string,
+  viewer: GroupViewer,
 ): Promise<GroupInvitation> => {
   const numericId = Number(invitationId);
   if (!Number.isFinite(numericId) || numericId <= 0) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid invitation id.');
   }
 
-  const row = await getInvitationRowForUser(numericId, userEmail);
+  const row = await getInvitationRowForUser(numericId, viewer.email);
   if (!row) {
     throw appError(ErrorCode.NOT_FOUND, 'Invitation not found.');
   }
@@ -259,6 +272,18 @@ export const acceptGroupInvitation = async (
       WHERE id = ?
     `,
     [numericId],
+  );
+
+  const viewerUserId = parseViewerUserId(viewer.userId);
+  await db.execute(
+    `
+      UPDATE group_members
+      SET user_id = ?
+      WHERE group_id = ?
+        AND email = ?
+        AND user_id IS NULL
+    `,
+    [viewerUserId, row.groupId, normalizeMemberEmail(row.email)],
   );
 
   return {
@@ -409,7 +434,7 @@ export const declineExpenseGroupParticipation = async (
 export const resendGroupInvitation = async (
   groupId: string,
   inviteeEmail: string,
-  actorEmail: string,
+  actor: GroupViewer,
 ): Promise<GroupPendingInvitation> => {
   const numericGroupId = Number(groupId);
   if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
@@ -420,9 +445,9 @@ export const resendGroupInvitation = async (
     throw appError(ErrorCode.BAD_USER_INPUT, 'Invitee email is required.');
   }
 
-  await assertActiveGroupMembership(numericGroupId, actorEmail, 'resend_group_invitation');
+  await assertActiveGroupMembership(numericGroupId, actor, 'resend_group_invitation');
 
-  const normalizedActorEmail = actorEmail.trim().toLowerCase();
+  const normalizedActorEmail = normalizeMemberEmail(actor.email);
   if (normalizedEmail === normalizedActorEmail) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Cannot resend an invitation to yourself.');
   }

@@ -25,7 +25,8 @@ const userId = await ensureUserAccount({ email, password, fullName });
 console.log(`User ready: ${email} (password synced to script value).`);
 await verifyUserLogin(email, password);
 console.log('Login check: OK');
-const groups = await listGroups(email, userId);
+const viewer = { userId, email };
+const groups = await listGroups(viewer);
 let household = groups.find((group) => group.name === householdName);
 
 if (!household) {
@@ -38,7 +39,7 @@ if (!household) {
         { name: partnerName, email: partnerEmail, ratio: 50 },
       ],
     },
-    email,
+    viewer,
   );
   console.log(`Created household “${householdName}” (id ${household.id}).`);
 }

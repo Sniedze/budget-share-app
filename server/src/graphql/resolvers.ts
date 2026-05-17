@@ -70,7 +70,7 @@ export const resolvers = {
     },
     groups: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return listGroups(user.email, user.id);
+      return listGroups({ userId: user.id, email: user.email });
     },
     myInvitations: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
       const user = requireAuth(context);
@@ -82,7 +82,7 @@ export const resolvers = {
       context: GraphqlContext,
     ) => {
       const user = requireAuth(context);
-      return listSplitTemplates(args.groupId, user.email);
+      return listSplitTemplates(args.groupId, { userId: user.id, email: user.email });
     },
     householdSettlements: async (
       _parent: unknown,
@@ -90,7 +90,7 @@ export const resolvers = {
       context: GraphqlContext,
     ) => {
       const user = requireAuth(context);
-      return listHouseholdSettlements(user.email, user.id, args.period);
+      return listHouseholdSettlements({ userId: user.id, email: user.email }, args.period);
     },
     userWorkspaceSettings: async (
       _parent: unknown,
@@ -122,7 +122,7 @@ export const resolvers = {
     },
     createGroup: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return createGroup(parseCreateGroupInput(args.input), user.email);
+      return createGroup(parseCreateGroupInput(args.input), { userId: user.id, email: user.email });
     },
     updateGroup: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
       const user = requireAuth(context);
@@ -178,11 +178,17 @@ export const resolvers = {
     },
     upsertGroupSplitTemplate: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return upsertSplitTemplate(parseUpsertSplitTemplateInput(args.input), user.email);
+      return upsertSplitTemplate(parseUpsertSplitTemplateInput(args.input), {
+        userId: user.id,
+        email: user.email,
+      });
     },
     recordSettlementPayment: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return recordSettlementPayment(parseRecordSettlementPaymentInput(args.input), user.email);
+      return recordSettlementPayment(parseRecordSettlementPaymentInput(args.input), {
+        userId: user.id,
+        email: user.email,
+      });
     },
     acceptGroupInvitation: async (
       _parent: unknown,
@@ -190,7 +196,7 @@ export const resolvers = {
       context: GraphqlContext,
     ) => {
       const user = requireAuth(context);
-      return acceptGroupInvitation(args.id, user.email);
+      return acceptGroupInvitation(args.id, { userId: user.id, email: user.email });
     },
     declineGroupInvitation: async (
       _parent: unknown,
@@ -206,7 +212,7 @@ export const resolvers = {
       context: GraphqlContext,
     ) => {
       const user = requireAuth(context);
-      return resendGroupInvitation(args.groupId, args.email, user.email);
+      return resendGroupInvitation(args.groupId, args.email, { userId: user.id, email: user.email });
     },
     declineExpenseGroupParticipation: async (
       _parent: unknown,
@@ -222,7 +228,7 @@ export const resolvers = {
       context: GraphqlContext,
     ) => {
       const user = requireAuth(context);
-      return deleteExpenseGroup(args.groupId, args.category, user.email);
+      return deleteExpenseGroup(args.groupId, args.category, { userId: user.id, email: user.email });
     },
     saveUserWorkspaceSettings: async (
       _parent: unknown,
