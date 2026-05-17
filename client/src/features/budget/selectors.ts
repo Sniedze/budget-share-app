@@ -1,7 +1,39 @@
 import type { Expense } from '../expenses/types';
+import { APP_CURRENCY_CODE } from '../../format/currency';
 import { toBudgetTopLevelCategory } from '../expenses/categories';
 
 const isIncomingExpense = (e: Expense): boolean => e.flow === 'Incoming';
+
+export const expenseCurrencyCode = (expense: Expense): string => {
+  const raw = expense.currency?.trim().toUpperCase();
+  return raw && raw.length === 3 ? raw : APP_CURRENCY_CODE;
+};
+
+export const dominantExpenseCurrency = (expenses: Expense[]): string => {
+  if (expenses.length === 0) {
+    return APP_CURRENCY_CODE;
+  }
+  const counts = new Map<string, number>();
+  for (const expense of expenses) {
+    const code = expenseCurrencyCode(expense);
+    counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+  const sorted = Array.from(counts.entries()).sort((left, right) => right[1] - left[1]);
+  return sorted[0]?.[0] ?? APP_CURRENCY_CODE;
+};
+
+export const hasMixedExpenseCurrencies = (expenses: Expense[]): boolean => {
+  if (expenses.length === 0) {
+    return false;
+  }
+  const codes = new Set(expenses.map(expenseCurrencyCode));
+  return codes.size > 1;
+};
+
+export const filterExpensesByCurrency = (expenses: Expense[], currency: string): Expense[] => {
+  const normalized = currency.trim().toUpperCase();
+  return expenses.filter((expense) => expenseCurrencyCode(expense) === normalized);
+};
 
 export const pad2 = (n: number): string => String(n).padStart(2, '0');
 
@@ -40,6 +72,9 @@ export const filterOutgoingExpensesInMonth = (
 
 export const sumExpenseAmounts = (expenses: Expense[]): number =>
   expenses.reduce((sum, e) => sum + e.amount, 0);
+
+export const sumExpenseAmountsInCurrency = (expenses: Expense[], currency: string): number =>
+  sumExpenseAmounts(filterExpensesByCurrency(expenses, currency));
 
 export const ytdExpensesThrough = (expenses: Expense[], now: Date): number => {
   const y = now.getFullYear();

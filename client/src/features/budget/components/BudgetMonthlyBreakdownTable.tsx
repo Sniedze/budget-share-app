@@ -5,12 +5,14 @@ import type { MonthlyBreakdownRow, MonthlyBreakdownTotals } from '../budgetPageT
 import { StatusPill } from '../budgetPageStyles';
 
 type BudgetMonthlyBreakdownTableProps = {
+  formatAmount?: import('../budgetPageTypes').FormatBudgetAmount;
   viewYear: number;
   rows: MonthlyBreakdownRow[];
   totals: MonthlyBreakdownTotals | null;
 };
 
 export const BudgetMonthlyBreakdownTable = ({
+  formatAmount = formatAppCurrency,
   viewYear,
   rows,
   totals,
@@ -41,12 +43,12 @@ export const BudgetMonthlyBreakdownTable = ({
                 ) : null}
               </Td>
               <Td style={{ textAlign: 'right', color: '#16a34a', fontWeight: 600 }}>
-                +{formatAppCurrency(row.income)}
+                +{formatAmount(row.income)}
               </Td>
               <Td style={{ textAlign: 'right' }}>
-                {row.expenses === null ? '—' : formatAppCurrency(row.expenses)}
+                {row.expenses === null ? '—' : formatAmount(row.expenses)}
               </Td>
-              <Td style={{ textAlign: 'right' }}>{row.budget > 0 ? formatAppCurrency(row.budget) : '—'}</Td>
+              <Td style={{ textAlign: 'right' }}>{row.budget > 0 ? formatAmount(row.budget) : '—'}</Td>
               <Td style={{ textAlign: 'right' }}>
                 {row.variance === null ? (
                   '—'
@@ -62,11 +64,11 @@ export const BudgetMonthlyBreakdownTable = ({
                     }}
                   >
                     {row.variance >= 0 ? <ArrowDownRight size={16} aria-hidden /> : <ArrowUpRight size={16} aria-hidden />}
-                    {formatAppCurrency(Math.abs(row.variance))}
+                    {formatAmount(Math.abs(row.variance))}
                   </span>
                 )}
               </Td>
-              <Td style={{ textAlign: 'right' }}>{row.savings === null ? '—' : formatAppCurrency(row.savings)}</Td>
+              <Td style={{ textAlign: 'right' }}>{row.savings === null ? '—' : formatAmount(row.savings)}</Td>
               <Td>
                 {row.status === 'under' ? (
                   <StatusPill $variant="under">Under budget</StatusPill>
@@ -82,12 +84,12 @@ export const BudgetMonthlyBreakdownTable = ({
             <Tr style={{ fontWeight: 700, background: '#f8fafc' }}>
               <Td>Total (actual)</Td>
               <Td style={{ textAlign: 'right', color: '#16a34a' }}>
-                +{formatAppCurrency(totals.income)}
+                +{formatAmount(totals.income)}
               </Td>
-              <Td style={{ textAlign: 'right' }}>{formatAppCurrency(totals.expenses)}</Td>
-              <Td style={{ textAlign: 'right' }}>{formatAppCurrency(totals.budget)}</Td>
+              <Td style={{ textAlign: 'right' }}>{formatAmount(totals.expenses)}</Td>
+              <Td style={{ textAlign: 'right' }}>{formatAmount(totals.budget)}</Td>
               <Td>—</Td>
-              <Td style={{ textAlign: 'right' }}>{formatAppCurrency(totals.savings)}</Td>
+              <Td style={{ textAlign: 'right' }}>{formatAmount(totals.savings)}</Td>
               <Td>—</Td>
             </Tr>
           ) : null}

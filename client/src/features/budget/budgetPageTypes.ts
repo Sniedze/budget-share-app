@@ -1,5 +1,7 @@
 import type { Expense } from '../expenses';
 
+export type FormatBudgetAmount = (amount: number) => string;
+
 export type MonthlyBreakdownRow = {
   key: string;
   label: string;

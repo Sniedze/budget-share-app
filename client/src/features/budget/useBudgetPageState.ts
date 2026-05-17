@@ -6,10 +6,13 @@ import {
   categorySpendTrend,
   collectCategories,
   currentEstimatedBalance,
+  dominantExpenseCurrency,
   expenseDateParts,
+  filterExpensesByCurrency,
   filterExpensesInMonth,
   filterIncomingExpensesInMonth,
   filterOutgoingExpensesInMonth,
+  hasMixedExpenseCurrencies,
   monthlyActualTotals,
   projectedYearEndBalance,
   suggestMonthBudgetsFromPreviousMonth,
@@ -23,6 +26,7 @@ import {
   ytdIncomeFromMonthlyEstimate,
   pad2,
 } from './selectors';
+import { formatCurrency } from '../../format/currency';
 import { useUserWorkspaceSettings } from '../userSettings';
 import type { BudgetAssumptions } from './storage';
 import { CATEGORY_DOT_COLORS, DEFAULT_CATEGORY_OPTIONS } from './budgetPageStyles';
@@ -59,9 +63,31 @@ export const useBudgetPageState = () => {
   const { data, loading, error } = useQuery<GetExpensesResponse>(GET_EXPENSES);
   const expenses = useMemo(() => data?.expenses ?? [], [data]);
 
+  const viewYearExpenses = useMemo(
+    () =>
+      expenses.filter((expense) => expenseDateParts(expense.transactionDate).year === viewYear),
+    [expenses, viewYear],
+  );
+  const mixedCurrencyWarning = useMemo(
+    () => hasMixedExpenseCurrencies(viewYearExpenses),
+    [viewYearExpenses],
+  );
+  const budgetCurrency = useMemo(
+    () => dominantExpenseCurrency(viewYearExpenses),
+    [viewYearExpenses],
+  );
+  const budgetExpenses = useMemo(
+    () => (mixedCurrencyWarning ? filterExpensesByCurrency(expenses, budgetCurrency) : expenses),
+    [expenses, mixedCurrencyWarning, budgetCurrency],
+  );
+  const formatBudgetAmount = useCallback(
+    (value: number) => formatCurrency(value, budgetCurrency),
+    [budgetCurrency],
+  );
+
   const categories = useMemo(
-    () => collectCategories(expenses, DEFAULT_CATEGORY_OPTIONS),
-    [expenses],
+    () => collectCategories(budgetExpenses, DEFAULT_CATEGORY_OPTIONS),
+    [budgetExpenses],
   );
 
   const assumptions = useMemo(
@@ -83,16 +109,16 @@ export const useBudgetPageState = () => {
   );
 
   const monthOutgoingExpenses = useMemo(
-    () => filterOutgoingExpensesInMonth(expenses, viewYear, viewMonthIndex),
-    [expenses, viewYear, viewMonthIndex],
+    () => filterOutgoingExpensesInMonth(budgetExpenses, viewYear, viewMonthIndex),
+    [budgetExpenses, viewYear, viewMonthIndex],
   );
 
   const totalSpentMonth = useMemo(() => sumExpenseAmounts(monthOutgoingExpenses), [monthOutgoingExpenses]);
   const remainingBudget = totalBudgeted - totalSpentMonth;
   const usagePct = totalBudgeted > 0 ? (totalSpentMonth / totalBudgeted) * 100 : 0;
 
-  const ytdExp = useMemo(() => ytdExpensesThrough(expenses, now), [expenses, now]);
-  const ytdIncomingActual = useMemo(() => ytdIncomingThrough(expenses, now), [expenses, now]);
+  const ytdExp = useMemo(() => ytdExpensesThrough(budgetExpenses, now), [budgetExpenses, now]);
+  const ytdIncomingActual = useMemo(() => ytdIncomingThrough(budgetExpenses, now), [budgetExpenses, now]);
   const ytdIncEstimate = useMemo(
     () => ytdIncomeFromMonthlyEstimate(assumptions.monthlyIncomeEstimate, now),
     [assumptions.monthlyIncomeEstimate, now],
@@ -126,8 +152,8 @@ export const useBudgetPageState = () => {
   const balanceDeltaYtd = ytdIncCombined - ytdExp;
 
   const monthlyActual = useMemo(
-    () => monthlyActualTotals(expenses, viewYear),
-    [expenses, viewYear],
+    () => monthlyActualTotals(budgetExpenses, viewYear),
+    [budgetExpenses, viewYear],
   );
 
   const chartRowsMonthly = useMemo(
@@ -136,8 +162,8 @@ export const useBudgetPageState = () => {
   );
 
   const yearTotals = useMemo(() => {
-    const map = totalSpendByYear(expenses);
-    const years = yearsPresentInExpenses(expenses);
+    const map = totalSpendByYear(budgetExpenses);
+    const years = yearsPresentInExpenses(budgetExpenses);
     if (years.length === 0) {
       return [{ year: now.getFullYear(), spent: 0, budget: totalBudgeted * 12 }];
     }
@@ -146,13 +172,13 @@ export const useBudgetPageState = () => {
       spent: Number((map.get(year) ?? 0).toFixed(2)),
       budget: totalBudgeted * 12,
     }));
-  }, [expenses, now, totalBudgeted]);
+  }, [budgetExpenses, now, totalBudgeted]);
 
   const prevMonthExpenses = useMemo(() => {
     const py = viewMonthIndex === 0 ? viewYear - 1 : viewYear;
     const pm = viewMonthIndex === 0 ? 11 : viewMonthIndex - 1;
-    return filterOutgoingExpensesInMonth(expenses, py, pm);
-  }, [expenses, viewYear, viewMonthIndex]);
+    return filterOutgoingExpensesInMonth(budgetExpenses, py, pm);
+  }, [budgetExpenses, viewYear, viewMonthIndex]);
 
   const prevByCat = useMemo(() => sumByCategory(prevMonthExpenses), [prevMonthExpenses]);
   const currByCat = useMemo(() => sumByCategory(monthOutgoingExpenses), [monthOutgoingExpenses]);
@@ -230,8 +256,8 @@ export const useBudgetPageState = () => {
       const key = toYearMonthKey(y, mi);
       const budMap = key === monthKey ? monthBudgets : {};
       const budgeted = Object.values(budMap).reduce((s, n) => s + n, 0);
-      const spent = sumExpenseAmounts(filterOutgoingExpensesInMonth(expenses, y, mi));
-      const incomeActual = sumExpenseAmounts(filterIncomingExpensesInMonth(expenses, y, mi));
+      const spent = sumExpenseAmounts(filterOutgoingExpensesInMonth(budgetExpenses, y, mi));
+      const incomeActual = sumExpenseAmounts(filterIncomingExpensesInMonth(budgetExpenses, y, mi));
       const isProjected = y > now.getFullYear() || (y === now.getFullYear() && mi > now.getMonth());
       const incomeShown = isProjected ? incomeEstimate : incomeActual > 0 ? incomeActual : incomeEstimate;
 
@@ -274,7 +300,7 @@ export const useBudgetPageState = () => {
         : null;
 
     return { rows, totals };
-  }, [userId, viewYear, expenses, monthBudgets, monthKey, assumptions.monthlyIncomeEstimate, now]);
+  }, [userId, viewYear, budgetExpenses, monthBudgets, monthKey, assumptions.monthlyIncomeEstimate, now]);
 
   const categoryTrendsTable = useMemo(() => {
     const y = viewYear;
@@ -296,7 +322,7 @@ export const useBudgetPageState = () => {
     const rows: CategoryTrendRow[] = catList.map((cat) => {
       const cap = monthBudgets[cat] ?? 0;
       const monthAmounts = monthIndices.map((mi) => {
-        const inMonth = filterOutgoingExpensesInMonth(expenses, y, mi).filter(
+        const inMonth = filterOutgoingExpensesInMonth(budgetExpenses, y, mi).filter(
           (e) => toBudgetTopLevelCategory(e.category) === cat,
         );
         return sumExpenseAmounts(inMonth);
@@ -313,12 +339,12 @@ export const useBudgetPageState = () => {
       Number(rows.reduce((s, r) => s + r.monthAmounts[colIdx], 0).toFixed(2)),
     );
     return { monthIndices, labels, rows, columnTotals };
-  }, [viewYear, now, expenses, categories, monthBudgets]);
+  }, [viewYear, now, budgetExpenses, categories, monthBudgets]);
 
   const openBudgetModal = useCallback(() => {
     setDraftAssumptions(assumptions);
     const existing = monthBudgets;
-    const suggested = suggestMonthBudgetsFromPreviousMonth(expenses, viewYear, viewMonthIndex, categories);
+    const suggested = suggestMonthBudgetsFromPreviousMonth(budgetExpenses, viewYear, viewMonthIndex, categories);
     const merged: Record<string, string> = {};
     for (const c of categories) {
       const v = existing[c] ?? suggested[c] ?? 0;
@@ -326,7 +352,7 @@ export const useBudgetPageState = () => {
     }
     setDraftCategoryBudgets(merged);
     setBudgetModalOpen(true);
-  }, [assumptions, monthBudgets, expenses, viewYear, viewMonthIndex, categories]);
+  }, [assumptions, monthBudgets, budgetExpenses, viewYear, viewMonthIndex, categories]);
 
   useEffect(() => {
     if (!budgetModalOpen) {
@@ -407,5 +433,8 @@ export const useBudgetPageState = () => {
     onSaveBudgets,
     categories,
     monthKey,
+    mixedCurrencyWarning,
+    budgetCurrency,
+    formatBudgetAmount,
   };
 };
