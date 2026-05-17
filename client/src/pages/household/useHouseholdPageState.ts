@@ -140,7 +140,6 @@ export const useHouseholdPageState = () => {
   const [expenseCategory, setExpenseCategory] = useState('General');
   const [expenseMembers, setExpenseMembers] = useState<Array<{ name: string; selected: boolean; ratio: number }>>([]);
   const [expenseError, setExpenseError] = useState<string | null>(null);
-  const [expenseIsPrivate, setExpenseIsPrivate] = useState(false);
   const [templateCategory, setTemplateCategory] = useState(PREDEFINED_EXPENSE_GROUPS[0]);
   const [customTemplateCategory, setCustomTemplateCategory] = useState('');
   const [editingTemplateCategory, setEditingTemplateCategory] = useState<string | null>(null);
@@ -155,6 +154,10 @@ export const useHouseholdPageState = () => {
   const activeGroup = useMemo(
     () => groups.find((group) => group.id === activeGroupId) ?? groups[0],
     [activeGroupId, groups],
+  );
+  const sharedHouseholdExpenses = useMemo(
+    () => activeGroup?.expenses ?? [],
+    [activeGroup],
   );
   const { data: templatesData, refetch: refetchGroupTemplates } = useQuery<GetGroupSplitTemplatesQueryResult>(
     GET_GROUP_SPLIT_TEMPLATES,
@@ -221,28 +224,28 @@ export const useHouseholdPageState = () => {
       return [];
     }
     if (isViewingAllExpenseGroups) {
-      return activeGroup.expenses;
+      return sharedHouseholdExpenses;
     }
     if (!activeExpenseGroup) {
-      return activeGroup.expenses;
+      return sharedHouseholdExpenses;
     }
-    return activeGroup.expenses.filter(
+    return sharedHouseholdExpenses.filter(
       (expense) =>
         (expense.expenseGroup ?? expense.category).trim().toLowerCase() ===
         activeExpenseGroup.category.trim().toLowerCase(),
     );
-  }, [activeExpenseGroup, activeGroup, isViewingAllExpenseGroups]);
+  }, [activeExpenseGroup, activeGroup, isViewingAllExpenseGroups, sharedHouseholdExpenses]);
   const expenseCountByGroupCategory = useMemo(() => {
     const counts = new Map<string, number>();
     if (!activeGroup) {
       return counts;
     }
-    for (const expense of activeGroup.expenses) {
+    for (const expense of sharedHouseholdExpenses) {
       const key = (expense.expenseGroup ?? expense.category).trim().toLowerCase();
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return counts;
-  }, [activeGroup]);
+  }, [activeGroup, sharedHouseholdExpenses]);
   const activeExpenseGroupTotals = useMemo(
     () =>
       activeExpenseGroupExpenses.reduce(
@@ -381,7 +384,6 @@ export const useHouseholdPageState = () => {
     setExpenseDate(new Date().toISOString().slice(0, 10));
     setExpenseGroup(preferredExpenseGroup ?? expenseGroupOptions[0] ?? 'Groceries');
     setExpenseCategory('General');
-    setExpenseIsPrivate(false);
     setExpenseError(null);
     setExpenseMembers(
       activeGroup.members.map((member) => ({
@@ -769,7 +771,6 @@ export const useHouseholdPageState = () => {
         split,
         splitDetails,
         groupId: activeGroup.id,
-        isPrivate: expenseIsPrivate,
         currency: APP_CURRENCY_CODE,
       });
       closeExpenseModal();
@@ -879,10 +880,10 @@ export const useHouseholdPageState = () => {
       return 0;
     }
     const categoryKey = editingTemplateCategory.trim().toLowerCase();
-    return activeGroup.expenses.filter(
+    return sharedHouseholdExpenses.filter(
       (expense) => (expense.expenseGroup ?? expense.category).trim().toLowerCase() === categoryKey,
     ).length;
-  }, [activeGroup, editingTemplateCategory]);
+  }, [activeGroup, editingTemplateCategory, sharedHouseholdExpenses]);
 
   const confirmOptOutOfEditingTemplate = async (): Promise<void> => {
     if (!activeGroup || !editingTemplateCategory) {
@@ -955,6 +956,7 @@ export const useHouseholdPageState = () => {
     loading,
     error,
     activeGroup,
+    sharedHouseholdExpenses,
     setModalOpen,
     openAddExpenseModal,
     activeExpenseGroup,
@@ -998,8 +1000,6 @@ export const useHouseholdPageState = () => {
     sortedExpenseCategories,
     expenseMembers,
     selectedExpenseTemplate,
-    expenseIsPrivate,
-    setExpenseIsPrivate,
     expenseError,
     isCreatingExpense,
     isExpenseSubmitDisabled,

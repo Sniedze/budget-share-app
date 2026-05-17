@@ -29,11 +29,6 @@ export type ExpenseRow = {
 const DEFAULT_SPLIT = 'Personal';
 const ALLOWED_SPLITS = new Set(['Personal', 'Shared', 'Custom']);
 
-const rowIsPrivate = (row: { is_private?: number | boolean | null }): boolean => {
-  const v = row.is_private;
-  return v === true || v === 1;
-};
-
 export const rowCurrencyFromRow = (row: { currency?: string | null }): string => {
   const c = row.currency;
   if (typeof c === 'string' && c.trim().length > 0) {
@@ -74,7 +69,7 @@ export const mapExpenseRow = (row: ExpenseRow | undefined, fallback: Expense): E
     groupId: row.group_id === null ? undefined : String(row.group_id),
     createdByUserId: row.created_by_user_id === null ? undefined : String(row.created_by_user_id),
     paidByUserId: row.paid_by_user_id === null ? undefined : String(row.paid_by_user_id),
-    isPrivate: rowIsPrivate(row),
+    isPrivate: row.group_id === null && normalizeSplit(row.split_type) === 'Personal',
     flow: normalizeExpenseFlow(row.expense_flow),
   };
 };

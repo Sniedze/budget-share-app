@@ -8,17 +8,22 @@ export type ExpenseViewerContext = {
 
 const normalizeKey = (value: string): string => value.trim().toLowerCase();
 
-const participantMatchesViewer = (participant: string, viewer: ExpenseViewerContext): boolean => {
+const participantMatchesViewer = (
+  participant: string,
+  viewer: ExpenseViewerContext,
+  createdByUserId?: string | null,
+): boolean => {
   const key = normalizeKey(participant);
-  return (
-    key === 'you' ||
-    key === normalizeKey(viewer.fullName) ||
-    key === normalizeKey(viewer.email)
-  );
+  if (key === 'you') {
+    return createdByUserId !== null && createdByUserId !== undefined && createdByUserId === viewer.userId;
+  }
+  return key === normalizeKey(viewer.fullName) || key === normalizeKey(viewer.email);
 };
 
 const findViewerSplitAmount = (expense: Expense, viewer: ExpenseViewerContext): number | null => {
-  const match = expense.splitDetails.find((detail) => participantMatchesViewer(detail.participant, viewer));
+  const match = expense.splitDetails.find((detail) =>
+    participantMatchesViewer(detail.participant, viewer, expense.createdByUserId),
+  );
   return match ? match.amount : null;
 };
 
@@ -57,10 +62,6 @@ export const getExpenseSharedContribution = (
 ): number => {
   if (!expense.groupId) {
     return 0;
-  }
-
-  if (expense.isPrivate && expense.createdByUserId === viewer.userId) {
-    return expense.amount;
   }
 
   const fromSplitDetails = findViewerSplitAmount(expense, viewer);

@@ -25,9 +25,19 @@ import { EXPENSE_SELECT_COLUMNS, mapExpenseRow, rowCurrencyFromRow, type Expense
 import { parseSplitDetails } from './parseSplitDetails.js';
 import { toStoredSplitDetails } from './splitAllocation.js';
 import {
+  legacyPrivateExpenseHiddenFromOthers,
+  loadExpenseViewerProfile,
+  viewerParticipatesInCustomSplit,
+  viewerParticipatesInExpenseGroup,
+  type ExpenseViewerProfile,
+} from '../groups/expenseVisibility.js';
+import {
   groupMemberMatchesViewerClause,
   groupMemberMatchesViewerParams,
+  loadViewerGroupMemberName,
+  type GroupViewer,
 } from '../groups/memberIdentity.js';
+import { listTemplateSplitDetailsByGroupAndCategory } from '../groups/service.js';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 const rowIsPrivate = (row: { is_private?: number | boolean | null }): boolean => {
@@ -212,7 +222,7 @@ const createExpenseWithContext = async (
     assertGroupMember(groupId, batch.memberGroupIds);
   }
   const paidByUserId = input.paidByUserId ? Number(input.paidByUserId) : Number(actor.userId);
-  const isPrivate = flow === 'Incoming' ? false : groupId !== null && Boolean(input.isPrivate);
+  const isPrivate = false;
   const currency = normalizeExpenseCurrency(input.currency);
   const transactionDedupHash = computeTransactionDedupHash(
     input.transactionDate,
@@ -275,15 +285,37 @@ const createExpenseWithContext = async (
   return mapExpenseRow(rows[0], fallback);
 };
 
-const canAccessExpense = (row: ExpenseRow, userId: string, memberGroupIds: Set<number>): boolean => {
+const canAccessExpense = (
+  row: ExpenseRow,
+  viewer: ExpenseViewerProfile,
+  memberGroupIds: Set<number>,
+): boolean => {
   if (row.group_id === null) {
-    return row.created_by_user_id !== null && String(row.created_by_user_id) === userId;
+    if (row.created_by_user_id !== null && String(row.created_by_user_id) === viewer.userId) {
+      return true;
+    }
+    if (normalizeSplit(row.split_type) === 'Custom') {
+      return viewerParticipatesInCustomSplit(
+        typeof row.split_details === 'string' ? row.split_details : null,
+        Number(row.amount),
+        viewer,
+        row.created_by_user_id,
+      );
+    }
+    return false;
   }
   return memberGroupIds.has(row.group_id);
 };
 
 export const listExpenses = async (userId: string, userEmail: string): Promise<Expense[]> => {
+  const viewerProfile = await loadExpenseViewerProfile(userId, userEmail);
+  const viewer: GroupViewer = { userId, email: userEmail };
   const memberGroupIds = await loadMemberGroupIds({ userId, email: userEmail });
+  const templateSplitByKey = await listTemplateSplitDetailsByGroupAndCategory([...memberGroupIds]);
+  const viewerNameByGroupId = new Map<number, string | null>();
+  for (const groupId of memberGroupIds) {
+    viewerNameByGroupId.set(groupId, await loadViewerGroupMemberName(groupId, viewer));
+  }
   const [rows] = await db.query<ExpenseRow[]>(
     `SELECT ${EXPENSE_SELECT_COLUMNS} FROM expenses ORDER BY transaction_date DESC, id DESC`,
   );
@@ -294,11 +326,26 @@ export const listExpenses = async (userId: string, userEmail: string): Promise<E
     if (row.created_by_user_id === null && row.group_id === null) {
       continue;
     }
-    if (!canAccessExpense(row, userId, memberGroupIds)) {
+    if (!canAccessExpense(row, viewerProfile, memberGroupIds)) {
       continue;
     }
-    if (row.group_id !== null && rowIsPrivate(row) && String(row.created_by_user_id) !== userId) {
-      continue;
+    if (row.group_id !== null) {
+      if (legacyPrivateExpenseHiddenFromOthers(rowIsPrivate(row), row.created_by_user_id, userId)) {
+        continue;
+      }
+      const expenseGroupKey = (row.expense_group ?? row.category).trim().toLowerCase();
+      const templateSplit = templateSplitByKey.get(`${row.group_id}:${expenseGroupKey}`) ?? [];
+      if (
+        !viewerParticipatesInExpenseGroup(
+          viewerNameByGroupId.get(row.group_id) ?? null,
+          row.split_type,
+          typeof row.split_details === 'string' ? row.split_details : null,
+          templateSplit,
+          Number(row.amount),
+        )
+      ) {
+        continue;
+      }
     }
     visible.push(
       mapExpenseRow(row, {
@@ -532,14 +579,7 @@ export const updateExpense = async (
     assertGroupMember(nextGroupId, memberGroupIds);
   }
   const nextPaidByUserId = input.paidByUserId ? Number(input.paidByUserId) : existing.paid_by_user_id;
-  const nextIsPrivate =
-    nextFlow === 'Incoming'
-      ? false
-      : nextGroupId === null
-        ? false
-        : input.isPrivate !== undefined
-          ? Boolean(input.isPrivate)
-          : rowIsPrivate(existing);
+  const nextIsPrivate = false;
   const existingFlow = normalizeExpenseFlow(existing.expense_flow);
   const nextDedupHash =
     existing.created_by_user_id === null

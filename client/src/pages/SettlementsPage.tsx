@@ -81,6 +81,7 @@ export const SettlementsPage = (): JSX.Element => {
     error,
     households,
     activeHousehold,
+    isPersonalCustomSettlementActive,
     mixedCurrencyWarning,
     settlementCurrency,
     setSettlementCurrency,
@@ -169,11 +170,11 @@ export const SettlementsPage = (): JSX.Element => {
         {!loading && !error && households.length === 0 ? (
           <Panel>
             <MutedText>
-              Settlements need at least one household. Create a household, add members, and log shared expenses —
-              then return here.
+              No settlements in this period yet. Add shared household expenses or personal custom-split expenses
+              (Custom split type on Personal Finances), then return here.
             </MutedText>
-            <Button as={Link} to="/groups" $variant="accent" style={{ marginTop: spacing.md, width: 'fit-content' }}>
-              Go to Household
+            <Button as={Link} to="/" $variant="accent" style={{ marginTop: spacing.md, width: 'fit-content' }}>
+              Go to Personal Finances
             </Button>
           </Panel>
         ) : null}
@@ -241,6 +242,12 @@ export const SettlementsPage = (): JSX.Element => {
               ) : null}
             </ToolbarRow>
 
+            {isPersonalCustomSettlementActive ? (
+              <MutedText style={{ marginBottom: spacing.md }}>
+                Balances from personal custom-split expenses (no household). Everyone named in the split is included.
+                Recording payments for this scope is not supported yet.
+              </MutedText>
+            ) : null}
             {mixedCurrencyWarning ? (
               <MutedText style={{ marginBottom: spacing.md }}>
                 This household has expenses in more than one currency. Balances and transfers are shown per currency —
@@ -363,7 +370,7 @@ export const SettlementsPage = (): JSX.Element => {
                         <Th>Period</Th>
                         <Th>Due date</Th>
                         <Th>Status</Th>
-                        <Th>Action</Th>
+                        {isPersonalCustomSettlementActive ? null : <Th>Action</Th>}
                       </Tr>
                     </Thead>
                     <Tbody>
@@ -383,47 +390,51 @@ export const SettlementsPage = (): JSX.Element => {
                                 {isOverdue ? 'Overdue' : 'Pending'}
                               </StatusPill>
                             </Td>
-                            <Td>
-                              <ActionCell>
-                                <Button
-                                  type="button"
-                                  $variant="accent"
-                                  $size="sm"
-                                  disabled={isSaving}
-                                  onClick={() => void handleMarkAsPaid(transfer)}
-                                >
-                                  Mark as Paid
-                                </Button>
-                                {viewerReceives ? (
+                            {isPersonalCustomSettlementActive ? null : (
+                              <Td>
+                                <ActionCell>
                                   <Button
                                     type="button"
-                                    $variant="secondary"
+                                    $variant="accent"
                                     $size="sm"
-                                    disabled={!isOverdue}
-                                    title={
-                                      isOverdue
-                                        ? 'Open email to remind the payer'
-                                        : 'Available after the due date has passed'
-                                    }
-                                    onClick={() => {
-                                      setReminderError(null);
-                                      const reminderIssue = sendReminder(transfer);
-                                      if (reminderIssue) {
-                                        setReminderError(reminderIssue);
-                                      }
-                                    }}
+                                    disabled={isSaving}
+                                    onClick={() => void handleMarkAsPaid(transfer)}
                                   >
-                                    Send Reminder
+                                    Mark as Paid
                                   </Button>
-                                ) : null}
-                              </ActionCell>
-                            </Td>
+                                  {viewerReceives ? (
+                                    <Button
+                                      type="button"
+                                      $variant="secondary"
+                                      $size="sm"
+                                      disabled={!isOverdue}
+                                      title={
+                                        isOverdue
+                                          ? 'Open email to remind the payer'
+                                          : 'Available after the due date has passed'
+                                      }
+                                      onClick={() => {
+                                        setReminderError(null);
+                                        const reminderIssue = sendReminder(transfer);
+                                        if (reminderIssue) {
+                                          setReminderError(reminderIssue);
+                                        }
+                                      }}
+                                    >
+                                      Send Reminder
+                                    </Button>
+                                  ) : null}
+                                </ActionCell>
+                              </Td>
+                            )}
                           </Tr>
                         );
                       })}
                       {transfers.length === 0 ? (
                         <Tr>
-                          <Td colSpan={7}>No pending transfers. This scope is settled.</Td>
+                          <Td colSpan={isPersonalCustomSettlementActive ? 6 : 7}>
+                            No pending transfers. This scope is settled.
+                          </Td>
                         </Tr>
                       ) : null}
                     </Tbody>
@@ -511,7 +522,7 @@ export const SettlementsPage = (): JSX.Element => {
                 </>
               ) : null}
 
-              {showRecordForm || detailsTab === 'pending' ? (
+              {!isPersonalCustomSettlementActive && (showRecordForm || detailsTab === 'pending') ? (
                 <RecordPanel>
                   <PanelHeader style={{ marginBottom: spacing.md }}>
                     <PanelTitle style={{ fontSize: 16 }}>Record payment</PanelTitle>

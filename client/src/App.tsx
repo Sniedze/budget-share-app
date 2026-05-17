@@ -54,8 +54,17 @@ const PublicOnly = ({ children }: { children: JSX.Element }): JSX.Element => {
   return children;
 };
 
+const NormalizeTrailingSlash = ({ children }: { children: JSX.Element }): JSX.Element => {
+  const { pathname, search, hash } = useLocation();
+  if (pathname.length > 1 && pathname.endsWith('/')) {
+    return <Navigate to={`${pathname.replace(/\/+$/, '')}${search}${hash}`} replace />;
+  }
+  return children;
+};
+
 const App = (): JSX.Element => {
   return (
+    <NormalizeTrailingSlash>
     <Suspense fallback={<PageLoading />}>
       <Routes>
         <Route
@@ -134,6 +143,7 @@ const App = (): JSX.Element => {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
+    </NormalizeTrailingSlash>
   );
 };
 

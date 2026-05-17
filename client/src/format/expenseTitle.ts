@@ -13,3 +13,12 @@ export function splitExpenseTitleForDisplay(title: string): { merchant: string; 
     description: trimmed.slice(idx + sep.length).trim(),
   };
 }
+
+export function combineExpenseTitle(merchant: string, description?: string): string {
+  const normalizedMerchant = merchant.trim();
+  const normalizedDescription = (description ?? '').trim();
+  if (normalizedMerchant && normalizedDescription && normalizedDescription !== normalizedMerchant) {
+    return `${normalizedMerchant}${EXPENSE_TITLE_DESCRIPTION_SEPARATOR}${normalizedDescription}`;
+  }
+  return normalizedMerchant || normalizedDescription;
+}

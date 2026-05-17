@@ -23,8 +23,10 @@ export const groupMemberMatchesViewerParams = (viewer: GroupViewer): [number, st
   normalizeMemberEmail(viewer.email),
 ];
 
-export const groupMemberMatchesViewerClause = (alias = 'gm'): string =>
-  `(${alias}.user_id = ? OR (${alias}.user_id IS NULL AND ${alias}.email = ?))`;
+export const groupMemberMatchesViewerClause = (alias?: string): string => {
+  const prefix = alias ? `${alias}.` : '';
+  return `(${prefix}user_id = ? OR (${prefix}user_id IS NULL AND ${prefix}email = ?))`;
+};
 
 export const findViewerGroupMember = <T extends { userId?: string; email: string }>(
   members: T[],
