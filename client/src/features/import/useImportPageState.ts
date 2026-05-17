@@ -46,7 +46,11 @@ import {
 } from './parseStatement';
 import { useImportMerchantRules } from './useImportMerchantRules';
 import type { ImportExpensesMutation } from '../../graphql/generated/graphql';
-import { columnMappingIndicesToForm, suggestRemapIndices } from './remapHelpers';
+import {
+  columnMappingIndicesToForm,
+  parseColumnMappingForm,
+  suggestRemapIndicesFromStatement,
+} from './remapHelpers';
 import type { ImportRemapContext, ImportedRow, ParsedStatementData } from './types';
 
 const clearManualMappingState = () => ({
@@ -109,8 +113,10 @@ export const useImportPageState = () => {
     }
   }, [workspaceSettings]);
   const [uploadedFileName, setUploadedFileName] = useState('');
+  const [uploadedFileText, setUploadedFileText] = useState<string | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const mappingSectionRef = useRef<HTMLDivElement | null>(null);
 
   const {
     merchantRules,
@@ -232,12 +238,12 @@ export const useImportPageState = () => {
   }, []);
 
   const parseStatement = useCallback(
-    async (file: File) => {
+    async (file: File, fileText: string) => {
       setImportError(null);
       setImportInfo(null);
       setImportBackendDuplicateFailureCount(0);
       const userScope = user?.id ?? 'anonymous';
-      const gridResult = buildStatementGrid(await file.text(), userScope, file.name);
+      const gridResult = buildStatementGrid(fileText, userScope, file.name);
       if (!isStatementGrid(gridResult)) {
         setImportError(gridResult.message);
         return;
@@ -276,7 +282,9 @@ export const useImportPageState = () => {
       return;
     }
     try {
-      await parseStatement(file);
+      const fileText = await file.text();
+      setUploadedFileText(fileText);
+      await parseStatement(file, fileText);
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Failed to parse statement file.');
     }
@@ -297,26 +305,24 @@ export const useImportPageState = () => {
     if (!manualMappingData) {
       return;
     }
-    const dateIndex = Number(manualDateIndex);
-    const merchantIndex = Number(manualMerchantIndex);
-    const amountIndex = Number(manualAmountIndex);
-    const parsedManualCurrencyIndex = manualCurrencyIndex === '' ? -1 : Number(manualCurrencyIndex);
-    const currencyIdx =
-      Number.isInteger(parsedManualCurrencyIndex) && parsedManualCurrencyIndex >= 0
-        ? parsedManualCurrencyIndex
-        : -1;
-    const parsedManualDescriptionIndex = manualDescriptionIndex === '' ? -1 : Number(manualDescriptionIndex);
-    const descriptionIdx =
-      Number.isInteger(parsedManualDescriptionIndex) && parsedManualDescriptionIndex >= 0
-        ? parsedManualDescriptionIndex
-        : -1;
-    if (!Number.isInteger(dateIndex) || !Number.isInteger(merchantIndex) || !Number.isInteger(amountIndex)) {
-      setImportError('Select Date, Merchant, and Amount columns to continue.');
+    const parsedForm = parseColumnMappingForm(
+      {
+        dateIndex: manualDateIndex,
+        merchantIndex: manualMerchantIndex,
+        amountIndex: manualAmountIndex,
+        descriptionIndex: manualDescriptionIndex,
+        currencyIndex: manualCurrencyIndex,
+      },
+      manualMappingData.header.length,
+    );
+    if (!parsedForm.ok) {
+      setImportError(parsedForm.message);
       return;
     }
+    const { indices } = parsedForm;
     const result = parseManualMapping(
       manualMappingData,
-      { dateIndex, merchantIndex, amountIndex, currencyIndex: currencyIdx, descriptionIndex: descriptionIdx },
+      indices,
       manualMappingSignatures,
       {
         ...parseContext,
@@ -332,14 +338,34 @@ export const useImportPageState = () => {
     applyParseResult(result);
   };
 
+  const rebuildRemapContextFromFile = useCallback((): ImportRemapContext | null => {
+    if (!uploadedFileText || !uploadedFileName || !remapContext) {
+      return null;
+    }
+    const userScope = user?.id ?? 'anonymous';
+    const gridResult = buildStatementGrid(uploadedFileText, userScope, uploadedFileName);
+    if (!isStatementGrid(gridResult)) {
+      return null;
+    }
+    const refreshed: ImportRemapContext = {
+      ...remapContext,
+      statementData: { header: gridResult.originalHeader, dataRows: gridResult.dataRows },
+      signatures: [gridResult.headerSignature, gridResult.fileSignature],
+    };
+    setRemapContext(refreshed);
+    return refreshed;
+  }, [remapContext, uploadedFileName, uploadedFileText, user?.id]);
+
   const onRequestColumnRemap = () => {
-    if (!remapContext) {
+    const context = remapContext ?? rebuildRemapContextFromFile();
+    if (!context) {
+      setImportError('Re-upload the statement file to remap columns.');
       return;
     }
-    const suggested = suggestRemapIndices(remapContext.appliedMapping, rows);
+    const suggested = suggestRemapIndicesFromStatement(context.appliedMapping, rows, context.statementData);
     const form = columnMappingIndicesToForm(suggested);
-    setManualMappingData(remapContext.statementData);
-    setManualMappingSignatures(remapContext.signatures);
+    setManualMappingData(context.statementData);
+    setManualMappingSignatures(context.signatures);
     setManualDateIndex(form.dateIndex);
     setManualMerchantIndex(form.merchantIndex);
     setManualAmountIndex(form.amountIndex);
@@ -348,8 +374,8 @@ export const useImportPageState = () => {
     setIsRemappingColumns(true);
     setImportError(null);
     const swapped =
-      suggested.merchantIndex !== remapContext.appliedMapping.merchantIndex ||
-      suggested.descriptionIndex !== remapContext.appliedMapping.descriptionIndex;
+      suggested.merchantIndex !== context.appliedMapping.merchantIndex ||
+      suggested.descriptionIndex !== context.appliedMapping.descriptionIndex;
     setImportInfo(
       swapped
         ? 'Merchant and description columns looked swapped — we pre-selected a fix. Confirm below and click Apply mapping.'
@@ -515,6 +541,7 @@ export const useImportPageState = () => {
     setManualDescriptionIndex(cleared.manualDescriptionIndex);
     setManualCurrencyIndex(cleared.manualCurrencyIndex);
     setUploadedFileName('');
+    setUploadedFileText(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -542,6 +569,13 @@ export const useImportPageState = () => {
     );
   };
 
+  useEffect(() => {
+    if (!manualMappingData) {
+      return;
+    }
+    mappingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [manualMappingData]);
+
   const handleUpsertRuleFromRow = (row: ImportedRow, matchType: 'exact' | 'contains') => {
     const info = upsertRuleFromRow(row, matchType);
     if (info) {
@@ -555,8 +589,10 @@ export const useImportPageState = () => {
     importInfo,
     importBackendDuplicateFailureCount,
     manualMappingData,
+    mappingSectionRef,
     isRemappingColumns,
     remapContext,
+    canRemapColumns: (remapContext !== null || uploadedFileText !== null) && rows.length > 0,
     manualDateIndex,
     setManualDateIndex,
     manualMerchantIndex,

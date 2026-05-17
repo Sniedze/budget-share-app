@@ -18,7 +18,7 @@ import {
   ImportUploadSection,
 } from '../features/import/components';
 import { useImportPageState } from '../features/import';
-import { Panel } from '../features/import/importPageStyles';
+import { ColumnMappingSectionAnchor, Panel } from '../features/import/importPageStyles';
 
 export const ImportPage = (): JSX.Element => {
   const state = useImportPageState();
@@ -45,25 +45,6 @@ export const ImportPage = (): JSX.Element => {
             onFileChange={state.onFileChange}
           />
 
-          {state.manualMappingData ? (
-            <ImportManualMappingSection
-              manualMappingData={state.manualMappingData}
-              isRemappingColumns={state.isRemappingColumns}
-              manualDateIndex={state.manualDateIndex}
-              setManualDateIndex={state.setManualDateIndex}
-              manualMerchantIndex={state.manualMerchantIndex}
-              setManualMerchantIndex={state.setManualMerchantIndex}
-              manualAmountIndex={state.manualAmountIndex}
-              setManualAmountIndex={state.setManualAmountIndex}
-              manualDescriptionIndex={state.manualDescriptionIndex}
-              setManualDescriptionIndex={state.setManualDescriptionIndex}
-              manualCurrencyIndex={state.manualCurrencyIndex}
-              setManualCurrencyIndex={state.setManualCurrencyIndex}
-              onApplyManualMapping={state.onApplyManualMapping}
-              onSwapMerchantDescriptionColumns={state.onSwapMerchantDescriptionColumns}
-            />
-          ) : null}
-
           <ImportSummaryBar rows={state.rows} duplicateStats={state.duplicateStats} />
 
           <ImportMerchantRulesPanel
@@ -88,10 +69,31 @@ export const ImportPage = (): JSX.Element => {
             onRemoveInFileDuplicates={state.onRemoveInFileDuplicates}
           />
 
+          {state.manualMappingData ? (
+            <ColumnMappingSectionAnchor ref={state.mappingSectionRef}>
+              <ImportManualMappingSection
+                manualMappingData={state.manualMappingData}
+                isRemappingColumns={state.isRemappingColumns}
+                manualDateIndex={state.manualDateIndex}
+                setManualDateIndex={state.setManualDateIndex}
+                manualMerchantIndex={state.manualMerchantIndex}
+                setManualMerchantIndex={state.setManualMerchantIndex}
+                manualAmountIndex={state.manualAmountIndex}
+                setManualAmountIndex={state.setManualAmountIndex}
+                manualDescriptionIndex={state.manualDescriptionIndex}
+                setManualDescriptionIndex={state.setManualDescriptionIndex}
+                manualCurrencyIndex={state.manualCurrencyIndex}
+                setManualCurrencyIndex={state.setManualCurrencyIndex}
+                onApplyManualMapping={state.onApplyManualMapping}
+                onSwapMerchantDescriptionColumns={state.onSwapMerchantDescriptionColumns}
+              />
+            </ColumnMappingSectionAnchor>
+          ) : null}
+
           <ImportToolbarActions
             rows={state.rows}
             manualMappingData={state.manualMappingData}
-            canRemapColumns={state.remapContext !== null && state.rows.length > 0}
+            canRemapColumns={state.canRemapColumns}
             isMutating={state.isMutating}
             onRemoveImportedFile={state.onRemoveImportedFile}
             onRequestColumnRemap={state.onRequestColumnRemap}

@@ -438,6 +438,14 @@ export const parseStatementFromGrid = (
   };
 };
 
+const resolveDebitCreditIndices = (header: string[]): { debitIndex: number; creditIndex: number } => {
+  const headerNorm = header.map((cell) => normalizeHeaderKey(cell));
+  return {
+    debitIndex: headerNorm.findIndex((cell) => includesAnyAlias(cell, DEBIT_COLUMN_ALIASES)),
+    creditIndex: headerNorm.findIndex((cell) => includesAnyAlias(cell, CREDIT_COLUMN_ALIASES)),
+  };
+};
+
 export const parseManualMapping = (
   manualData: ParsedStatementData,
   indices: {
@@ -450,19 +458,20 @@ export const parseManualMapping = (
   signatures: string[],
   ctx: ParseStatementContext,
 ): ParseStatementResult => {
+  const { debitIndex, creditIndex } = resolveDebitCreditIndices(manualData.header);
   const manualAssumeOutgoing = computeAmountColumnAssumeAllOutgoing(
     manualData.dataRows,
     indices.amountIndex,
-    -1,
-    -1,
+    debitIndex,
+    creditIndex,
   );
   const parsedRows = buildImportedRows(
     manualData.dataRows,
     indices.dateIndex,
     indices.merchantIndex,
     indices.amountIndex,
-    -1,
-    -1,
+    debitIndex,
+    creditIndex,
     indices.currencyIndex,
     indices.descriptionIndex,
     manualAssumeOutgoing,

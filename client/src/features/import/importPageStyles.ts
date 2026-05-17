@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 import { Card, Input } from '../../components/ui';
-import { colors, spacing } from '../../styles/tokens';
+import { colors, radii, spacing } from '../../styles/tokens';
 
 export const Panel = styled(Card)`
   display: grid;
@@ -155,7 +155,23 @@ export const ColumnMappingLabel = styled.label`
   color: ${colors.textPrimary};
 `;
 
-export const ColumnMappingSelect = styled(InlineInput)`
+export const ColumnMappingSelect = styled.select`
+  font: inherit;
+  padding: 10px 12px;
+  border-radius: ${radii.sm};
+  border: 1px solid ${colors.border};
+  background: ${colors.surface};
+  color: ${colors.textPrimary};
   min-width: 0;
   width: 100%;
+
+  &:focus {
+    outline: 2px solid rgba(79, 70, 229, 0.25);
+    outline-offset: 1px;
+    border-color: ${colors.primary};
+  }
+`;
+
+export const ColumnMappingSectionAnchor = styled.div`
+  scroll-margin-top: ${spacing.lg};
 `;
