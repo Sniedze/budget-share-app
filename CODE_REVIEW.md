@@ -75,11 +75,11 @@ This is genuinely good shipping. With the security posture and observability in 
 
 | # | Finding | Status |
 |---|---|---|
-| 1.10 | Raw `Error` messages leak | **◐ Partially resolved** — `errorHandler` rewrites 500s to "Internal server error." (`middleware/errorHandler.ts:29`). GraphQL resolver errors still expose raw `Error.message` to the client; need `formatError` to scrub. |
-| 1.11 | Email-as-identity | **◐ Partially resolved** — membership auth uses `user_id` (email fallback); GraphQL `GroupMember.userId`; share totals resolve viewer by user id. Invitations remain email-keyed. |
-| 1.12 | Dedup hash edit footgun | **✗ Still open** — same logic. |
-| 1.13 | Currency half-implemented | **◐ Partially resolved** — any ISO 4217 code stored per expense; UI formats per row. Budget/settlement aggregates still sum amounts without FX (assume mostly DKK). |
-| 1.14 | Password policy minimal | **◐ Partially resolved** — register/change require ≥8 chars, letter + digit, max 72 bytes; `changePassword` revokes all refresh sessions then issues a new session for the current device. No breached-password (zxcvbn) check yet. |
+| 1.10 | Raw `Error` messages leak | **✓ Resolved** — `formatGraphqlError` scrubs non–client-safe errors in production and attaches `requestId`; `errorHandler` covers HTTP paths. |
+| 1.11 | Email-as-identity | **◐ Partially resolved** — membership auth uses `user_id` (email fallback); GraphQL `GroupMember.userId`; `myInvitations` matches viewer user id or email (PR #50). |
+| 1.12 | Dedup hash edit footgun | **✓ Resolved** — `transactionDedupFieldsUnchanged` preserves hash when dedup fields unchanged on update. |
+| 1.13 | Currency half-implemented | **◐ Partially resolved** — multi-currency expenses + import; settlements computed per currency with `mixedCurrencyWarning` (PR #49). Budget rollups and FX conversion still out of scope. |
+| 1.14 | Password policy minimal | **◐ Partially resolved** — letter+digit + `changePassword`; common-password blocklist on register/change (PR #51). No HIBP/zxcvbn API yet. |
 | 1.15 | Login rate limit IP-only | **✓ Resolved** — login/register keyed by normalized email with IP fallback (`graphqlRateLimit.ts`). |
 | 1.18 | `audit_logs.actor_email NOT NULL` vs `actor_user_id NULL` | **✗ Still open** — schema unchanged (`db/mysql.ts:127-138`). |
 | 1.19 | `/health` doesn't check DB | **✓ Resolved** — `/health` runs `checkDbConnection()` and returns 503 when DB is down. |
@@ -87,10 +87,10 @@ This is genuinely good shipping. With the security posture and observability in 
 | 2.2 | Three sources of truth (Apollo / state / localStorage) | **✓ Resolved** — `user_settings` table + `userWorkspaceSettings` / `saveUserWorkspaceSettings`; client migrates legacy localStorage on first load. |
 | 2.3 | `listHouseholdSettlements` duplicates `listGroups` work | **✓ Resolved** — `loadAccessibleGroupsWithMembers` loads only settlement-scoped groups + members. |
 | 2.4 | `refetchQueries` everywhere | **✓ Resolved** — batched `importExpenses` mutation; `refetchGroups(client)` + expense cache updates. |
-| 2.5 | `ME` is `network-only` on every mount | **◐ Partially resolved** — skipped when session-hint cookie absent; still `network-only` when hint present. |
+| 2.5 | `ME` is `network-only` on every mount | **✓ Resolved** — skipped when session-hint absent; `cache-first` when hint present (PR #51). |
 | 2.6 | No error boundary | **✓ Resolved** — `ErrorBoundary` wraps the app in `main.tsx`. |
 | 2.7 | No route code splitting | **✓ Resolved** — `App.tsx:1-21` uses `React.lazy` for every page + a `<Suspense>` wrapper. |
-| 2.8 | `<AuthBootstrap>` splash flicker | **✗ Still open** — `App.tsx:RequireAuth/PublicOnly` still render `<div>Loading...</div>`. |
+| 2.8 | `<AuthBootstrap>` splash flicker | **✓ Resolved** — `RequireAuth` / `PublicOnly` use shared `PageLoading` while `isInitializing`. |
 
 ### Optimizations (4 high) — two resolved, two open
 
@@ -120,7 +120,7 @@ This is genuinely good shipping. With the security posture and observability in 
 | # | Finding | Status |
 |---|---|---|
 | 6.1 | No validation library | **◐ Partially resolved** — `auth/validation.ts` introduces hand-rolled, well-named validators with explicit constants. Other modules (`expenses/service.ts`, `groups/service.ts`) still hand-roll inline. No Zod adopted. |
-| 6.2 | `refetchQueries` is the old way | **◐ Partially resolved** — codegen types wired for operations; still uses `refetchQueries` (no fragments / `cache.modify` yet). |
+| 6.2 | `refetchQueries` is the old way | **◐ Partially resolved** — `EXPENSE_FIELDS` fragment; expense cache updates; group create/update merge into `GET_GROUPS` (PR #52). Some mutations still refetch (templates, boolean group ops). |
 | 6.3 | No `<ErrorBoundary>` | **✓ Resolved** — `main.tsx` wraps the app. |
 | 6.4 | `AuthContext` is one big context | **✓ Resolved** — split `AuthStateContext` / `AuthActionsContext`. |
 
@@ -277,20 +277,20 @@ If a library attaches a malicious `statusCode = "1000"` string, `Number("1000") 
 
 The previous top-10 list is mostly done. Here's what's left, ordered by impact ÷ effort.
 
-1. **Email-as-identity → user IDs** (1.11) — **◐ Partial** — `user_id` on members + auth; `GroupMember.userId` exposed; viewer matched by id in share math. Invitations still keyed by email.
-2. **Adopt GraphQL codegen for all client operations** (6.2) — **◐ Partial** — feature `types.ts` derive from generated operations; hooks typed with `*Query`/`*Mutation`.
-3. **Currency beyond DKK** (1.13) — **◐ Partial** — multi-currency expenses + import; FX for household/settlement totals still out of scope.
-4. **Email invitation resend flow** (A.2) — **✓ Done** — `email_delivery_status` on invitations; `resendGroupInvitation` mutation + household UI.
-5. **Duplication cleanup** — shared `roundCents`, expense projections, invitation email templates (A.3).
-6. **Stronger password policy** (1.14) — **◐ Partial** — letter+digit + `changePassword` with `revokeRefreshTokens`; breached-password check still open.
+1. **Email-as-identity → user IDs** (1.11) — **◐ Partial** — members + share math by `user_id`; invitation inbox by user id or email (#50).
+2. **Adopt GraphQL codegen for all client operations** (6.2) — **◐ Partial** — generated types + expense/group cache updates (#52); trim remaining `refetchQueries`.
+3. **Currency beyond DKK** (1.13) — **◐ Partial** — per-currency settlement scopes (#49); budget FX / cross-currency rollups still open.
+4. **Email invitation resend flow** (A.2) — **✓ Done**
+5. **Duplication cleanup** — `roundCents` / `toIsoString` shared; extract `mapExpenseRow` / GraphQL `GROUP_FIELDS` fragment still open.
+6. **Stronger password policy** (1.14) — **◐ Partial** — common-password blocklist (#51); optional HIBP/zxcvbn later.
 7. **Dedup hash on edit** (1.12) — **✓ Done**
-8. **Per-device logout** (1.B) — **✓ Done** — `user_refresh_sessions` + `logout` revokes current device only (integration test).
-9. **Logout all devices** — **✓ Done** — `logoutAllDevices` mutation + UserMenu action.
-10. **Audit `actor_user_id`** (1.18) — **✓ Done** — required on `logAuditEvent` input.
-11. **Duplicate error codes** (1.7) — **✓ Done** — client uses `errorCode` only for import duplicates.
-12. **Duplication cleanup (`roundCents` / `toIsoString`)** — **◐ Partial** — shared `lib/money.ts` and `lib/dates.ts`; invitation templates already in `invitationEmailTemplates.ts`.
+8. **Per-device logout** (1.B) — **✓ Done**
+9. **Logout all devices** — **✓ Done**
+10. **Audit `actor_user_id`** (1.18) — **✓ Done** — required on `logAuditEvent`; `actor_email` still NOT NULL in schema (display/audit trail).
+11. **Duplicate error codes** (1.7) — **✓ Done**
+12. **Dependabot** (5.7) — **✓ Done** — weekly npm updates for root, client, server.
 
-Stretch: split `AuthContext`, add error boundary, swap `me` to use a non-secret session-hint cookie, adopt Zod for the rest of the inputs, generate GraphQL types with codegen.
+Stretch: Zod for expenses/groups inputs, budget multi-currency subtotals, `invited_user_id` on invitations, path aliases (6.7).
 
 ---
 
