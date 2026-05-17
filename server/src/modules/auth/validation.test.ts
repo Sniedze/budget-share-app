@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AppError, ErrorCode } from '../../graphql/appError.js';
-import { assertPasswordStrength } from './validation.js';
+import { assertPasswordNotCommon, assertPasswordStrength } from './validation.js';
 
 describe('assertPasswordStrength', () => {
   it('accepts passwords with at least 8 chars, a letter, and a digit', () => {
@@ -25,5 +25,15 @@ describe('assertPasswordStrength', () => {
 
   it('rejects passwords without a digit', () => {
     assert.throws(() => assertPasswordStrength('password'));
+  });
+});
+
+describe('assertPasswordNotCommon', () => {
+  it('rejects trivial breached-style passwords', () => {
+    assert.throws(() => assertPasswordNotCommon('password1'));
+  });
+
+  it('allows less common passwords', () => {
+    assert.doesNotThrow(() => assertPasswordNotCommon('k9RiverLane'));
   });
 });

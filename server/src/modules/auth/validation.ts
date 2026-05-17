@@ -1,6 +1,7 @@
 /** bcrypt truncates at 72 bytes; cap here for predictable behavior. */
 import { appError, ErrorCode } from '../../graphql/appError.js';
 import { stripControlCharacters } from '../../lib/sanitize.js';
+import { isCommonPassword } from './commonPasswords.js';
 
 export const MAX_PASSWORD_LENGTH = 72;
 export const MIN_PASSWORD_LENGTH = 8;
@@ -63,8 +64,23 @@ export const assertPasswordStrength = (password: string): void => {
   }
 };
 
+export const assertPasswordNotCommon = (password: string): void => {
+  if (isCommonPassword(password)) {
+    throw appError(
+      ErrorCode.BAD_USER_INPUT,
+      'That password is too common. Choose something less predictable.',
+    );
+  }
+};
+
 export const assertPasswordAcceptableForRegister = (password: string): void => {
   assertPasswordStrength(password);
+  assertPasswordNotCommon(password);
+};
+
+export const assertNewPasswordRules = (password: string): void => {
+  assertPasswordStrength(password);
+  assertPasswordNotCommon(password);
 };
 
 export const assertCurrentPasswordForChange = (password: string): void => {

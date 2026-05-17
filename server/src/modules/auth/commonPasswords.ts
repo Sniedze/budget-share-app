@@ -1,0 +1,33 @@
+/** Lowercase passwords rejected on register and password change (top breached / trivial choices). */
+const COMMON_PASSWORDS = new Set([
+  'password',
+  'password1',
+  'password12',
+  'password123',
+  '12345678',
+  '123456789',
+  '1234567890',
+  'qwerty12',
+  'qwerty123',
+  'letmein1',
+  'welcome1',
+  'admin123',
+  'iloveyou1',
+  'sunshine1',
+  'football1',
+  'baseball1',
+  'monkey123',
+  'dragon12',
+  'master12',
+  'trustno1',
+  'passw0rd',
+  'passw0rd1',
+  'changeme1',
+  'secret12',
+  'abc12345',
+  'aa123456',
+  'budget12',
+  'budget123',
+]);
+
+export const isCommonPassword = (password: string): boolean => COMMON_PASSWORDS.has(password.trim().toLowerCase());

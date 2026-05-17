@@ -9,7 +9,7 @@ import {
   assertCurrentPasswordForChange,
   assertPasswordAcceptableForRegister,
   assertPasswordLengthForLogin,
-  assertPasswordStrength,
+  assertNewPasswordRules,
   normalizeFullNameForRegister,
   stripControlCharacters,
   validateEmailFormat,
@@ -183,7 +183,7 @@ export const changePassword = async (
   input: ChangePasswordInput,
 ): Promise<AuthPayload> => {
   assertCurrentPasswordForChange(input.currentPassword);
-  assertPasswordStrength(input.newPassword);
+  assertNewPasswordRules(input.newPassword);
 
   const user = await queryOne<UserRow>(
     `

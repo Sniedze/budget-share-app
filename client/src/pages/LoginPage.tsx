@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useId, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth';
 import {
@@ -27,6 +27,8 @@ export const LoginPage = (): JSX.Element => {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const emailId = useId();
+  const passwordId = useId();
   const isFormComplete = email.trim().length > 0 && password.length > 0;
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -48,20 +50,22 @@ export const LoginPage = (): JSX.Element => {
   return (
     <AuthPageShell subtitle="Manage household expenses together" activeTab="login">
         <AuthForm onSubmit={onSubmit}>
-          <FieldLabel>
+          <FieldLabel htmlFor={emailId}>
             Email <RequiredMark>*</RequiredMark>
           </FieldLabel>
           <Input
+            id={emailId}
             type="email"
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          <FieldLabel>
+          <FieldLabel htmlFor={passwordId}>
             Password <RequiredMark>*</RequiredMark>
           </FieldLabel>
           <Input
+            id={passwordId}
             type="password"
             placeholder="********"
             value={password}

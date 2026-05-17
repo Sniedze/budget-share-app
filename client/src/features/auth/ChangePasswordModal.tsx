@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useId, useState } from 'react';
 import styled from 'styled-components';
 import { Button, ErrorText, FieldLabel, Input, MutedText } from '../../components/ui';
 import { colors, radii, spacing } from '../../styles/tokens';
@@ -53,6 +53,9 @@ export const ChangePasswordModal = ({ onClose }: ChangePasswordModalProps): JSX.
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const currentPasswordId = useId();
+  const newPasswordId = useId();
+  const confirmPasswordId = useId();
 
   const canSubmit =
     currentPassword.length > 0 &&
@@ -93,8 +96,9 @@ export const ChangePasswordModal = ({ onClose }: ChangePasswordModalProps): JSX.
         </MutedText>
         <FormStack onSubmit={onSubmit}>
           <div>
-            <FieldLabel>Current password</FieldLabel>
+            <FieldLabel htmlFor={currentPasswordId}>Current password</FieldLabel>
             <Input
+              id={currentPasswordId}
               type="password"
               autoComplete="current-password"
               value={currentPassword}
@@ -103,8 +107,9 @@ export const ChangePasswordModal = ({ onClose }: ChangePasswordModalProps): JSX.
             />
           </div>
           <div>
-            <FieldLabel>New password</FieldLabel>
+            <FieldLabel htmlFor={newPasswordId}>New password</FieldLabel>
             <Input
+              id={newPasswordId}
               type="password"
               autoComplete="new-password"
               value={newPassword}
@@ -113,8 +118,9 @@ export const ChangePasswordModal = ({ onClose }: ChangePasswordModalProps): JSX.
             />
           </div>
           <div>
-            <FieldLabel>Confirm new password</FieldLabel>
+            <FieldLabel htmlFor={confirmPasswordId}>Confirm new password</FieldLabel>
             <Input
+              id={confirmPasswordId}
               type="password"
               autoComplete="new-password"
               value={confirmPassword}

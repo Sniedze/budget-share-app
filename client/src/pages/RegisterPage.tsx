@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth';
 import { isPasswordStrong, passwordPolicyHint } from '../features/auth/passwordPolicy';
@@ -22,6 +22,10 @@ export const RegisterPage = (): JSX.Element => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const fullNameId = useId();
+  const emailId = useId();
+  const passwordId = useId();
+  const confirmPasswordId = useId();
   const passwordsMatch = password === confirmPassword;
   const isFormComplete =
     fullName.trim().length > 0 &&
@@ -49,30 +53,33 @@ export const RegisterPage = (): JSX.Element => {
   return (
     <AuthPageShell subtitle="Create your account and start sharing expenses" activeTab="register">
         <AuthForm onSubmit={onSubmit}>
-          <FieldLabel>
+          <FieldLabel htmlFor={fullNameId}>
             Full name <RequiredMark>*</RequiredMark>
           </FieldLabel>
           <Input
+            id={fullNameId}
             type="text"
             placeholder="Your full name"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             required
           />
-          <FieldLabel>
+          <FieldLabel htmlFor={emailId}>
             Email <RequiredMark>*</RequiredMark>
           </FieldLabel>
           <Input
+            id={emailId}
             type="email"
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          <FieldLabel>
+          <FieldLabel htmlFor={passwordId}>
             Password <RequiredMark>*</RequiredMark>
           </FieldLabel>
           <Input
+            id={passwordId}
             type="password"
             placeholder="At least 8 characters"
             value={password}
@@ -81,10 +88,11 @@ export const RegisterPage = (): JSX.Element => {
             required
           />
           <MutedText style={{ margin: 0 }}>{passwordPolicyHint}</MutedText>
-          <FieldLabel>
+          <FieldLabel htmlFor={confirmPasswordId}>
             Confirm password <RequiredMark>*</RequiredMark>
           </FieldLabel>
           <Input
+            id={confirmPasswordId}
             type="password"
             placeholder="Repeat your password"
             value={confirmPassword}

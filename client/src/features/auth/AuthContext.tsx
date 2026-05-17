@@ -51,7 +51,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
     error: meError,
   } = useQuery<MeQueryData>(ME, {
     skip: !sessionHintPresent,
-    fetchPolicy: 'network-only',
+    fetchPolicy: 'cache-first',
     errorPolicy: 'all',
   });
 
