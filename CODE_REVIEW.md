@@ -288,10 +288,7 @@ The previous top-10 list is mostly done. Here's what's left, ordered by impact �
 9. **Logout all devices** — **✓ Done** — `logoutAllDevices` mutation + UserMenu action.
 10. **Audit `actor_user_id`** (1.18) — **✓ Done** — required on `logAuditEvent` input.
 11. **Duplicate error codes** (1.7) — **✓ Done** — client uses `errorCode` only for import duplicates.
-7. **Currency beyond DKK** (1.13) — product decision + schema/API work.
-8. **Email invitation delivery status UI** (A.2) — **◐ Done server-side** (`email_delivery_status`); extend resend flow if needed.
-9. **Duplication cleanup** — shared `roundCents`, expense projections, invitation email templates (A.3).
-10. **Stronger password policy** (1.14) — complexity / breached-password check.
+12. **Duplication cleanup (`roundCents` / `toIsoString`)** — **◐ Partial** — shared `lib/money.ts` and `lib/dates.ts`; invitation templates already in `invitationEmailTemplates.ts`.
 
 Stretch: split `AuthContext`, add error boundary, swap `me` to use a non-secret session-hint cookie, adopt Zod for the rest of the inputs, generate GraphQL types with codegen.
 

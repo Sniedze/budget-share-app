@@ -1,5 +1,6 @@
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { db } from '../../db/mysql.js';
+import { toIsoString } from '../../lib/dates.js';
 import { appError, ErrorCode } from '../../graphql/appError.js';
 import { logAuthzDenied } from '../../logger.js';
 import type { GroupInvitation, GroupInvitationStatus } from './types.js';
@@ -17,9 +18,6 @@ type InvitationRow = {
   invitedAt: Date | string;
   acceptedAt: Date | string | null;
 } & RowDataPacket;
-
-const toIsoString = (value: Date | string): string =>
-  value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 
 export const mapInvitationStatus = (status: string): GroupInvitationStatus => {
   if (status === 'Accepted') {

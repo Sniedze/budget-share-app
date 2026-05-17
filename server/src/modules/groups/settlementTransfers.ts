@@ -1,3 +1,5 @@
+import { roundCents } from '../../lib/money.js';
+
 export type SettlementBalance = {
   memberName: string;
   amount: number;
@@ -8,8 +10,6 @@ export type SettlementTransfer = {
   toMember: string;
   amount: number;
 };
-
-const roundCents = (value: number): number => Math.round(value * 100) / 100;
 
 /** Greedy minimum-transfers settlement from net balances. */
 export const buildOptimizedTransfers = (balances: SettlementBalance[]): SettlementTransfer[] => {
