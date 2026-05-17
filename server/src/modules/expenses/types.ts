@@ -40,7 +40,7 @@ export type CreateExpenseInput = {
   groupId?: string;
   paidByUserId?: string;
   isPrivate?: boolean;
-  /** ISO 4217 code; only DKK is accepted. */
+  /** ISO 4217 code (e.g. DKK, EUR); defaults to DKK when omitted. */
   currency?: string;
   flow?: ExpenseFlow;
 };

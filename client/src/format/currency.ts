@@ -1,14 +1,39 @@
-/** Single app currency — amounts in the database are stored in this unit. */
+/** Default currency for new expenses and single-currency summaries (budget, settlements). */
 export const APP_CURRENCY_CODE = 'DKK';
 
-const appCurrencyFormatter = new Intl.NumberFormat('da-DK', {
-  style: 'currency',
-  currency: APP_CURRENCY_CODE,
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+const formatterCache = new Map<string, Intl.NumberFormat>();
 
-export const formatAppCurrency = (value: number): string => appCurrencyFormatter.format(value);
+const getCurrencyFormatter = (currencyCode: string): Intl.NumberFormat => {
+  const code = currencyCode.trim().toUpperCase() || APP_CURRENCY_CODE;
+  const cached = formatterCache.get(code);
+  if (cached) {
+    return cached;
+  }
+  let formatter: Intl.NumberFormat;
+  try {
+    formatter = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: code,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  } catch {
+    formatter = new Intl.NumberFormat('da-DK', {
+      style: 'currency',
+      currency: APP_CURRENCY_CODE,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+  formatterCache.set(code, formatter);
+  return formatter;
+};
+
+export const formatCurrency = (value: number, currencyCode: string = APP_CURRENCY_CODE): string =>
+  getCurrencyFormatter(currencyCode).format(value);
+
+/** Format using the app default currency (DKK). */
+export const formatAppCurrency = (value: number): string => formatCurrency(value, APP_CURRENCY_CODE);
 
 /**
  * Normalize a bank statement currency cell to a 3-letter ISO-style code.

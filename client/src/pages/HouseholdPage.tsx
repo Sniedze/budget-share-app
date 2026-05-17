@@ -8,7 +8,7 @@ import { CreateHouseholdModal } from './household/CreateHouseholdModal';
 import { PendingInvitationsPanel } from './household/PendingInvitationsPanel';
 import { useHouseholdPageState } from './household/useHouseholdPageState';
 import { resolveExpenseGroupFromSuggestion } from '../features/expenses';
-import { formatAppCurrency } from '../format/currency';
+import { formatAppCurrency, formatCurrency } from '../format/currency';
 import { splitExpenseTitleForDisplay } from '../format/expenseTitle';
 import { colors, spacing } from '../styles/tokens';
 
@@ -431,7 +431,7 @@ export const HouseholdPage = (): JSX.Element => {
                               <Td>{expense.expenseGroup ?? expense.category}</Td>
                             ) : null}
                             <Td>{expense.paidBy}</Td>
-                            <Td>{formatAppCurrency(expense.total)}</Td>
+                            <Td>{formatCurrency(expense.total, expense.currency)}</Td>
                             <Td>{getExpenseRatioLabel(
                               expense.total,
                               expense.yourShare,
@@ -444,7 +444,7 @@ export const HouseholdPage = (): JSX.Element => {
                                         currentUserName.trim().toLowerCase(),
                                   )?.ratio,
                             )}</Td>
-                            <Td>{formatAppCurrency(expense.yourShare)}</Td>
+                            <Td>{formatCurrency(expense.yourShare, expense.currency)}</Td>
                             <Td>{expense.isPrivate ? 'Yes' : '—'}</Td>
                           </Tr>
                           );

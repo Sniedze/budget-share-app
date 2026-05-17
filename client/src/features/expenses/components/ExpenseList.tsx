@@ -1,7 +1,7 @@
 import type { Expense } from '../types';
 import styled from 'styled-components';
 import { Button, MutedText } from '../../../components/ui';
-import { formatAppCurrency } from '../../../format/currency';
+import { formatCurrency } from '../../../format/currency';
 
 const List = styled.ul`
   list-style: none;
@@ -68,7 +68,7 @@ export const ExpenseList = ({
         <ListItem key={expense.id}>
           <Main>
             <strong>{expense.title}</strong>
-            <span>{formatAppCurrency(expense.amount)}</span>
+            <span>{formatCurrency(expense.amount, expense.currency)}</span>
           </Main>
           <Meta>
             <span>Transaction: {formatDate(expense.transactionDate)}</span>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import type { Expense } from '../../features/expenses';
-import { formatAppCurrency } from '../../format/currency';
+import { formatCurrency } from '../../format/currency';
 import { splitExpenseTitleForDisplay } from '../../format/expenseTitle';
 import { colors, radii, spacing } from '../../styles/tokens';
 import { Badge, Button, Card, MutedText, Table, TableWrapper, Td, Th, Thead, Tr } from '../ui';
@@ -197,7 +197,7 @@ export const RecentExpensesSection = ({
                     <Td>
                       <Badge $variant="accent">{expense.category}</Badge>
                     </Td>
-                    <Td>{formatAppCurrency(expense.amount)}</Td>
+                    <Td>{formatCurrency(expense.amount, expense.currency)}</Td>
                     <Td>{formatSplitLabel(expense)}</Td>
                     <Td>{expense.isPrivate && expense.groupId ? 'Yes' : '—'}</Td>
                     <Td>
