@@ -1,4 +1,5 @@
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import { buildBulkInsertPlaceholders } from '../../db/queryHelpers.js';
 import { db } from '../../db/mysql.js';
 import { toIsoString } from '../../lib/dates.js';
 import { stripParticipantFromTemplateSplitJson } from './splitDetailsParse.js';
@@ -11,6 +12,7 @@ import {
   groupMemberMatchesViewerClause,
   groupMemberMatchesViewerParams,
   loadUserIdsByEmails,
+  loadViewerGroupMemberName,
   normalizeMemberEmail,
   parseViewerUserId,
 } from './memberIdentity.js';
@@ -20,9 +22,6 @@ import type {
   GroupPendingInvitation,
   InvitationEmailDeliveryStatus,
 } from './types.js';
-
-const buildBulkInsertPlaceholders = (rows: number, width: number): string =>
-  Array.from({ length: rows }, () => `(${Array.from({ length: width }, () => '?').join(', ')})`).join(', ');
 
 type InvitationRow = {
   id: number;
@@ -366,18 +365,8 @@ export const declineExpenseGroupParticipation = async (
 
   await assertActiveGroupMembership(numericGroupId, viewer, 'declineExpenseGroupParticipation');
 
-  const [memberRows] = await db.query<Array<{ name: string } & RowDataPacket>>(
-    `
-      SELECT name
-      FROM group_members
-      WHERE group_id = ?
-        AND ${groupMemberMatchesViewerClause()}
-      LIMIT 1
-    `,
-    [numericGroupId, ...groupMemberMatchesViewerParams(viewer)],
-  );
-  const member = memberRows[0];
-  if (!member) {
+  const memberName = await loadViewerGroupMemberName(numericGroupId, viewer);
+  if (!memberName) {
     throw appError(ErrorCode.FORBIDDEN, 'Not a member of this household.');
   }
 
@@ -397,7 +386,7 @@ export const declineExpenseGroupParticipation = async (
 
   const splitDetailsJson = stripParticipantFromTemplateSplitJson(
     typeof template.splitDetails === 'string' ? template.splitDetails : '[]',
-    member.name,
+    memberName,
   );
 
   const [updateResult] = await db.execute<ResultSetHeader>(

@@ -38,6 +38,24 @@ export const findViewerGroupMember = <T extends { userId?: string; email: string
   return members.find((member) => normalizeMemberEmail(member.email) === normalizedEmail);
 };
 
+export const loadViewerGroupMemberName = async (
+  groupId: number,
+  viewer: GroupViewer,
+): Promise<string | null> => {
+  const [rows] = await db.query<Array<{ name: string } & RowDataPacket>>(
+    `
+      SELECT name
+      FROM group_members
+      WHERE group_id = ?
+        AND ${groupMemberMatchesViewerClause()}
+      LIMIT 1
+    `,
+    [groupId, ...groupMemberMatchesViewerParams(viewer)],
+  );
+  const name = rows[0]?.name?.trim();
+  return name && name.length > 0 ? name : null;
+};
+
 export const loadUserIdsByEmails = async (emails: string[]): Promise<Map<string, number>> => {
   if (emails.length === 0) {
     return new Map();
