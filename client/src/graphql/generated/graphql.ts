@@ -269,7 +269,9 @@ export type Mutation = {
   __typename?: 'Mutation';
   acceptGroupInvitation: GroupInvitation;
   addExpense: Expense;
+  cancelPendingEmailChange: User;
   changePassword: AuthPayload;
+  confirmEmailChange: User;
   createGroup: Group;
   declineExpenseGroupParticipation: Group;
   declineGroupInvitation: GroupInvitation;
@@ -282,10 +284,12 @@ export type Mutation = {
   recordSettlementPayment: RecordSettlementPaymentPayload;
   refreshSession: AuthPayload;
   register: AuthPayload;
+  resendEmailChangeConfirmation: User;
   resendGroupInvitation: GroupPendingInvitation;
   saveUserWorkspaceSettings: UserWorkspaceSettings;
   updateExpense: Maybe<Expense>;
   updateGroup: Group;
+  updateProfile: User;
   upsertGroupSplitTemplate: Group;
 };
 
@@ -302,6 +306,11 @@ export type MutationAddExpenseArgs = {
 
 export type MutationChangePasswordArgs = {
   input: ChangePasswordInput;
+};
+
+
+export type MutationConfirmEmailChangeArgs = {
+  token: Scalars['String']['input'];
 };
 
 
@@ -376,6 +385,11 @@ export type MutationUpdateExpenseArgs = {
 
 export type MutationUpdateGroupArgs = {
   input: UpdateGroupInput;
+};
+
+
+export type MutationUpdateProfileArgs = {
+  input: UpdateProfileInput;
 };
 
 
@@ -565,6 +579,14 @@ export type UpdateGroupInput = {
   name: Scalars['String']['input'];
 };
 
+export type UpdateProfileInput = {
+  email: Scalars['String']['input'];
+  fullName: Scalars['String']['input'];
+  phone?: InputMaybe<Scalars['String']['input']>;
+  preferredCurrency: Scalars['String']['input'];
+  timezone: Scalars['String']['input'];
+};
+
 export type UpsertSplitTemplateInput = {
   category: Scalars['String']['input'];
   groupId: Scalars['ID']['input'];
@@ -578,6 +600,10 @@ export type User = {
   email: Scalars['String']['output'];
   fullName: Scalars['String']['output'];
   id: Scalars['ID']['output'];
+  pendingEmail: Maybe<Scalars['String']['output']>;
+  phone: Maybe<Scalars['String']['output']>;
+  preferredCurrency: Scalars['String']['output'];
+  timezone: Scalars['String']['output'];
 };
 
 export type UserWorkspaceSettings = {
@@ -592,21 +618,21 @@ export type UserWorkspaceSettings = {
 export type MeQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type MeQuery = { __typename?: 'Query', me: { __typename?: 'User', id: string, email: string, fullName: string, createdAt: string } | null };
+export type MeQuery = { __typename?: 'Query', me: { __typename?: 'User', id: string, email: string, fullName: string, createdAt: string, phone: string | null, timezone: string, preferredCurrency: string, pendingEmail: string | null } | null };
 
 export type LoginMutationVariables = Exact<{
   input: LoginInput;
 }>;
 
 
-export type LoginMutation = { __typename?: 'Mutation', login: { __typename?: 'AuthPayload', user: { __typename?: 'User', id: string, email: string, fullName: string, createdAt: string } } };
+export type LoginMutation = { __typename?: 'Mutation', login: { __typename?: 'AuthPayload', user: { __typename?: 'User', id: string, email: string, fullName: string, createdAt: string, phone: string | null, timezone: string, preferredCurrency: string, pendingEmail: string | null } } };
 
 export type RegisterMutationVariables = Exact<{
   input: RegisterInput;
 }>;
 
 
-export type RegisterMutation = { __typename?: 'Mutation', register: { __typename?: 'AuthPayload', user: { __typename?: 'User', id: string, email: string, fullName: string, createdAt: string } } };
+export type RegisterMutation = { __typename?: 'Mutation', register: { __typename?: 'AuthPayload', user: { __typename?: 'User', id: string, email: string, fullName: string, createdAt: string, phone: string | null, timezone: string, preferredCurrency: string, pendingEmail: string | null } } };
 
 export type LogoutMutationVariables = Exact<{ [key: string]: never; }>;
 
@@ -623,7 +649,31 @@ export type ChangePasswordMutationVariables = Exact<{
 }>;
 
 
-export type ChangePasswordMutation = { __typename?: 'Mutation', changePassword: { __typename?: 'AuthPayload', user: { __typename?: 'User', id: string, email: string, fullName: string, createdAt: string } } };
+export type ChangePasswordMutation = { __typename?: 'Mutation', changePassword: { __typename?: 'AuthPayload', user: { __typename?: 'User', id: string, email: string, fullName: string, createdAt: string, phone: string | null, timezone: string, preferredCurrency: string, pendingEmail: string | null } } };
+
+export type UpdateProfileMutationVariables = Exact<{
+  input: UpdateProfileInput;
+}>;
+
+
+export type UpdateProfileMutation = { __typename?: 'Mutation', updateProfile: { __typename?: 'User', id: string, email: string, fullName: string, createdAt: string, phone: string | null, timezone: string, preferredCurrency: string, pendingEmail: string | null } };
+
+export type ConfirmEmailChangeMutationVariables = Exact<{
+  token: Scalars['String']['input'];
+}>;
+
+
+export type ConfirmEmailChangeMutation = { __typename?: 'Mutation', confirmEmailChange: { __typename?: 'User', id: string, email: string, fullName: string, createdAt: string, phone: string | null, timezone: string, preferredCurrency: string, pendingEmail: string | null } };
+
+export type CancelPendingEmailChangeMutationVariables = Exact<{ [key: string]: never; }>;
+
+
+export type CancelPendingEmailChangeMutation = { __typename?: 'Mutation', cancelPendingEmailChange: { __typename?: 'User', id: string, email: string, fullName: string, createdAt: string, phone: string | null, timezone: string, preferredCurrency: string, pendingEmail: string | null } };
+
+export type ResendEmailChangeConfirmationMutationVariables = Exact<{ [key: string]: never; }>;
+
+
+export type ResendEmailChangeConfirmationMutation = { __typename?: 'Mutation', resendEmailChangeConfirmation: { __typename?: 'User', id: string, email: string, fullName: string, createdAt: string, phone: string | null, timezone: string, preferredCurrency: string, pendingEmail: string | null } };
 
 export type FxRateQueryVariables = Exact<{
   from: Scalars['String']['input'];

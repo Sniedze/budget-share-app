@@ -2,7 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { PageLoading } from './components/ui';
 import { useAuth } from './features/auth';
-import { ACCOUNT_SETTINGS_PATH, PERSONAL_FINANCES_PATH } from './routes';
+import { ACCOUNT_SETTINGS_PATH, CONFIRM_EMAIL_CHANGE_PATH, PERSONAL_FINANCES_PATH } from './routes';
 
 const HouseholdPage = lazy(() =>
   import('./pages/HouseholdPage').then((module) => ({ default: module.HouseholdPage })),
@@ -26,6 +26,9 @@ const InvitationsPage = lazy(() =>
 );
 const AccountSettingsPage = lazy(() =>
   import('./pages/AccountSettingsPage').then((module) => ({ default: module.AccountSettingsPage })),
+);
+const ConfirmEmailChangePage = lazy(() =>
+  import('./pages/ConfirmEmailChangePage').then((module) => ({ default: module.ConfirmEmailChangePage })),
 );
 
 const RequireAuth = ({ children }: { children: JSX.Element }): JSX.Element => {
@@ -127,6 +130,7 @@ const App = (): JSX.Element => {
             </RequireAuth>
           }
         />
+        <Route path={CONFIRM_EMAIL_CHANGE_PATH} element={<ConfirmEmailChangePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

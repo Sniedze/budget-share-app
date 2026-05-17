@@ -159,6 +159,50 @@ const defaultOrigin =
     assert.ok(refreshB.body.errors?.length, 'all-device logout should invalidate other sessions');
   });
 
+  it('updateProfile stores pending email until confirmation', async () => {
+    const email = `it-profile-${Date.now()}@example.com`;
+    const newEmail = `updated-${Date.now()}@example.com`.toLowerCase();
+    const password = 'password12';
+    const agent = request.agent(bundle.app);
+
+    await agent
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({
+        query: `mutation R($input: RegisterInput!) { register(input: $input) { user { id } } }`,
+        variables: { input: { email, password, fullName: 'Before Name' } },
+      });
+
+    const updated = await agent
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({
+        query: `mutation U($input: UpdateProfileInput!) { updateProfile(input: $input) { fullName email pendingEmail phone timezone preferredCurrency } }`,
+        variables: {
+          input: {
+            fullName: 'After Name',
+            email: newEmail,
+            phone: '+45 12 34 56 78',
+            timezone: 'Europe/Copenhagen',
+            preferredCurrency: 'EUR',
+          },
+        },
+      });
+    assert.equal(updated.status, 200);
+    assert.equal(updated.body.data.updateProfile.fullName, 'After Name');
+    assert.equal(updated.body.data.updateProfile.email, email.toLowerCase());
+    assert.equal(updated.body.data.updateProfile.pendingEmail, newEmail);
+
+    const me = await agent
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({ query: `query { me { fullName email pendingEmail } }` });
+    assert.equal(me.status, 200);
+    assert.equal(me.body.data.me.fullName, 'After Name');
+    assert.equal(me.body.data.me.email, email.toLowerCase());
+    assert.equal(me.body.data.me.pendingEmail, newEmail);
+  });
+
   it('changePassword revokes other devices and keeps the current session', async () => {
     const email = `it-change-pw-${Date.now()}@example.com`;
     const oldPassword = 'password12';

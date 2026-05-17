@@ -80,3 +80,11 @@ export const logInvitationEmailSent = (fields: LogFields): void => {
 export const logInvitationEmailFailed = (fields: LogFields): void => {
   write('warn', 'invitation_email_failed', fields);
 };
+
+export const logEmailChangeConfirmationSent = (fields: LogFields): void => {
+  write('info', 'email_change_confirmation_sent', fields);
+};
+
+export const logEmailChangeConfirmationFailed = (fields: LogFields): void => {
+  write('warn', 'email_change_confirmation_failed', fields);
+};

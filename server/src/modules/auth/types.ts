@@ -3,6 +3,10 @@ export type User = {
   email: string;
   fullName: string;
   createdAt: string;
+  phone: string | null;
+  timezone: string;
+  preferredCurrency: string;
+  pendingEmail: string | null;
 };
 
 export type RegisterInput = {
@@ -20,6 +24,14 @@ export type LoginInput = {
 export type ChangePasswordInput = {
   currentPassword: string;
   newPassword: string;
+};
+
+export type UpdateProfileInput = {
+  fullName: string;
+  email: string;
+  phone?: string | null;
+  timezone: string;
+  preferredCurrency: string;
 };
 
 /** Tokens are also set as httpOnly cookies; fields exist for testing/tools only. */
