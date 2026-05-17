@@ -15,7 +15,7 @@ import {
 import { useAuth } from '../auth';
 import { GET_GROUPS } from '../groups';
 import { refetchGroups } from '../groups/groupCacheUpdates';
-import type { GroupSummary } from '../groups';
+import type { GetGroupsQueryResult } from '../groups';
 import { APP_CURRENCY_CODE, normalizeStatementCurrency } from '../../format/currency';
 import {
   ALLOWED_FILE_EXTENSIONS,
@@ -67,7 +67,7 @@ export const useImportPageState = () => {
   const { user } = useAuth();
   const client = useApolloClient();
   const { data: expensesData } = useQuery<GetExpensesResponse>(GET_EXPENSES);
-  const { data: groupsData } = useQuery<{ groups: GroupSummary[] }>(GET_GROUPS);
+  const { data: groupsData } = useQuery<GetGroupsQueryResult>(GET_GROUPS);
   const [importExpensesMutation, { loading: isImporting }] = useMutation<ImportExpensesMutation>(IMPORT_EXPENSES, {
     update(cache, { data }) {
       const created =

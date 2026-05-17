@@ -22,7 +22,7 @@ import {
 import { buildMembersByGroupId } from '../features/expenses/selectors/expenseAttribution';
 import type { Expense, GetExpensesResponse, SplitAllocationInput, SplitType } from '../features/expenses';
 import { GET_GROUPS, GET_GROUP_SPLIT_TEMPLATES } from '../features/groups';
-import type { GroupSummary, SplitTemplate } from '../features/groups';
+import type { GetGroupSplitTemplatesQueryResult, GetGroupsQueryResult } from '../features/groups';
 import { colors, radii, spacing } from '../styles/tokens';
 
 const ChartsSection = lazy(() =>
@@ -113,10 +113,10 @@ export const HomePage = (): JSX.Element => {
   const [analyticsView, setAnalyticsView] = useState<'table' | 'charts'>('table');
 
   const { data, loading, error } = useQuery<GetExpensesResponse>(GET_EXPENSES);
-  const { data: groupsData } = useQuery<{ groups: GroupSummary[] }>(GET_GROUPS);
+  const { data: groupsData } = useQuery<GetGroupsQueryResult>(GET_GROUPS);
   const { addExpense, updateExpense, deleteExpense, isMutating } = useExpenseActions();
   const hasDefaultedSharedSplit = useRef(false);
-  const { data: groupTemplatesData } = useQuery<{ groupSplitTemplates: SplitTemplate[] }>(GET_GROUP_SPLIT_TEMPLATES, {
+  const { data: groupTemplatesData } = useQuery<GetGroupSplitTemplatesQueryResult>(GET_GROUP_SPLIT_TEMPLATES, {
     variables: { groupId: formValues.groupId },
     skip: !formValues.groupId || formValues.split !== 'Shared',
   });

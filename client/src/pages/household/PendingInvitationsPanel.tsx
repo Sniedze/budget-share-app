@@ -9,6 +9,7 @@ import {
   type InvitationEmailDeliveryStatusLabel,
 } from '../../features/groups/invitationEmailStatus';
 import type { GroupPendingInvitation } from '../../features/groups';
+import type { ResendGroupInvitationMutation } from '../../graphql/generated/graphql';
 import { colors, spacing } from '../../styles/tokens';
 
 const Panel = styled.div`
@@ -34,17 +35,13 @@ const InviteActions = styled.div`
   gap: ${spacing.sm};
 `;
 
-type ResendGroupInvitationData = {
-  resendGroupInvitation: GroupPendingInvitation;
-};
-
 type PendingInvitationsPanelProps = {
   groupId: string;
   invitations: GroupPendingInvitation[];
 };
 
 const statusVariant = (
-  status: InvitationEmailDeliveryStatusLabel | undefined,
+  status: InvitationEmailDeliveryStatusLabel | null | undefined,
 ): 'default' | 'accent' | 'danger' => {
   if (status === 'EmailSent') {
     return 'accent';
@@ -61,7 +58,7 @@ export const PendingInvitationsPanel = ({
 }: PendingInvitationsPanelProps): JSX.Element | null => {
   const [resendError, setResendError] = useState<string | null>(null);
   const [resendingEmail, setResendingEmail] = useState<string | null>(null);
-  const [resendInvitation] = useMutation<ResendGroupInvitationData>(RESEND_GROUP_INVITATION, {
+  const [resendInvitation] = useMutation<ResendGroupInvitationMutation>(RESEND_GROUP_INVITATION, {
     refetchQueries: [{ query: GET_GROUPS }],
   });
 

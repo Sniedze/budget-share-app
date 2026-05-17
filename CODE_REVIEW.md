@@ -120,7 +120,7 @@ This is genuinely good shipping. With the security posture and observability in 
 | # | Finding | Status |
 |---|---|---|
 | 6.1 | No validation library | **◐ Partially resolved** — `auth/validation.ts` introduces hand-rolled, well-named validators with explicit constants. Other modules (`expenses/service.ts`, `groups/service.ts`) still hand-roll inline. No Zod adopted. |
-| 6.2 | `refetchQueries` is the old way | **✗ Still open** — no fragments, no `cache.modify`, no codegen. |
+| 6.2 | `refetchQueries` is the old way | **◐ Partially resolved** — codegen types wired for operations; still uses `refetchQueries` (no fragments / `cache.modify` yet). |
 | 6.3 | No `<ErrorBoundary>` | **✓ Resolved** — `main.tsx` wraps the app. |
 | 6.4 | `AuthContext` is one big context | **✓ Resolved** — split `AuthStateContext` / `AuthActionsContext`. |
 
@@ -278,7 +278,7 @@ If a library attaches a malicious `statusCode = "1000"` string, `Number("1000") 
 The previous top-10 list is mostly done. Here's what's left, ordered by impact ÷ effort.
 
 1. **Email-as-identity → user IDs** (1.11) — **◐ Partial** — `user_id` on `group_members` + auth checks; finish removing email-only paths and invitation flows keyed solely by email.
-2. **Adopt GraphQL codegen for all client operations** (6.2) — expand beyond generated schema types.
+2. **Adopt GraphQL codegen for all client operations** (6.2) — **◐ Partial** — feature `types.ts` derive from generated operations; hooks typed with `*Query`/`*Mutation`.
 3. **Currency beyond DKK** (1.13) — product decision + schema/API work.
 4. **Email invitation resend flow** (A.2) — **✓ Done** — `email_delivery_status` on invitations; `resendGroupInvitation` mutation + household UI.
 5. **Duplication cleanup** — shared `roundCents`, expense projections, invitation email templates (A.3).
