@@ -66,7 +66,7 @@ This is genuinely good shipping. With the security posture and observability in 
 | 1.5 | Hardcoded GraphQL URL | **✓ Resolved** — `import.meta.env.VITE_GRAPHQL_URL` read with localhost fallback for dev (`apolloClient.ts:3-4`) |
 | 1.6 | `Authorization` parsing via `split(' ')` | **✓ Resolved** — `context.ts` uses `^Bearer\s+(\S+)$` regex; cookies preferred, bearer fallback. |
 | 1.7 | Substring-coupled auth-error detection | **◐ Partially resolved** — `apolloClient.ts` uses `extensions.code` (`UNAUTHENTICATED`). Import duplicate detection still accepts legacy `Duplicate transaction:` prefix when `errorCode` is absent. |
-| 1.8 | Server throws plain `Error` everywhere; no `extensions.code` | **◐ Partially resolved** — `AppError` + `formatGraphqlError` scrub unknown errors and stamp `requestId`. Many services still `throw new Error`; migrate incrementally to `appError(ErrorCode.*, ...)`. |
+| 1.8 | Server throws plain `Error` everywhere; no `extensions.code` | **✓ Resolved** — services use `appError`; boot-time config may still throw plain `Error`. |
 | 1.9 | No central logger | **◐ Partially resolved** — `server/src/logger.ts` exists, emits structured JSON, logs request completion + authz denials + 5xx via `errorHandler`. Still uses `console.log/error/warn` underneath rather than pino/winston, has no log-level filtering via env, and doesn't log GraphQL resolver errors (only HTTP-level errors and select authz denials). |
 | 1.16 | No `helmet` / CSP / HSTS | **✓ Resolved** — `helmet()` in `createApp.ts` (CSP disabled for GraphQL playground compatibility in dev). |
 | 1.17 | No body-size limit | **✓ Resolved** — `express.json({ limit: process.env.JSON_BODY_LIMIT ?? '512kb' })` (`createApp.ts:58-59`) |
@@ -80,14 +80,14 @@ This is genuinely good shipping. With the security posture and observability in 
 | 1.12 | Dedup hash edit footgun | **✗ Still open** — same logic. |
 | 1.13 | Currency half-implemented | **✗ Still open** — `normalizeExpenseCurrency` still throws "Only DKK supported" if anything else slips through (`expenses/service.ts:83-92`). |
 | 1.14 | Password policy minimal | **◐ Partially resolved** — still `>= 8`, but now bounded at 72 bytes (bcrypt limit) and login-time validation gives the same error as bad creds. No complexity rule or breached-password check. |
-| 1.15 | Login rate limit IP-only | **✗ Still open** — `graphqlRateLimit.ts` still keys on IP only. |
+| 1.15 | Login rate limit IP-only | **✓ Resolved** — login/register keyed by normalized email with IP fallback (`graphqlRateLimit.ts`). |
 | 1.18 | `audit_logs.actor_email NOT NULL` vs `actor_user_id NULL` | **✗ Still open** — schema unchanged (`db/mysql.ts:127-138`). |
-| 1.19 | `/health` doesn't check DB | **✗ Still open** — `createApp.ts:61-63` still returns OK unconditionally. |
+| 1.19 | `/health` doesn't check DB | **✓ Resolved** — `/health` runs `checkDbConnection()` and returns 503 when DB is down. |
 | 2.1 | Oversized page files | **✓ Resolved** — `ImportPage.tsx` and `BudgetPage.tsx` are thin shells; logic lives in `features/import/*` and `features/budget/*` + section components. |
-| 2.2 | Three sources of truth (Apollo / state / localStorage) | **✗ Still open** — `features/budget/storage.ts` + `ImportPage.tsx` localStorage helpers unchanged. |
+| 2.2 | Three sources of truth (Apollo / state / localStorage) | **✓ Resolved** — `user_settings` table + `userWorkspaceSettings` / `saveUserWorkspaceSettings`; client migrates legacy localStorage on first load. |
 | 2.3 | `listHouseholdSettlements` duplicates `listGroups` work | **✓ Resolved** — `loadAccessibleGroupsWithMembers` loads only settlement-scoped groups + members. |
-| 2.4 | `refetchQueries` everywhere | **◐ Partially resolved** — `refetchGroups(client)` after household expense mutations/import; cache updates for expenses. Import still uses per-row mutations (batched mutation still open). |
-| 2.5 | `ME` is `network-only` on every mount | **✗ Still open** — `AuthContext.tsx:48`. Necessary for the cookie/session model but worth revisiting (see new 1.A). |
+| 2.4 | `refetchQueries` everywhere | **✓ Resolved** — batched `importExpenses` mutation; `refetchGroups(client)` + expense cache updates. |
+| 2.5 | `ME` is `network-only` on every mount | **◐ Partially resolved** — skipped when session-hint cookie absent; still `network-only` when hint present. |
 | 2.6 | No error boundary | **✓ Resolved** — `ErrorBoundary` wraps the app in `main.tsx`. |
 | 2.7 | No route code splitting | **✓ Resolved** — `App.tsx:1-21` uses `React.lazy` for every page + a `<Suspense>` wrapper. |
 | 2.8 | `<AuthBootstrap>` splash flicker | **✗ Still open** — `App.tsx:RequireAuth/PublicOnly` still render `<div>Loading...</div>`. |
@@ -121,8 +121,8 @@ This is genuinely good shipping. With the security posture and observability in 
 |---|---|---|
 | 6.1 | No validation library | **◐ Partially resolved** — `auth/validation.ts` introduces hand-rolled, well-named validators with explicit constants. Other modules (`expenses/service.ts`, `groups/service.ts`) still hand-roll inline. No Zod adopted. |
 | 6.2 | `refetchQueries` is the old way | **✗ Still open** — no fragments, no `cache.modify`, no codegen. |
-| 6.3 | No `<ErrorBoundary>` | **✗ Still open** (Suspense added, error boundary not). |
-| 6.4 | `AuthContext` is one big context | **✗ Still open** — `AuthContext.tsx:109-120` still ships state + actions in one value. |
+| 6.3 | No `<ErrorBoundary>` | **✓ Resolved** — `main.tsx` wraps the app. |
+| 6.4 | `AuthContext` is one big context | **✓ Resolved** — split `AuthStateContext` / `AuthActionsContext`. |
 
 ---
 
@@ -277,16 +277,16 @@ If a library attaches a malicious `statusCode = "1000"` string, `Number("1000") 
 
 The previous top-10 list is mostly done. Here's what's left, ordered by impact ÷ effort.
 
-1. **Finish `AppError` migration** (1.8) — replace remaining `throw new Error` in services with `appError(ErrorCode.*, ...)`. ~Half a day.
-2. **Batched import mutation** (2.4) — single `importExpenses` round-trip; drop per-row refetch patterns. ~Half a day.
-3. **Persist budget + merchant rules in DB** (2.2) — replace `localStorage` in `features/budget/storage.ts` and import rules. ~One to two days.
-4. **Email-as-identity → user IDs** (1.11) — `group_members.user_id` as auth key. Large migration.
-5. **Per-device logout** (1.B) — refresh session rows vs revoke-all `refresh_token_version`.
-6. **Adopt GraphQL codegen on client** (6.2) — typed operations beyond generated schema types.
-7. **Login rate limit by email** (1.15) — composite key IP + normalized email.
-8. **DB health in `/health`** (1.19) — lightweight `SELECT 1`.
-9. **Dev-only DB fallbacks** (1.E) — already fail-fast in production via `resolveDbConfig`; document in README.
-10. **Email invitation delivery status** (A.2) — `email_status` on invitations or outbox table.
+1. **Email-as-identity → user IDs** (1.11) — `group_members.user_id` as auth key. Large migration.
+2. **Per-device logout** (1.B) — refresh session rows vs revoke-all `refresh_token_version`.
+3. **Dedup hash on edit** (1.12) — **✓ Done** — reuse hash when date/amount/title/flow unchanged.
+4. **Adopt GraphQL codegen for all client operations** (6.2) — expand beyond generated schema types.
+5. **Audit log `actor_user_id`** (1.18) — nullable email or require user id on write.
+6. **Remove legacy duplicate-transaction message prefix** (1.7) — client-only cleanup once all envs use `errorCode`.
+7. **Currency beyond DKK** (1.13) — product decision + schema/API work.
+8. **Email invitation delivery status UI** (A.2) — **◐ Done server-side** (`email_delivery_status`); extend resend flow if needed.
+9. **Duplication cleanup** — shared `roundCents`, expense projections, invitation email templates (A.3).
+10. **Stronger password policy** (1.14) — complexity / breached-password check.
 
 Stretch: split `AuthContext`, add error boundary, swap `me` to use a non-secret session-hint cookie, adopt Zod for the rest of the inputs, generate GraphQL types with codegen.
 

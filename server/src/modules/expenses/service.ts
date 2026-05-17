@@ -17,6 +17,7 @@ import { logAuthzDenied } from '../../logger.js';
 import {
   DUPLICATE_TRANSACTION_MESSAGE,
   computeTransactionDedupHash,
+  transactionDedupFieldsUnchanged,
 } from './transactionDedup.js';
 import { toStoredSplitDetails } from './splitAllocation.js';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
@@ -639,10 +640,22 @@ export const updateExpense = async (
         : input.isPrivate !== undefined
           ? Boolean(input.isPrivate)
           : rowIsPrivate(existing);
+  const existingFlow = normalizeExpenseFlow(existing.expense_flow);
   const nextDedupHash =
     existing.created_by_user_id === null
       ? null
-      : computeTransactionDedupHash(input.transactionDate, input.amount, title, nextFlow);
+      : transactionDedupFieldsUnchanged({
+          existingTransactionDate: toIsoString(existing.transaction_date),
+          existingAmount: existing.amount,
+          existingTitle: existing.title,
+          existingFlow,
+          nextTransactionDate: input.transactionDate,
+          nextAmount: input.amount,
+          nextTitle: title,
+          nextFlow,
+        })
+        ? existing.transaction_dedup_hash
+        : computeTransactionDedupHash(input.transactionDate, input.amount, title, nextFlow);
   const nextCurrency = normalizeExpenseCurrency(
     input.currency !== undefined && input.currency !== null ? input.currency : rowCurrency(existing),
   );

@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto';
 import { appError, ErrorCode } from '../../graphql/appError.js';
 
-const roundToCents = (value: number): number => Math.round(value * 100) / 100;
-
 /** Lowercase, trim, collapse internal whitespace (bank / merchant text). */
 export const normalizeTransactionDescriptionForDedup = (title: string): string => {
   return title.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -30,6 +28,33 @@ export const transactionDateKeyForDedup = (transactionDate: string): string => {
  * Dedup fingerprints treat `flow` as immutable: if flow semantics ever change, migrate existing
  * `transaction_dedup_hash` values; otherwise false positives/negatives can occur.
  */
+const roundToCents = (value: number): number => Math.round(value * 100) / 100;
+
+/** True when date, amount, normalized title, and flow are unchanged — keep existing dedup hash on edit. */
+export const transactionDedupFieldsUnchanged = (params: {
+  existingTransactionDate: string;
+  existingAmount: number | string;
+  existingTitle: string;
+  existingFlow: 'Outgoing' | 'Incoming';
+  nextTransactionDate: string;
+  nextAmount: number;
+  nextTitle: string;
+  nextFlow: 'Outgoing' | 'Incoming';
+}): boolean => {
+  const existingDateKey = transactionDateKeyForDedup(params.existingTransactionDate);
+  const nextDateKey = transactionDateKeyForDedup(params.nextTransactionDate);
+  const existingAmountCents = roundToCents(Number(params.existingAmount));
+  const nextAmountCents = roundToCents(params.nextAmount);
+  const existingTitleKey = normalizeTransactionDescriptionForDedup(params.existingTitle);
+  const nextTitleKey = normalizeTransactionDescriptionForDedup(params.nextTitle);
+  return (
+    existingDateKey === nextDateKey &&
+    existingAmountCents === nextAmountCents &&
+    existingTitleKey === nextTitleKey &&
+    params.existingFlow === params.nextFlow
+  );
+};
+
 export const computeTransactionDedupHash = (
   transactionDate: string,
   amount: number,

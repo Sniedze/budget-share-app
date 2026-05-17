@@ -36,7 +36,9 @@ export const errorHandler = (
     return;
   }
 
-  const message = safeStatus === 500 ? 'Internal server error.' : err.message;
+  const baseMessage = safeStatus === 500 ? 'Internal server error.' : err.message;
+  const message =
+    safeStatus === 500 ? `${baseMessage} (request id: ${requestId})` : baseMessage;
   res.status(safeStatus).json({
     errors: [{ message }],
     requestId,

@@ -1,5 +1,5 @@
 import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
-import { ChangeEvent, DragEvent, useCallback, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, DragEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DEFAULT_EXPENSE_CATEGORIES,
   DEFAULT_INCOME_CATEGORIES,
@@ -24,7 +24,9 @@ import {
 } from './constants';
 import { applyDuplicateFlags, buildExpenseTitleForImport, buildImportSignature } from './buildImportedRows';
 import { normalizeAmountValue } from './amountParse';
-import { loadCustomImportCategories } from './importStorage';
+import { toYearMonthKey } from '../budget/selectors';
+import { useUserWorkspaceSettings } from '../userSettings';
+import type { SavedColumnMapping } from './types';
 import {
   buildExistingExpenseSignatures,
   buildMerchantHistory,
@@ -88,7 +90,24 @@ export const useImportPageState = () => {
   const [manualCurrencyIndex, setManualCurrencyIndex] = useState('');
   const [remapContext, setRemapContext] = useState<ImportRemapContext | null>(null);
   const [isRemappingColumns, setIsRemappingColumns] = useState(false);
-  const [customCategories] = useState<string[]>(() => loadCustomImportCategories());
+  const workspaceMonthKey = useMemo(() => {
+    const now = new Date();
+    return toYearMonthKey(now.getFullYear(), now.getMonth());
+  }, []);
+  const { settings: workspaceSettings, saveSettings } = useUserWorkspaceSettings(
+    user?.id ?? '',
+    workspaceMonthKey,
+  );
+  const customCategories = useMemo(
+    () => workspaceSettings?.importCustomCategories ?? [],
+    [workspaceSettings],
+  );
+  const [columnMappings, setColumnMappings] = useState<Record<string, SavedColumnMapping>>({});
+  useEffect(() => {
+    if (workspaceSettings?.importColumnMappings) {
+      setColumnMappings(workspaceSettings.importColumnMappings);
+    }
+  }, [workspaceSettings]);
   const [uploadedFileName, setUploadedFileName] = useState('');
   const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -101,7 +120,24 @@ export const useImportPageState = () => {
     upsertRuleFromRow,
     updateMerchantRule,
     deleteMerchantRule,
-  } = useImportMerchantRules(setRows);
+  } = useImportMerchantRules(
+    setRows,
+    workspaceSettings?.importMerchantRules ?? [],
+    (rules) => {
+      void saveSettings({ importMerchantRules: rules });
+    },
+  );
+
+  const saveColumnMapping = useCallback(
+    (signature: string, mapping: SavedColumnMapping) => {
+      setColumnMappings((previous) => {
+        const next = { ...previous, [signature]: mapping };
+        void saveSettings({ importColumnMappings: next });
+        return next;
+      });
+    },
+    [saveSettings],
+  );
 
   const groups = useMemo(() => groupsData?.groups ?? [], [groupsData?.groups]);
   const categoryOptions = useMemo(() => {
@@ -156,8 +192,10 @@ export const useImportPageState = () => {
       merchantHistory,
       existingExpenseSignatures,
       finalizeRows,
+      savedColumnMappings: columnMappings,
+      saveColumnMapping,
     }),
-    [merchantRules, merchantHistory, existingExpenseSignatures, finalizeRows],
+    [columnMappings, merchantRules, merchantHistory, existingExpenseSignatures, finalizeRows, saveColumnMapping],
   );
 
   const applyParseResult = useCallback((result: ParseStatementResult) => {

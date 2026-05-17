@@ -23,13 +23,8 @@ import {
   ytdIncomeFromMonthlyEstimate,
   pad2,
 } from './selectors';
-import {
-  loadAssumptions,
-  loadMonthBudgets,
-  saveAssumptions,
-  saveMonthBudgets,
-  type BudgetAssumptions,
-} from './storage';
+import { useUserWorkspaceSettings } from '../userSettings';
+import type { BudgetAssumptions } from './storage';
 import { CATEGORY_DOT_COLORS, DEFAULT_CATEGORY_OPTIONS } from './budgetPageStyles';
 import type { CategoryTrendRow, MonthlyBreakdownRow, MonthlyBreakdownTotals } from './budgetPageTypes';
 import {
@@ -47,10 +42,18 @@ export const useBudgetPageState = () => {
   const [detailTab, setDetailTab] = useState<'recent' | 'months' | 'trends'>('recent');
   const [chartTab, setChartTab] = useState<'monthly' | 'yearly'>('monthly');
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
-  /** Bumps when month budgets or assumptions are saved so we re-read localStorage. */
-  const [budgetStorageTick, setBudgetStorageTick] = useState(0);
 
-  const [draftAssumptions, setDraftAssumptions] = useState<BudgetAssumptions>(() => loadAssumptions(userId));
+  const monthKey = toYearMonthKey(viewYear, viewMonthIndex);
+  const {
+    settings: workspaceSettings,
+    loading: workspaceLoading,
+    saveSettings,
+  } = useUserWorkspaceSettings(userId, monthKey);
+
+  const [draftAssumptions, setDraftAssumptions] = useState<BudgetAssumptions>({
+    startingBalance: 0,
+    monthlyIncomeEstimate: 0,
+  });
   const [draftCategoryBudgets, setDraftCategoryBudgets] = useState<Record<string, string>>({});
 
   const { data, loading, error } = useQuery<GetExpensesResponse>(GET_EXPENSES);
@@ -61,15 +64,18 @@ export const useBudgetPageState = () => {
     [expenses],
   );
 
-  const assumptions = useMemo(() => {
-    void budgetStorageTick;
-    return loadAssumptions(userId);
-  }, [userId, budgetStorageTick]);
-  const monthKey = toYearMonthKey(viewYear, viewMonthIndex);
-  const monthBudgets = useMemo(() => {
-    void budgetStorageTick;
-    return loadMonthBudgets(userId, monthKey);
-  }, [userId, monthKey, budgetStorageTick]);
+  const assumptions = useMemo(
+    () =>
+      workspaceSettings?.budgetAssumptions ?? {
+        startingBalance: 0,
+        monthlyIncomeEstimate: 0,
+      },
+    [workspaceSettings],
+  );
+  const monthBudgets = useMemo(
+    () => workspaceSettings?.monthCategoryBudgets ?? {},
+    [workspaceSettings],
+  );
 
   const totalBudgeted = useMemo(
     () => Object.values(monthBudgets).reduce((s, n) => s + n, 0),
@@ -208,7 +214,6 @@ export const useBudgetPageState = () => {
   }, [expenses, viewYear, viewMonthIndex, totalBudgeted]);
 
   const monthlyBreakdownDetail = useMemo(() => {
-    void budgetStorageTick;
     if (!userId) {
       return { rows: [] as MonthlyBreakdownRow[], totals: null as MonthlyBreakdownTotals | null };
     }
@@ -223,7 +228,7 @@ export const useBudgetPageState = () => {
 
     for (let mi = 0; mi < 12; mi++) {
       const key = toYearMonthKey(y, mi);
-      const budMap = loadMonthBudgets(userId, key);
+      const budMap = key === monthKey ? monthBudgets : {};
       const budgeted = Object.values(budMap).reduce((s, n) => s + n, 0);
       const spent = sumExpenseAmounts(filterOutgoingExpensesInMonth(expenses, y, mi));
       const incomeActual = sumExpenseAmounts(filterIncomingExpensesInMonth(expenses, y, mi));
@@ -269,7 +274,7 @@ export const useBudgetPageState = () => {
         : null;
 
     return { rows, totals };
-  }, [userId, viewYear, expenses, budgetStorageTick, assumptions.monthlyIncomeEstimate, now]);
+  }, [userId, viewYear, expenses, monthBudgets, monthKey, assumptions.monthlyIncomeEstimate, now]);
 
   const categoryTrendsTable = useMemo(() => {
     const y = viewYear;
@@ -311,9 +316,8 @@ export const useBudgetPageState = () => {
   }, [viewYear, now, expenses, categories, monthBudgets]);
 
   const openBudgetModal = useCallback(() => {
-    const loaded = loadAssumptions(userId);
-    setDraftAssumptions(loaded);
-    const existing = loadMonthBudgets(userId, monthKey);
+    setDraftAssumptions(assumptions);
+    const existing = monthBudgets;
     const suggested = suggestMonthBudgetsFromPreviousMonth(expenses, viewYear, viewMonthIndex, categories);
     const merged: Record<string, string> = {};
     for (const c of categories) {
@@ -322,24 +326,20 @@ export const useBudgetPageState = () => {
     }
     setDraftCategoryBudgets(merged);
     setBudgetModalOpen(true);
-  }, [userId, monthKey, expenses, viewYear, viewMonthIndex, categories]);
+  }, [assumptions, monthBudgets, expenses, viewYear, viewMonthIndex, categories]);
 
   useEffect(() => {
-    if (!budgetModalOpen || !userId) {
+    if (!budgetModalOpen) {
       return;
     }
-    setDraftAssumptions(loadAssumptions(userId));
-  }, [budgetModalOpen, userId]);
+    setDraftAssumptions(assumptions);
+  }, [assumptions, budgetModalOpen]);
 
-  const onSaveBudgets = (event: FormEvent) => {
+  const onSaveBudgets = async (event: FormEvent) => {
     event.preventDefault();
     if (!userId) {
       return;
     }
-    saveAssumptions(userId, {
-      startingBalance: Number(draftAssumptions.startingBalance) || 0,
-      monthlyIncomeEstimate: Number(draftAssumptions.monthlyIncomeEstimate) || 0,
-    });
     const next: Record<string, number> = {};
     for (const [k, v] of Object.entries(draftCategoryBudgets)) {
       const n = Number(v);
@@ -347,8 +347,13 @@ export const useBudgetPageState = () => {
         next[k] = n;
       }
     }
-    saveMonthBudgets(userId, monthKey, next);
-    setBudgetStorageTick((t) => t + 1);
+    await saveSettings({
+      budgetAssumptions: {
+        startingBalance: Number(draftAssumptions.startingBalance) || 0,
+        monthlyIncomeEstimate: Number(draftAssumptions.monthlyIncomeEstimate) || 0,
+      },
+      monthCategoryBudgets: { yearMonth: monthKey, budgets: next },
+    });
     setBudgetModalOpen(false);
   };
 
@@ -364,7 +369,7 @@ export const useBudgetPageState = () => {
   };
 
   return {
-    loading,
+    loading: loading || workspaceLoading,
     error,
     now,
     balanceNow,

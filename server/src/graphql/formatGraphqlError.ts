@@ -34,8 +34,9 @@ export const formatGraphqlError = (
       statusCode: 500,
       message: formattedError.message,
     });
+    const baseMessage = isDevelopment ? formattedError.message : 'Internal server error.';
     return {
-      message: isDevelopment ? formattedError.message : 'Internal server error.',
+      message: `${baseMessage} (request id: ${requestId})`,
       extensions: {
         code: ErrorCode.INTERNAL_SERVER_ERROR,
         requestId,

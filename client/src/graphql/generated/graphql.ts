@@ -34,6 +34,17 @@ export type AuthPayload = {
   user: User;
 };
 
+export type BudgetAssumptions = {
+  __typename?: 'BudgetAssumptions';
+  monthlyIncomeEstimate: Scalars['Float']['output'];
+  startingBalance: Scalars['Float']['output'];
+};
+
+export type BudgetAssumptionsInput = {
+  monthlyIncomeEstimate: Scalars['Float']['input'];
+  startingBalance: Scalars['Float']['input'];
+};
+
 export type CreateGroupInput = {
   description?: InputMaybe<Scalars['String']['input']>;
   members: Array<GroupMemberInput>;
@@ -187,6 +198,31 @@ export type ImportExpensesPayload = {
   results: Array<ImportExpenseRowResult>;
 };
 
+export type ImportMerchantRuleSetting = {
+  __typename?: 'ImportMerchantRuleSetting';
+  category: Scalars['String']['output'];
+  expenseGroup: Maybe<Scalars['String']['output']>;
+  flow: Scalars['String']['output'];
+  groupId: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  matchType: Scalars['String']['output'];
+  pattern: Scalars['String']['output'];
+  split: Maybe<Scalars['String']['output']>;
+  updatedAt: Scalars['String']['output'];
+};
+
+export type ImportMerchantRuleSettingInput = {
+  category: Scalars['String']['input'];
+  expenseGroup?: InputMaybe<Scalars['String']['input']>;
+  flow: Scalars['String']['input'];
+  groupId?: InputMaybe<Scalars['String']['input']>;
+  id: Scalars['ID']['input'];
+  matchType: Scalars['String']['input'];
+  pattern: Scalars['String']['input'];
+  split?: InputMaybe<Scalars['String']['input']>;
+  updatedAt: Scalars['String']['input'];
+};
+
 export type InvitationEmailDeliveryStatus =
   | 'EmailFailed'
   | 'EmailSent'
@@ -197,6 +233,17 @@ export type LoginInput = {
   email: Scalars['String']['input'];
   password: Scalars['String']['input'];
   rememberMe?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+export type MonthCategoryBudgetEntry = {
+  __typename?: 'MonthCategoryBudgetEntry';
+  amount: Scalars['Float']['output'];
+  category: Scalars['String']['output'];
+};
+
+export type MonthCategoryBudgetEntryInput = {
+  amount: Scalars['Float']['input'];
+  category: Scalars['String']['input'];
 };
 
 export type Mutation = {
@@ -214,6 +261,7 @@ export type Mutation = {
   recordSettlementPayment: SettlementPayment;
   refreshSession: AuthPayload;
   register: AuthPayload;
+  saveUserWorkspaceSettings: UserWorkspaceSettings;
   updateExpense: Maybe<Expense>;
   updateGroup: Group;
   upsertGroupSplitTemplate: SplitTemplate;
@@ -282,6 +330,11 @@ export type MutationRegisterArgs = {
 };
 
 
+export type MutationSaveUserWorkspaceSettingsArgs = {
+  input: SaveUserWorkspaceSettingsInput;
+};
+
+
 export type MutationUpdateExpenseArgs = {
   input: UpdateExpenseInput;
 };
@@ -305,6 +358,7 @@ export type Query = {
   householdSettlements: Array<HouseholdSettlement>;
   me: Maybe<User>;
   myInvitations: Array<GroupInvitation>;
+  userWorkspaceSettings: UserWorkspaceSettings;
 };
 
 
@@ -315,6 +369,11 @@ export type QueryGroupSplitTemplatesArgs = {
 
 export type QueryHouseholdSettlementsArgs = {
   period?: InputMaybe<SettlementPeriod>;
+};
+
+
+export type QueryUserWorkspaceSettingsArgs = {
+  yearMonth: Scalars['String']['input'];
 };
 
 export type RecordSettlementPaymentInput = {
@@ -335,6 +394,48 @@ export type RegisterInput = {
   email: Scalars['String']['input'];
   fullName: Scalars['String']['input'];
   password: Scalars['String']['input'];
+};
+
+export type SaveMonthCategoryBudgetsInput = {
+  budgets: Array<MonthCategoryBudgetEntryInput>;
+  yearMonth: Scalars['String']['input'];
+};
+
+export type SaveUserWorkspaceSettingsInput = {
+  budgetAssumptions?: InputMaybe<BudgetAssumptionsInput>;
+  importColumnMappings?: InputMaybe<Array<SavedColumnMappingSettingInput>>;
+  importCustomCategories?: InputMaybe<Array<Scalars['String']['input']>>;
+  importMerchantRules?: InputMaybe<Array<ImportMerchantRuleSettingInput>>;
+  monthCategoryBudgets?: InputMaybe<SaveMonthCategoryBudgetsInput>;
+};
+
+export type SavedColumnMappingSetting = {
+  __typename?: 'SavedColumnMappingSetting';
+  amountHeaderKey: Maybe<Scalars['String']['output']>;
+  amountIndex: Scalars['Int']['output'];
+  currencyHeaderKey: Maybe<Scalars['String']['output']>;
+  currencyIndex: Maybe<Scalars['Int']['output']>;
+  dateHeaderKey: Maybe<Scalars['String']['output']>;
+  dateIndex: Scalars['Int']['output'];
+  descriptionHeaderKey: Maybe<Scalars['String']['output']>;
+  descriptionIndex: Maybe<Scalars['Int']['output']>;
+  merchantHeaderKey: Maybe<Scalars['String']['output']>;
+  merchantIndex: Scalars['Int']['output'];
+  signature: Scalars['String']['output'];
+};
+
+export type SavedColumnMappingSettingInput = {
+  amountHeaderKey?: InputMaybe<Scalars['String']['input']>;
+  amountIndex: Scalars['Int']['input'];
+  currencyHeaderKey?: InputMaybe<Scalars['String']['input']>;
+  currencyIndex?: InputMaybe<Scalars['Int']['input']>;
+  dateHeaderKey?: InputMaybe<Scalars['String']['input']>;
+  dateIndex: Scalars['Int']['input'];
+  descriptionHeaderKey?: InputMaybe<Scalars['String']['input']>;
+  descriptionIndex?: InputMaybe<Scalars['Int']['input']>;
+  merchantHeaderKey?: InputMaybe<Scalars['String']['input']>;
+  merchantIndex: Scalars['Int']['input'];
+  signature: Scalars['String']['input'];
 };
 
 export type SettlementBalance = {
@@ -429,6 +530,15 @@ export type User = {
   email: Scalars['String']['output'];
   fullName: Scalars['String']['output'];
   id: Scalars['ID']['output'];
+};
+
+export type UserWorkspaceSettings = {
+  __typename?: 'UserWorkspaceSettings';
+  budgetAssumptions: BudgetAssumptions;
+  importColumnMappings: Array<SavedColumnMappingSetting>;
+  importCustomCategories: Array<Scalars['String']['output']>;
+  importMerchantRules: Array<ImportMerchantRuleSetting>;
+  monthCategoryBudgets: Array<MonthCategoryBudgetEntry>;
 };
 
 export type MeQueryVariables = Exact<{ [key: string]: never; }>;
@@ -571,3 +681,19 @@ export type RecordSettlementPaymentMutationVariables = Exact<{
 
 
 export type RecordSettlementPaymentMutation = { __typename?: 'Mutation', recordSettlementPayment: { __typename?: 'SettlementPayment', id: string, groupId: string, expenseGroup: string | null, fromMember: string, toMember: string, amount: number, note: string | null, settledAt: string } };
+
+export type UserWorkspaceSettingsFieldsFragment = { __typename?: 'UserWorkspaceSettings', importCustomCategories: Array<string>, budgetAssumptions: { __typename?: 'BudgetAssumptions', startingBalance: number, monthlyIncomeEstimate: number }, monthCategoryBudgets: Array<{ __typename?: 'MonthCategoryBudgetEntry', category: string, amount: number }>, importMerchantRules: Array<{ __typename?: 'ImportMerchantRuleSetting', id: string, flow: string, matchType: string, pattern: string, category: string, split: string | null, groupId: string | null, expenseGroup: string | null, updatedAt: string }>, importColumnMappings: Array<{ __typename?: 'SavedColumnMappingSetting', signature: string, dateIndex: number, merchantIndex: number, amountIndex: number, currencyIndex: number | null, descriptionIndex: number | null, dateHeaderKey: string | null, merchantHeaderKey: string | null, amountHeaderKey: string | null, currencyHeaderKey: string | null, descriptionHeaderKey: string | null }> };
+
+export type GetUserWorkspaceSettingsQueryVariables = Exact<{
+  yearMonth: Scalars['String']['input'];
+}>;
+
+
+export type GetUserWorkspaceSettingsQuery = { __typename?: 'Query', userWorkspaceSettings: { __typename?: 'UserWorkspaceSettings', importCustomCategories: Array<string>, budgetAssumptions: { __typename?: 'BudgetAssumptions', startingBalance: number, monthlyIncomeEstimate: number }, monthCategoryBudgets: Array<{ __typename?: 'MonthCategoryBudgetEntry', category: string, amount: number }>, importMerchantRules: Array<{ __typename?: 'ImportMerchantRuleSetting', id: string, flow: string, matchType: string, pattern: string, category: string, split: string | null, groupId: string | null, expenseGroup: string | null, updatedAt: string }>, importColumnMappings: Array<{ __typename?: 'SavedColumnMappingSetting', signature: string, dateIndex: number, merchantIndex: number, amountIndex: number, currencyIndex: number | null, descriptionIndex: number | null, dateHeaderKey: string | null, merchantHeaderKey: string | null, amountHeaderKey: string | null, currencyHeaderKey: string | null, descriptionHeaderKey: string | null }> } };
+
+export type SaveUserWorkspaceSettingsMutationVariables = Exact<{
+  input: SaveUserWorkspaceSettingsInput;
+}>;
+
+
+export type SaveUserWorkspaceSettingsMutation = { __typename?: 'Mutation', saveUserWorkspaceSettings: { __typename?: 'UserWorkspaceSettings', importCustomCategories: Array<string>, budgetAssumptions: { __typename?: 'BudgetAssumptions', startingBalance: number, monthlyIncomeEstimate: number }, monthCategoryBudgets: Array<{ __typename?: 'MonthCategoryBudgetEntry', category: string, amount: number }>, importMerchantRules: Array<{ __typename?: 'ImportMerchantRuleSetting', id: string, flow: string, matchType: string, pattern: string, category: string, split: string | null, groupId: string | null, expenseGroup: string | null, updatedAt: string }>, importColumnMappings: Array<{ __typename?: 'SavedColumnMappingSetting', signature: string, dateIndex: number, merchantIndex: number, amountIndex: number, currencyIndex: number | null, descriptionIndex: number | null, dateHeaderKey: string | null, merchantHeaderKey: string | null, amountHeaderKey: string | null, currencyHeaderKey: string | null, descriptionHeaderKey: string | null }> } };

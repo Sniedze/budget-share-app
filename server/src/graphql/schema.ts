@@ -286,6 +286,99 @@ export const typeDefs = `#graphql
     flow: ExpenseFlow
   }
 
+  type BudgetAssumptions {
+    startingBalance: Float!
+    monthlyIncomeEstimate: Float!
+  }
+
+  type MonthCategoryBudgetEntry {
+    category: String!
+    amount: Float!
+  }
+
+  type ImportMerchantRuleSetting {
+    id: ID!
+    flow: String!
+    matchType: String!
+    pattern: String!
+    category: String!
+    split: String
+    groupId: String
+    expenseGroup: String
+    updatedAt: String!
+  }
+
+  type SavedColumnMappingSetting {
+    signature: String!
+    dateIndex: Int!
+    merchantIndex: Int!
+    amountIndex: Int!
+    currencyIndex: Int
+    descriptionIndex: Int
+    dateHeaderKey: String
+    merchantHeaderKey: String
+    amountHeaderKey: String
+    currencyHeaderKey: String
+    descriptionHeaderKey: String
+  }
+
+  type UserWorkspaceSettings {
+    budgetAssumptions: BudgetAssumptions!
+    monthCategoryBudgets: [MonthCategoryBudgetEntry!]!
+    importMerchantRules: [ImportMerchantRuleSetting!]!
+    importColumnMappings: [SavedColumnMappingSetting!]!
+    importCustomCategories: [String!]!
+  }
+
+  input BudgetAssumptionsInput {
+    startingBalance: Float!
+    monthlyIncomeEstimate: Float!
+  }
+
+  input MonthCategoryBudgetEntryInput {
+    category: String!
+    amount: Float!
+  }
+
+  input SaveMonthCategoryBudgetsInput {
+    yearMonth: String!
+    budgets: [MonthCategoryBudgetEntryInput!]!
+  }
+
+  input ImportMerchantRuleSettingInput {
+    id: ID!
+    flow: String!
+    matchType: String!
+    pattern: String!
+    category: String!
+    split: String
+    groupId: String
+    expenseGroup: String
+    updatedAt: String!
+  }
+
+  input SavedColumnMappingSettingInput {
+    signature: String!
+    dateIndex: Int!
+    merchantIndex: Int!
+    amountIndex: Int!
+    currencyIndex: Int
+    descriptionIndex: Int
+    dateHeaderKey: String
+    merchantHeaderKey: String
+    amountHeaderKey: String
+    currencyHeaderKey: String
+    descriptionHeaderKey: String
+  }
+
+  input SaveUserWorkspaceSettingsInput {
+    budgetAssumptions: BudgetAssumptionsInput
+    monthCategoryBudgets: SaveMonthCategoryBudgetsInput
+    importMerchantRules: [ImportMerchantRuleSettingInput!]
+    importColumnMappings: [SavedColumnMappingSettingInput!]
+    importCustomCategories: [String!]
+  }
+
   type Query {
     hello: String!
     me: User
@@ -294,6 +387,7 @@ export const typeDefs = `#graphql
     myInvitations: [GroupInvitation!]!
     groupSplitTemplates(groupId: ID!): [SplitTemplate!]!
     householdSettlements(period: SettlementPeriod): [HouseholdSettlement!]!
+    userWorkspaceSettings(yearMonth: String!): UserWorkspaceSettings!
   }
 
   type Mutation {
@@ -313,5 +407,6 @@ export const typeDefs = `#graphql
     declineGroupInvitation(id: ID!): GroupInvitation!
     declineExpenseGroupParticipation(groupId: ID!, category: String!): Boolean!
     deleteExpenseGroup(groupId: ID!, category: String!): Boolean!
+    saveUserWorkspaceSettings(input: SaveUserWorkspaceSettingsInput!): UserWorkspaceSettings!
   }
 `;

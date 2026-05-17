@@ -4,6 +4,7 @@ import {
   computeTransactionDedupHash,
   normalizeTransactionDescriptionForDedup,
   transactionDateKeyForDedup,
+  transactionDedupFieldsUnchanged,
 } from './transactionDedup.js';
 
 describe('transactionDedup', () => {
@@ -25,5 +26,34 @@ describe('transactionDedup', () => {
     const a = computeTransactionDedupHash('2026-05-15', 99.99, 'Netto', 'Outgoing');
     const b = computeTransactionDedupHash('2026-05-15', 99.99, 'netto', 'Outgoing');
     assert.equal(a, b);
+  });
+
+  it('detects unchanged dedup fields on edit', () => {
+    assert.equal(
+      transactionDedupFieldsUnchanged({
+        existingTransactionDate: '2026-05-15T00:00:00.000Z',
+        existingAmount: '100.00',
+        existingTitle: 'Coffee Shop',
+        existingFlow: 'Outgoing',
+        nextTransactionDate: '2026-05-15',
+        nextAmount: 100,
+        nextTitle: 'coffee shop',
+        nextFlow: 'Outgoing',
+      }),
+      true,
+    );
+    assert.equal(
+      transactionDedupFieldsUnchanged({
+        existingTransactionDate: '2026-05-15T00:00:00.000Z',
+        existingAmount: '100.00',
+        existingTitle: 'Coffee Shop',
+        existingFlow: 'Outgoing',
+        nextTransactionDate: '2026-05-15',
+        nextAmount: 101,
+        nextTitle: 'Coffee Shop',
+        nextFlow: 'Outgoing',
+      }),
+      false,
+    );
   });
 });
