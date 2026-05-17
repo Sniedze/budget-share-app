@@ -14,6 +14,7 @@ import {
   DELETE_EXPENSE_GROUP,
   GET_GROUPS,
   GET_GROUP_SPLIT_TEMPLATES,
+  mergeGroupIntoCache,
   UPDATE_GROUP,
   UPSERT_GROUP_SPLIT_TEMPLATE,
   type GetGroupSplitTemplatesQueryResult,
@@ -76,16 +77,16 @@ export const useHouseholdPageState = () => {
   const { user } = useAuth();
   const { data, loading, error } = useQuery<GetGroupsQueryResult>(GET_GROUPS);
   const { data: expensesData } = useQuery<GetExpensesResponse>(GET_EXPENSES);
-  const { addExpense, isMutating: isCreatingExpense } = useExpenseActions({
-    refetchQueries: [GET_GROUPS],
-  });
+  const { addExpense, isMutating: isCreatingExpense } = useExpenseActions();
   const [createGroupMutation, { loading: creatingGroup }] = useMutation<CreateGroupMutation>(CREATE_GROUP, {
-    refetchQueries: [{ query: GET_GROUPS }],
-    awaitRefetchQueries: true,
+    update(cache, { data }) {
+      mergeGroupIntoCache(cache, data?.createGroup ?? null);
+    },
   });
   const [updateGroupMutation, { loading: updatingGroup }] = useMutation<UpdateGroupMutation>(UPDATE_GROUP, {
-    refetchQueries: [{ query: GET_GROUPS }],
-    awaitRefetchQueries: true,
+    update(cache, { data }) {
+      mergeGroupIntoCache(cache, data?.updateGroup ?? null);
+    },
   });
   const [upsertTemplateMutation, { loading: savingTemplate }] = useMutation(UPSERT_GROUP_SPLIT_TEMPLATE, {
     refetchQueries: [{ query: GET_GROUPS }],
