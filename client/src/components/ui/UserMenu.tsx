@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import styled from 'styled-components';
 import { CircleUserRound } from 'lucide-react';
+import { ChangePasswordModal } from '../../features/auth/ChangePasswordModal';
 import { useAuth } from '../../features/auth';
 import { colors, spacing } from '../../styles/tokens';
 import { Button } from './Button';
@@ -24,15 +26,20 @@ const ProfileIcon = styled.span`
 
 export const UserMenu = (): JSX.Element => {
   const { user, logout, logoutAllDevices } = useAuth();
+  const [showChangePassword, setShowChangePassword] = useState(false);
   if (!user) {
     return <></>;
   }
   return (
     <Wrapper>
+      {showChangePassword ? <ChangePasswordModal onClose={() => setShowChangePassword(false)} /> : null}
       <ProfileIcon aria-hidden>
         <CircleUserRound size={16} color={colors.primaryLighterText} />
       </ProfileIcon>
       <MutedText>{user.fullName}</MutedText>
+      <Button type="button" $variant="secondary" $size="sm" onClick={() => setShowChangePassword(true)}>
+        Password
+      </Button>
       <Button type="button" $variant="secondary" $size="sm" onClick={() => void logout()}>
         Log out
       </Button>

@@ -47,12 +47,29 @@ export const normalizeFullNameForRegister = (fullName: string): string => {
   return stripped;
 };
 
-export const assertPasswordAcceptableForRegister = (password: string): void => {
+/** Register and password-change rules (length + letter and digit). */
+export const assertPasswordStrength = (password: string): void => {
   if (password.length < MIN_PASSWORD_LENGTH) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Password must be at least 8 characters.');
   }
   if (Buffer.byteLength(password, 'utf8') > MAX_PASSWORD_LENGTH) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Password must be at most 72 bytes.');
+  }
+  if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
+    throw appError(
+      ErrorCode.BAD_USER_INPUT,
+      'Password must include at least one letter and one number.',
+    );
+  }
+};
+
+export const assertPasswordAcceptableForRegister = (password: string): void => {
+  assertPasswordStrength(password);
+};
+
+export const assertCurrentPasswordForChange = (password: string): void => {
+  if (Buffer.byteLength(password, 'utf8') > MAX_PASSWORD_LENGTH) {
+    throw appError(ErrorCode.UNAUTHENTICATED, 'Current password is incorrect.');
   }
 };
 

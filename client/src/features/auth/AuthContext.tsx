@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { LOGIN, LOGOUT, LOGOUT_ALL_DEVICES, ME, REGISTER } from './graphql';
+import { CHANGE_PASSWORD, LOGIN, LOGOUT, LOGOUT_ALL_DEVICES, ME, REGISTER } from './graphql';
 import { hasSessionHintCookie } from './sessionHint';
 import { clearStoredTokens } from './storage';
 import type { AuthUser } from './types';
@@ -25,6 +25,7 @@ export type AuthActionsContextValue = {
   register: (fullName: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   logoutAllDevices: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 };
 
 export type AuthContextValue = AuthStateContextValue & AuthActionsContextValue;
@@ -36,13 +37,14 @@ type MeQueryData = {
 type AuthMutationData = {
   login?: { user: AuthUser };
   register?: { user: AuthUser };
+  changePassword?: { user: AuthUser };
 };
 
 const AuthStateContext = createContext<AuthStateContextValue | undefined>(undefined);
 const AuthActionsContext = createContext<AuthActionsContextValue | undefined>(undefined);
 
 const getUserFromAuthMutation = (data: AuthMutationData): AuthUser | null => {
-  return data.login?.user ?? data.register?.user ?? null;
+  return data.login?.user ?? data.register?.user ?? data.changePassword?.user ?? null;
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element => {
@@ -78,6 +80,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
   });
   const [logoutMutation] = useMutation(LOGOUT, { errorPolicy: 'all' });
   const [logoutAllDevicesMutation] = useMutation(LOGOUT_ALL_DEVICES, { errorPolicy: 'all' });
+  const [changePasswordMutation, { loading: changePasswordLoading }] = useMutation<AuthMutationData>(
+    CHANGE_PASSWORD,
+    { errorPolicy: 'all' },
+  );
 
   const login = useCallback(
     async (email: string, password: string, remember = true): Promise<void> => {
@@ -131,6 +137,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
     }
   }, [clearAuthState, logoutAllDevicesMutation]);
 
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string): Promise<void> => {
+      const result = await changePasswordMutation({
+        variables: { input: { currentPassword, newPassword } },
+      });
+      const nextUser = result.data ? getUserFromAuthMutation(result.data) : null;
+      if (!nextUser) {
+        throw new Error(result.error?.message ?? 'Password change failed.');
+      }
+      setUser(nextUser);
+    },
+    [changePasswordMutation],
+  );
+
   const isInitializing = sessionHintPresent && meLoading && user === null && !meError;
 
   const stateValue = useMemo<AuthStateContextValue>(
@@ -138,9 +158,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
       user,
       isAuthenticated: Boolean(user),
       isInitializing,
-      isAuthenticating: loginLoading || registerLoading,
+      isAuthenticating: loginLoading || registerLoading || changePasswordLoading,
     }),
-    [user, isInitializing, loginLoading, registerLoading],
+    [user, isInitializing, loginLoading, registerLoading, changePasswordLoading],
   );
 
   const actionsValue = useMemo<AuthActionsContextValue>(
@@ -149,8 +169,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
       register,
       logout,
       logoutAllDevices,
+      changePassword,
     }),
-    [login, logout, logoutAllDevices, register],
+    [changePassword, login, logout, logoutAllDevices, register],
   );
 
   return (

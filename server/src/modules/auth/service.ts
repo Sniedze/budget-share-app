@@ -3,11 +3,13 @@ import bcrypt from 'bcryptjs';
 import { db } from '../../db/mysql.js';
 import { queryOne } from '../../db/queryHelpers.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from './jwt.js';
-import type { AuthPayload, LoginInput, RegisterInput, User } from './types.js';
+import type { AuthPayload, ChangePasswordInput, LoginInput, RegisterInput, User } from './types.js';
 import { appError, ErrorCode } from '../../graphql/appError.js';
 import {
+  assertCurrentPasswordForChange,
   assertPasswordAcceptableForRegister,
   assertPasswordLengthForLogin,
+  assertPasswordStrength,
   normalizeFullNameForRegister,
   stripControlCharacters,
   validateEmailFormat,
@@ -174,6 +176,65 @@ export const refreshSession = async (refreshToken: string): Promise<AuthPayload>
 
   const sessionId = await assertRefreshTokenUsable(claims, user);
   return issueAuthPayload(user, sessionId);
+};
+
+export const changePassword = async (
+  userId: string,
+  input: ChangePasswordInput,
+): Promise<AuthPayload> => {
+  assertCurrentPasswordForChange(input.currentPassword);
+  assertPasswordStrength(input.newPassword);
+
+  const user = await queryOne<UserRow>(
+    `
+      SELECT id, email, full_name, password_hash, created_at, refresh_token_version
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [userId],
+  );
+  if (!user) {
+    throw appError(ErrorCode.NOT_FOUND, 'User not found.');
+  }
+
+  const currentValid = await bcrypt.compare(input.currentPassword, user.password_hash);
+  if (!currentValid) {
+    throw appError(ErrorCode.UNAUTHENTICATED, 'Current password is incorrect.');
+  }
+
+  const reusingPassword = await bcrypt.compare(input.newPassword, user.password_hash);
+  if (reusingPassword) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'New password must be different from your current password.');
+  }
+
+  const passwordHash = await bcrypt.hash(input.newPassword, SALT_ROUNDS);
+  await db.execute(
+    `
+      UPDATE users
+      SET password_hash = ?
+      WHERE id = ?
+    `,
+    [passwordHash, userId],
+  );
+
+  await revokeRefreshTokens(userId);
+
+  const updatedUser = await queryOne<UserRow>(
+    `
+      SELECT id, email, full_name, password_hash, created_at, refresh_token_version
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [userId],
+  );
+  if (!updatedUser) {
+    throw appError(ErrorCode.INTERNAL_SERVER_ERROR, 'Failed to load user after password change.');
+  }
+
+  const sessionId = await createRefreshSession(userId);
+  return issueAuthPayload(updatedUser, sessionId);
 };
 
 /** Revokes only the refresh session tied to the given token (current device). */

@@ -17,6 +17,11 @@ export type LoginInput = {
   rememberMe?: boolean | null;
 };
 
+export type ChangePasswordInput = {
+  currentPassword: string;
+  newPassword: string;
+};
+
 /** Tokens are also set as httpOnly cookies; fields exist for testing/tools only. */
 export type AuthPayload = {
   accessToken: string;

@@ -79,7 +79,7 @@ This is genuinely good shipping. With the security posture and observability in 
 | 1.11 | Email-as-identity | **✗ Still open** — `group_members.email` is still the authorization key everywhere (`expenses/service.ts:209-221`, `groups/service.ts:312-326`). |
 | 1.12 | Dedup hash edit footgun | **✗ Still open** — same logic. |
 | 1.13 | Currency half-implemented | **✗ Still open** — `normalizeExpenseCurrency` still throws "Only DKK supported" if anything else slips through (`expenses/service.ts:83-92`). |
-| 1.14 | Password policy minimal | **◐ Partially resolved** — still `>= 8`, but now bounded at 72 bytes (bcrypt limit) and login-time validation gives the same error as bad creds. No complexity rule or breached-password check. |
+| 1.14 | Password policy minimal | **◐ Partially resolved** — register/change require ≥8 chars, letter + digit, max 72 bytes; `changePassword` revokes all refresh sessions then issues a new session for the current device. No breached-password (zxcvbn) check yet. |
 | 1.15 | Login rate limit IP-only | **✓ Resolved** — login/register keyed by normalized email with IP fallback (`graphqlRateLimit.ts`). |
 | 1.18 | `audit_logs.actor_email NOT NULL` vs `actor_user_id NULL` | **✗ Still open** — schema unchanged (`db/mysql.ts:127-138`). |
 | 1.19 | `/health` doesn't check DB | **✓ Resolved** — `/health` runs `checkDbConnection()` and returns 503 when DB is down. |
@@ -173,7 +173,7 @@ formatError(formattedError, error) {
 
 - **1.11** Email-as-identity for authorization keys (`expenses/service.ts:209-221`, `groups/service.ts:312-326, 780-791`).
 - **1.13** Currency check rejects non-DKK with a user-visible error string (`expenses/service.ts:88-91`). Either remove the input or store as-is.
-- **1.14** Password policy still 8 chars. Add length ≥ 10 or check against a breached-password list (zxcvbn).
+- **1.14** Optional: breached-password list (zxcvbn) or longer minimum length.
 - **1.15** Login rate limiter still per-IP only.
 - **1.18** `audit_logs.actor_email NOT NULL` while `actor_user_id NULL` (`db/mysql.ts:127-138`).
 - **1.19** `/health` doesn't check DB.
@@ -282,7 +282,7 @@ The previous top-10 list is mostly done. Here's what's left, ordered by impact �
 3. **Currency beyond DKK** (1.13) — product decision + schema/API work.
 4. **Email invitation resend flow** (A.2) — delivery status exists; add resend if needed.
 5. **Duplication cleanup** — shared `roundCents`, expense projections, invitation email templates (A.3).
-6. **Stronger password policy** (1.14) — complexity / breached-password check; call `revokeRefreshTokens` on password change.
+6. **Stronger password policy** (1.14) — **◐ Partial** — letter+digit + `changePassword` with `revokeRefreshTokens`; breached-password check still open.
 7. **Dedup hash on edit** (1.12) — **✓ Done**
 8. **Per-device logout** (1.B) — **✓ Done** — `user_refresh_sessions` + `logout` revokes current device only (integration test).
 9. **Logout all devices** — **✓ Done** — `logoutAllDevices` mutation + UserMenu action.

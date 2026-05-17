@@ -196,6 +196,11 @@ export const typeDefs = `#graphql
     rememberMe: Boolean
   }
 
+  input ChangePasswordInput {
+    currentPassword: String!
+    newPassword: String!
+  }
+
   input RefreshSessionInput {
     refreshToken: String
   }
@@ -402,6 +407,7 @@ export const typeDefs = `#graphql
     refreshSession(input: RefreshSessionInput!): AuthPayload!
     logout: Boolean!
     logoutAllDevices: Boolean!
+    changePassword(input: ChangePasswordInput!): AuthPayload!
     upsertGroupSplitTemplate(input: UpsertSplitTemplateInput!): SplitTemplate!
     recordSettlementPayment(input: RecordSettlementPaymentInput!): SettlementPayment!
     acceptGroupInvitation(id: ID!): GroupInvitation!

@@ -159,6 +159,83 @@ const defaultOrigin =
     assert.ok(refreshB.body.errors?.length, 'all-device logout should invalidate other sessions');
   });
 
+  it('changePassword revokes other devices and keeps the current session', async () => {
+    const email = `it-change-pw-${Date.now()}@example.com`;
+    const oldPassword = 'password12';
+    const newPassword = 'newpass99';
+    const deviceA = request.agent(bundle.app);
+    const deviceB = request.agent(bundle.app);
+
+    await deviceA
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({
+        query: `mutation R($input: RegisterInput!) { register(input: $input) { user { id } } }`,
+        variables: { input: { email, password: oldPassword, fullName: 'Password Change User' } },
+      });
+    await deviceB
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({
+        query: `mutation L($input: LoginInput!) { login(input: $input) { user { id } } }`,
+        variables: { input: { email, password: oldPassword, rememberMe: true } },
+      });
+
+    const wrongCurrent = await deviceA
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({
+        query: `mutation C($input: ChangePasswordInput!) { changePassword(input: $input) { user { id } } }`,
+        variables: { input: { currentPassword: 'wrongpass1', newPassword } },
+      });
+    assert.equal(wrongCurrent.status, 200);
+    assert.ok(wrongCurrent.body.errors?.length);
+
+    const changed = await deviceA
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({
+        query: `mutation C($input: ChangePasswordInput!) { changePassword(input: $input) { user { email } } }`,
+        variables: { input: { currentPassword: oldPassword, newPassword } },
+      });
+    assert.equal(changed.status, 200);
+    assert.equal(changed.body.data.changePassword.user.email, email.toLowerCase());
+
+    const refreshB = await deviceB
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({ query: `mutation { refreshSession(input: {}) { user { id } } }` });
+    assert.equal(refreshB.status, 200);
+    assert.ok(refreshB.body.errors?.length, 'other device refresh should fail after password change');
+
+    const refreshA = await deviceA
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({ query: `mutation { refreshSession(input: {}) { user { email } } }` });
+    assert.equal(refreshA.status, 200);
+    assert.equal(refreshA.body.data.refreshSession.user.email, email.toLowerCase());
+
+    const loginOld = await deviceB
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({
+        query: `mutation L($input: LoginInput!) { login(input: $input) { user { id } } }`,
+        variables: { input: { email, password: oldPassword, rememberMe: true } },
+      });
+    assert.equal(loginOld.status, 200);
+    assert.ok(loginOld.body.errors?.length, 'login with old password should fail');
+
+    const loginNew = await deviceB
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({
+        query: `mutation L($input: LoginInput!) { login(input: $input) { user { id } } }`,
+        variables: { input: { email, password: newPassword, rememberMe: true } },
+      });
+    assert.equal(loginNew.status, 200);
+    assert.ok(loginNew.body.data.login.user.id);
+  });
+
   it('rejects cookie-authenticated mutation without allowlisted Origin (CSRF)', async () => {
     const agent = request.agent(bundle.app);
     const email = `it-csrf-${Date.now()}@example.com`;

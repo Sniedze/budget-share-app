@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth';
+import { isPasswordStrong, passwordPolicyHint } from '../features/auth/passwordPolicy';
 import {
   AuthActions,
   AuthForm,
@@ -25,8 +26,8 @@ export const RegisterPage = (): JSX.Element => {
   const isFormComplete =
     fullName.trim().length > 0 &&
     email.trim().length > 0 &&
-    password.length >= 8 &&
-    confirmPassword.length >= 8;
+    isPasswordStrong(password) &&
+    isPasswordStrong(confirmPassword);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -73,13 +74,13 @@ export const RegisterPage = (): JSX.Element => {
           </FieldLabel>
           <Input
             type="password"
-            placeholder="Minimum 8 characters"
+            placeholder="At least 8 characters"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             minLength={8}
             required
           />
-          <MutedText style={{ margin: 0 }}>Password must be at least 8 characters.</MutedText>
+          <MutedText style={{ margin: 0 }}>{passwordPolicyHint}</MutedText>
           <FieldLabel>
             Confirm password <RequiredMark>*</RequiredMark>
           </FieldLabel>
