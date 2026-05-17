@@ -39,6 +39,7 @@ import {
   groupMemberMatchesViewerParams,
   loadUserIdsByEmails,
   normalizeMemberEmail,
+  parseViewerUserId,
 } from './memberIdentity.js';
 import { buildOptimizedTransfers } from './settlementTransfers.js';
 import { parseSettlementPeriod, settlementPeriodRange } from './settlementPeriod.js';
@@ -1041,8 +1042,9 @@ export const updateGroup = async (input: UpdateGroupInput, actor: GroupViewer): 
   };
 };
 
-export const listInvitations = async (userEmail: string): Promise<GroupInvitation[]> => {
-  const normalizedEmail = userEmail.trim().toLowerCase();
+export const listInvitations = async (viewer: GroupViewer): Promise<GroupInvitation[]> => {
+  const normalizedEmail = normalizeMemberEmail(viewer.email);
+  const viewerUserId = parseViewerUserId(viewer.userId);
   const [rows] = await db.query<GroupInvitationRow[]>(
     `
       SELECT
@@ -1056,11 +1058,17 @@ export const listInvitations = async (userEmail: string): Promise<GroupInvitatio
         gi.accepted_at AS acceptedAt
       FROM group_invitations gi
       INNER JOIN \`groups\` g ON g.id = gi.group_id
-      WHERE gi.email = ?
-        AND gi.status = 'Pending'
+      WHERE gi.status = 'Pending'
+        AND (
+          gi.email = ?
+          OR (
+            ? IS NOT NULL
+            AND gi.email IN (SELECT email FROM users WHERE id = ?)
+          )
+        )
       ORDER BY gi.invited_at DESC, gi.id DESC
     `,
-    [normalizedEmail],
+    [normalizedEmail, viewerUserId, viewerUserId],
   );
 
   return rows.map((row) => ({
