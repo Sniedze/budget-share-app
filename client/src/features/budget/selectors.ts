@@ -73,6 +73,41 @@ export const filterOutgoingExpensesInMonth = (
 export const sumExpenseAmounts = (expenses: Expense[]): number =>
   expenses.reduce((sum, e) => sum + e.amount, 0);
 
+/** Sum amounts after converting each expense currency into `targetCurrency` using multipliers in `ratesToTarget`. */
+export const sumExpenseAmountsWithFx = (
+  expenses: Expense[],
+  ratesToTarget: Record<string, number>,
+  targetCurrency: string,
+): number => {
+  const target = targetCurrency.trim().toUpperCase();
+  return expenses.reduce((sum, expense) => {
+    const code = expenseCurrencyCode(expense);
+    if (code === target) {
+      return sum + expense.amount;
+    }
+    const rate = ratesToTarget[code];
+    if (rate === undefined || !Number.isFinite(rate)) {
+      return sum;
+    }
+    return sum + expense.amount * rate;
+  }, 0);
+};
+
+export const ytdOutgoingExpensesThrough = (expenses: Expense[], now: Date): Expense[] => {
+  const year = now.getFullYear();
+  const endTime = now.getTime();
+  return expenses.filter((expense) => {
+    if (isIncomingExpense(expense)) {
+      return false;
+    }
+    const parts = expenseDateParts(expense.transactionDate);
+    if (parts.year !== year) {
+      return false;
+    }
+    return parts.time <= endTime;
+  });
+};
+
 export const sumExpenseAmountsInCurrency = (expenses: Expense[], currency: string): number =>
   sumExpenseAmounts(filterExpensesByCurrency(expenses, currency));
 

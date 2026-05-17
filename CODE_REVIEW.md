@@ -78,8 +78,8 @@ This is genuinely good shipping. With the security posture and observability in 
 | 1.10 | Raw `Error` messages leak | **✓ Resolved** — `formatGraphqlError` scrubs non–client-safe errors in production and attaches `requestId`; `errorHandler` covers HTTP paths. |
 | 1.11 | Email-as-identity | **✓ Resolved** — `user_id` on members; `invited_user_id` on invitations; inbox by user id or email. |
 | 1.12 | Dedup hash edit footgun | **✓ Resolved** — `transactionDedupFieldsUnchanged` preserves hash when dedup fields unchanged on update. |
-| 1.13 | Currency half-implemented | **◐ Partially resolved** — per-currency settlements (#49); budget totals scoped to dominant currency when mixed (#54). True FX conversion still out of scope. |
-| 1.14 | Password policy minimal | **◐ Partially resolved** — letter+digit + `changePassword`; common-password blocklist on register/change (PR #51). No HIBP/zxcvbn API yet. |
+| 1.13 | Currency half-implemented | **✓ Resolved** — per-currency settlements (#49); dominant-currency budget scope (#54); `fxRate` query (Frankfurter ECB rates) + indicative YTD spend in DKK when mixed. |
+| 1.14 | Password policy minimal | **✓ Resolved** — letter+digit + `changePassword`; common-password blocklist (#51); HIBP k-anonymity range check on register/change (`HIBP_PASSWORD_CHECK=off` to disable). |
 | 1.15 | Login rate limit IP-only | **✓ Resolved** — login/register keyed by normalized email with IP fallback (`graphqlRateLimit.ts`). |
 | 1.18 | `audit_logs.actor_email NOT NULL` vs `actor_user_id NULL` | **✓ Resolved** — `actor_user_id` NOT NULL after backfill; `actor_email` kept for audit display. |
 | 1.19 | `/health` doesn't check DB | **✓ Resolved** — `/health` runs `checkDbConnection()` and returns 503 when DB is down. |
@@ -120,7 +120,7 @@ This is genuinely good shipping. With the security posture and observability in 
 | # | Finding | Status |
 |---|---|---|
 | 6.1 | No validation library | **✓ Resolved** — Zod schemas in `expenses/validation.ts` and `groups/validation.ts`, wired in GraphQL resolvers. Auth remains hand-rolled validators. |
-| 6.2 | `refetchQueries` is the old way | **◐ Partially resolved** — expense + group cache updates; resend patches invitations (#57). Settlements still refetch by period. |
+| 6.2 | `refetchQueries` is the old way | **◐ Partially resolved** — expense + group cache updates; resend patches invitations (#57); `recordSettlementPayment` merges `householdSettlement` into cache; template/expense-group mutations return `Group` and merge cache. Optional: migrate remaining hand-written `features/*/types.ts` to codegen-only. |
 | 6.3 | No `<ErrorBoundary>` | **✓ Resolved** — `main.tsx` wraps the app. |
 | 6.4 | `AuthContext` is one big context | **✓ Resolved** — split `AuthStateContext` / `AuthActionsContext`. |
 
@@ -172,8 +172,8 @@ formatError(formattedError, error) {
 ### Medium — still open
 
 - **1.11** Email-as-identity for authorization keys (`expenses/service.ts:209-221`, `groups/service.ts:312-326, 780-791`).
-- **1.13** Optional: FX conversion or per-currency subtotals for household/settlement/budget rollups when expenses mix currencies.
-- **1.14** Optional: breached-password list (zxcvbn) or longer minimum length.
+- ~~**1.13** FX conversion~~ — done (`server/src/lib/fxRates.ts`, `fxRate` query, budget indicative DKK total).
+- ~~**1.14** HIBP breached-password check~~ — done (`server/src/modules/auth/hibp.ts`).
 - **1.15** Login rate limiter still per-IP only.
 - **1.18** `audit_logs.actor_email NOT NULL` while `actor_user_id NULL` (`db/mysql.ts:127-138`).
 - **1.19** `/health` doesn't check DB.
@@ -277,14 +277,11 @@ If a library attaches a malicious `statusCode = "1000"` string, `Number("1000") 
 
 The previous top-10 list is mostly done. Here's what's left, ordered by impact ÷ effort.
 
-1. **Currency FX** (1.13 rest) — optional exchange-rate API for true cross-currency rollups.
-2. **Settlement refetch** (6.2) — cache updates for `recordSettlementPayment` / period queries.
-3. **Stronger password policy** (1.14) — optional HIBP/zxcvbn beyond static common-password list.
-4. **Return `Group` from template/expense-group mutations** — avoid `refetchGroups` after boolean ops.
+**Done recently (optional batch):** FX `fxRate` + budget indicative totals (1.13), HIBP password check (1.14), settlement payment cache merge + `RecordSettlementPaymentPayload`, group mutations return `Group` with Apollo cache merge.
 
-**Done recently:** email/user identity (#50, #56), budget per-currency (#54), `mapExpenseRow` + `GROUP_FIELDS` (#55), Dependabot (#53), common-password + cache-first `me` (#51), per-currency settlements (#49), group cache (#52, #57), audit `actor_user_id` NOT NULL.
+**Still open (lower priority):** codegen-only types (drop `features/*/types.ts`), duplication cleanup (§4), stretch items from earlier passes.
 
-Stretch: path alias `@/` in Vite (6.7), mutation payloads returning full `Group`.
+**Done earlier:** email/user identity (#50, #56), budget per-currency (#54), `mapExpenseRow` + `GROUP_FIELDS` (#55), Dependabot (#53), common-password + cache-first `me` (#51), per-currency settlements (#49), group cache (#52, #57), audit `actor_user_id` NOT NULL, Vite `@/` alias (6.7).
 
 ---
 

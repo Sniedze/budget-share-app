@@ -4,6 +4,8 @@ import { useAuth } from '../auth';
 import { GET_GROUPS } from '../groups/graphql';
 import type { GetGroupsQueryResult } from '../groups/types';
 import { formatAppCurrency, formatCurrency } from '../../format/currency';
+import type { RecordSettlementPaymentMutation } from '../../graphql/generated/graphql';
+import { mergeHouseholdSettlementInCache } from './settlementCacheUpdates';
 import { GET_HOUSEHOLD_SETTLEMENTS, RECORD_SETTLEMENT_PAYMENT } from './graphql';
 import {
   formatSettlementPeriodLabel,
@@ -44,9 +46,15 @@ export const useSettlementsPageState = () => {
     variables: { period: settlementPeriod },
   });
   const { data: groupsData } = useQuery<GetGroupsQueryResult>(GET_GROUPS);
-  const [recordPayment, { loading: isSaving }] = useMutation(RECORD_SETTLEMENT_PAYMENT, {
-    refetchQueries: [{ query: GET_HOUSEHOLD_SETTLEMENTS, variables: { period: settlementPeriod } }],
-    awaitRefetchQueries: true,
+  const [recordPayment, { loading: isSaving }] = useMutation<RecordSettlementPaymentMutation>(
+    RECORD_SETTLEMENT_PAYMENT,
+    {
+    update(cache, { data }) {
+      const settlement = data?.recordSettlementPayment?.householdSettlement;
+      if (settlement) {
+        mergeHouseholdSettlementInCache(cache, settlementPeriod, settlement);
+      }
+    },
   });
 
   const households = useMemo(() => data?.householdSettlements ?? [], [data?.householdSettlements]);
@@ -218,6 +226,7 @@ export const useSettlementsPageState = () => {
             note: null,
             settledAt: new Date().toISOString().slice(0, 10),
           },
+          period: settlementPeriod,
         },
       });
       return null;
@@ -253,6 +262,7 @@ export const useSettlementsPageState = () => {
             note: note.trim() || null,
             settledAt,
           },
+          period: settlementPeriod,
         },
       });
       setAmount('');

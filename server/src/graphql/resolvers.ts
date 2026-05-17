@@ -13,6 +13,7 @@ import {
 } from '../modules/groups/invitations.js';
 import {
   createGroup,
+  getGroupForViewer,
   listHouseholdSettlements,
   listGroups,
   listInvitations,
@@ -22,6 +23,7 @@ import {
   deleteExpenseGroup,
   upsertSplitTemplate,
 } from '../modules/groups/service.js';
+import { getFxRate } from '../lib/fxRates.js';
 import {
   changePassword,
   login,
@@ -101,6 +103,9 @@ export const resolvers = {
       const yearMonth = parseYearMonth(args.yearMonth);
       const settings = await getUserWorkspaceSettings(Number(user.id), yearMonth);
       return toGraphqlUserWorkspaceSettings(settings);
+    },
+    fxRate: async (_parent: unknown, args: { from: string; to: string }) => {
+      return getFxRate(args.from, args.to);
     },
   },
   Mutation: {
@@ -183,12 +188,17 @@ export const resolvers = {
         email: user.email,
       });
     },
-    recordSettlementPayment: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
+    recordSettlementPayment: async (
+      _parent: unknown,
+      args: { input: unknown; period?: string | null },
+      context: GraphqlContext,
+    ) => {
       const user = requireAuth(context);
-      return recordSettlementPayment(parseRecordSettlementPaymentInput(args.input), {
-        userId: user.id,
-        email: user.email,
-      });
+      return recordSettlementPayment(
+        parseRecordSettlementPaymentInput(args.input),
+        { userId: user.id, email: user.email },
+        args.period,
+      );
     },
     acceptGroupInvitation: async (
       _parent: unknown,
@@ -220,10 +230,16 @@ export const resolvers = {
       context: GraphqlContext,
     ) => {
       const user = requireAuth(context);
-      return declineExpenseGroupParticipation(args.groupId, args.category, {
-        userId: user.id,
-        email: user.email,
-      });
+      const viewer = { userId: user.id, email: user.email };
+      const declined = await declineExpenseGroupParticipation(args.groupId, args.category, viewer);
+      if (!declined) {
+        throw appError(ErrorCode.NOT_FOUND, 'Expense group not found.');
+      }
+      const group = await getGroupForViewer(viewer, args.groupId);
+      if (!group) {
+        throw appError(ErrorCode.NOT_FOUND, 'Household not found.');
+      }
+      return group;
     },
     deleteExpenseGroup: async (
       _parent: unknown,

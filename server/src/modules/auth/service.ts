@@ -69,7 +69,7 @@ export const register = async (input: RegisterInput): Promise<AuthPayload> => {
   validateEmailFormat(email, 'register');
   const fullName = normalizeFullNameForRegister(input.fullName);
   const password = input.password;
-  assertPasswordAcceptableForRegister(password);
+  await assertPasswordAcceptableForRegister(password);
 
   const existingUser = await getUserByEmail(email);
   if (existingUser) {
@@ -183,7 +183,7 @@ export const changePassword = async (
   input: ChangePasswordInput,
 ): Promise<AuthPayload> => {
   assertCurrentPasswordForChange(input.currentPassword);
-  assertNewPasswordRules(input.newPassword);
+  await assertNewPasswordRules(input.newPassword);
 
   const user = await queryOne<UserRow>(
     `

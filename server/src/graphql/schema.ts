@@ -150,6 +150,11 @@ export const typeDefs = `#graphql
     settledAt: String!
   }
 
+  type RecordSettlementPaymentPayload {
+    payment: SettlementPayment!
+    householdSettlement: HouseholdSettlement!
+  }
+
   type HouseholdSettlement {
     groupId: ID!
     groupName: String!
@@ -406,6 +411,8 @@ export const typeDefs = `#graphql
     groupSplitTemplates(groupId: ID!): [SplitTemplate!]!
     householdSettlements(period: SettlementPeriod): [HouseholdSettlement!]!
     userWorkspaceSettings(yearMonth: String!): UserWorkspaceSettings!
+    """Multiplier to convert one unit of \`from\` into \`to\` (e.g. EUR→DKK)."""
+    fxRate(from: String!, to: String!): Float!
   }
 
   type Mutation {
@@ -421,13 +428,16 @@ export const typeDefs = `#graphql
     logout: Boolean!
     logoutAllDevices: Boolean!
     changePassword(input: ChangePasswordInput!): AuthPayload!
-    upsertGroupSplitTemplate(input: UpsertSplitTemplateInput!): SplitTemplate!
-    recordSettlementPayment(input: RecordSettlementPaymentInput!): SettlementPayment!
+    upsertGroupSplitTemplate(input: UpsertSplitTemplateInput!): Group!
+    recordSettlementPayment(
+      input: RecordSettlementPaymentInput!
+      period: SettlementPeriod
+    ): RecordSettlementPaymentPayload!
     acceptGroupInvitation(id: ID!): GroupInvitation!
     declineGroupInvitation(id: ID!): GroupInvitation!
     resendGroupInvitation(groupId: ID!, email: String!): GroupPendingInvitation!
-    declineExpenseGroupParticipation(groupId: ID!, category: String!): Boolean!
-    deleteExpenseGroup(groupId: ID!, category: String!): Boolean!
+    declineExpenseGroupParticipation(groupId: ID!, category: String!): Group!
+    deleteExpenseGroup(groupId: ID!, category: String!): Group!
     saveUserWorkspaceSettings(input: SaveUserWorkspaceSettingsInput!): UserWorkspaceSettings!
   }
 `;
