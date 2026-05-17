@@ -17,7 +17,7 @@ import {
   ACCEPT_GROUP_INVITATION,
   DECLINE_GROUP_INVITATION,
   GET_MY_INVITATIONS,
-  type GroupInvitation,
+  type GetMyInvitationsQueryResult,
 } from '../features/groups';
 import { spacing } from '../styles/tokens';
 
@@ -38,12 +38,8 @@ const ActionsRow = styled.div`
   gap: ${spacing.sm};
 `;
 
-type MyInvitationsData = {
-  myInvitations: GroupInvitation[];
-};
-
 export const InvitationsPage = (): JSX.Element => {
-  const { data, loading, error, refetch } = useQuery<MyInvitationsData>(GET_MY_INVITATIONS);
+  const { data, loading, error, refetch } = useQuery<GetMyInvitationsQueryResult>(GET_MY_INVITATIONS);
   const [acceptInvitation, { loading: accepting }] = useMutation(ACCEPT_GROUP_INVITATION, {
     onCompleted: () => refetch(),
   });

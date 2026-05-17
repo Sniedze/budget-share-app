@@ -2,7 +2,7 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth';
 import { GET_GROUPS } from '../groups/graphql';
-import type { GroupSummary } from '../groups/types';
+import type { GetGroupsQueryResult } from '../groups/types';
 import { formatAppCurrency } from '../../format/currency';
 import { GET_HOUSEHOLD_SETTLEMENTS, RECORD_SETTLEMENT_PAYMENT } from './graphql';
 import {
@@ -43,7 +43,7 @@ export const useSettlementsPageState = () => {
   const { data, loading, error } = useQuery<GetHouseholdSettlementsResponse>(GET_HOUSEHOLD_SETTLEMENTS, {
     variables: { period: settlementPeriod },
   });
-  const { data: groupsData } = useQuery<{ groups: GroupSummary[] }>(GET_GROUPS);
+  const { data: groupsData } = useQuery<GetGroupsQueryResult>(GET_GROUPS);
   const [recordPayment, { loading: isSaving }] = useMutation(RECORD_SETTLEMENT_PAYMENT, {
     refetchQueries: [{ query: GET_HOUSEHOLD_SETTLEMENTS, variables: { period: settlementPeriod } }],
     awaitRefetchQueries: true,

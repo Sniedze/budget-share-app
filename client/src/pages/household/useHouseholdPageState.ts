@@ -16,27 +16,14 @@ import {
   GET_GROUP_SPLIT_TEMPLATES,
   UPDATE_GROUP,
   UPSERT_GROUP_SPLIT_TEMPLATE,
+  type GetGroupSplitTemplatesQueryResult,
+  type GetGroupsQueryResult,
   type GroupMember,
-  type GroupSummary,
   type SplitTemplate,
 } from '../../features/groups';
+import type { CreateGroupMutation, DeleteExpenseGroupMutation, UpdateGroupMutation } from '../../graphql/generated/graphql';
 import { APP_CURRENCY_CODE } from '../../format/currency';
 
-type GroupsQueryData = {
-  groups: GroupSummary[];
-};
-
-type CreateGroupMutationData = {
-  createGroup: GroupSummary;
-};
-
-type GroupSplitTemplatesQueryData = {
-  groupSplitTemplates: SplitTemplate[];
-};
-
-type DeleteExpenseGroupMutationData = {
-  deleteExpenseGroup: boolean;
-};
 
 type DraftExpenseGroup = {
   category: string;
@@ -87,16 +74,16 @@ export const ALL_HOUSEHOLD_EXPENSE_GROUPS = '__all__';
 
 export const useHouseholdPageState = () => {
   const { user } = useAuth();
-  const { data, loading, error } = useQuery<GroupsQueryData>(GET_GROUPS);
+  const { data, loading, error } = useQuery<GetGroupsQueryResult>(GET_GROUPS);
   const { data: expensesData } = useQuery<GetExpensesResponse>(GET_EXPENSES);
   const { addExpense, isMutating: isCreatingExpense } = useExpenseActions({
     refetchQueries: [GET_GROUPS],
   });
-  const [createGroupMutation, { loading: creatingGroup }] = useMutation<CreateGroupMutationData>(CREATE_GROUP, {
+  const [createGroupMutation, { loading: creatingGroup }] = useMutation<CreateGroupMutation>(CREATE_GROUP, {
     refetchQueries: [{ query: GET_GROUPS }],
     awaitRefetchQueries: true,
   });
-  const [updateGroupMutation, { loading: updatingGroup }] = useMutation<CreateGroupMutationData>(UPDATE_GROUP, {
+  const [updateGroupMutation, { loading: updatingGroup }] = useMutation<UpdateGroupMutation>(UPDATE_GROUP, {
     refetchQueries: [{ query: GET_GROUPS }],
     awaitRefetchQueries: true,
   });
@@ -111,7 +98,7 @@ export const useHouseholdPageState = () => {
       awaitRefetchQueries: true,
     },
   );
-  const [deleteExpenseGroupMutation, { loading: isDeletingExpenseGroup }] = useMutation<DeleteExpenseGroupMutationData>(
+  const [deleteExpenseGroupMutation, { loading: isDeletingExpenseGroup }] = useMutation<DeleteExpenseGroupMutation>(
     DELETE_EXPENSE_GROUP,
     {
       refetchQueries: [{ query: GET_GROUPS }],
@@ -153,7 +140,7 @@ export const useHouseholdPageState = () => {
     () => groups.find((group) => group.id === activeGroupId) ?? groups[0],
     [activeGroupId, groups],
   );
-  const { data: templatesData, refetch: refetchGroupTemplates } = useQuery<GroupSplitTemplatesQueryData>(
+  const { data: templatesData, refetch: refetchGroupTemplates } = useQuery<GetGroupSplitTemplatesQueryResult>(
     GET_GROUP_SPLIT_TEMPLATES,
     {
       variables: { groupId: activeGroup?.id ?? '' },
@@ -633,39 +620,43 @@ export const useHouseholdPageState = () => {
     }
 
     try {
-      const result = editingHouseholdId
-        ? await updateGroupMutation({
-            variables: {
-              input: {
-                id: editingHouseholdId,
-                name: groupName.trim(),
-                description: description.trim() || undefined,
-                members: membersWithRatios,
-              },
+      let savedGroupId: string | undefined;
+      if (editingHouseholdId) {
+        const result = await updateGroupMutation({
+          variables: {
+            input: {
+              id: editingHouseholdId,
+              name: groupName.trim(),
+              description: description.trim() || undefined,
+              members: membersWithRatios,
             },
-          })
-        : await createGroupMutation({
-            variables: {
-              input: {
-                name: groupName.trim(),
-                description: description.trim() || undefined,
-                members: membersWithRatios,
-              },
+          },
+        });
+        savedGroupId = result.data?.updateGroup.id;
+      } else {
+        const result = await createGroupMutation({
+          variables: {
+            input: {
+              name: groupName.trim(),
+              description: description.trim() || undefined,
+              members: membersWithRatios,
             },
-          });
-
-      const createdGroupId = result.data?.createGroup.id;
-      if (createdGroupId) {
-        setActiveGroupId(createdGroupId);
+          },
+        });
+        savedGroupId = result.data?.createGroup.id;
       }
 
-      if (!editingHouseholdId && createdGroupId && expenseGroupCategories.length > 0) {
+      if (savedGroupId) {
+        setActiveGroupId(savedGroupId);
+      }
+
+      if (!editingHouseholdId && savedGroupId && expenseGroupCategories.length > 0) {
         await Promise.all(
           expenseGroupCategories.map((category) =>
             upsertTemplateMutation({
               variables: {
                 input: {
-                  groupId: createdGroupId,
+                  groupId: savedGroupId,
                   category,
                   templateName: category,
                   splitDetails: membersWithRatios.map((member) => ({

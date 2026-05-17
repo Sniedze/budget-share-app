@@ -11,7 +11,7 @@ import {
 import { CHANGE_PASSWORD, LOGIN, LOGOUT, LOGOUT_ALL_DEVICES, ME, REGISTER } from './graphql';
 import { hasSessionHintCookie } from './sessionHint';
 import { clearStoredTokens } from './storage';
-import type { AuthUser } from './types';
+import type { AuthMutationData, AuthUser } from './types';
 
 export type AuthStateContextValue = {
   user: AuthUser | null;
@@ -32,12 +32,6 @@ export type AuthContextValue = AuthStateContextValue & AuthActionsContextValue;
 
 type MeQueryData = {
   me: AuthUser | null;
-};
-
-type AuthMutationData = {
-  login?: { user: AuthUser };
-  register?: { user: AuthUser };
-  changePassword?: { user: AuthUser };
 };
 
 const AuthStateContext = createContext<AuthStateContextValue | undefined>(undefined);

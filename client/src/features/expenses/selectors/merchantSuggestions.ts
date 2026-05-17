@@ -21,7 +21,7 @@ const toSuggestionFromExpense = (expense: Expense): MerchantSuggestion => ({
   merchant: expense.title.trim(),
   category: expense.category,
   split: expense.split,
-  groupId: expense.groupId,
+  groupId: expense.groupId ?? undefined,
   expenseGroup: expense.split === 'Shared' ? (expense.expenseGroup ?? expense.category) : undefined,
   isPrivate: expense.isPrivate ?? false,
   splitDetails: toSplitDetails(expense),

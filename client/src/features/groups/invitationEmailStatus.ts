@@ -1,8 +1,6 @@
-export type InvitationEmailDeliveryStatusLabel =
-  | 'PendingEmail'
-  | 'EmailSent'
-  | 'EmailFailed'
-  | 'EmailSkipped';
+import type { InvitationEmailDeliveryStatus } from '../../graphql/generated/graphql';
+
+export type InvitationEmailDeliveryStatusLabel = InvitationEmailDeliveryStatus;
 
 export const canResendInvitationEmail = (
   status: InvitationEmailDeliveryStatusLabel | null | undefined,

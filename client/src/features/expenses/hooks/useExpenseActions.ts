@@ -4,14 +4,7 @@ import { refetchGroups } from '../../groups/groupCacheUpdates';
 import { addExpenseToCache, removeExpenseFromCache, updateExpenseInCache } from '../expenseCacheUpdates';
 import { GET_EXPENSES, ADD_EXPENSE, DELETE_EXPENSE, UPDATE_EXPENSE } from '../graphql';
 import type { AddExpenseInput, Expense, GetExpensesResponse, UpdateExpenseInput } from '../types';
-
-type AddExpenseMutationData = {
-  addExpense: Expense;
-};
-
-type UpdateExpenseMutationData = {
-  updateExpense: Expense;
-};
+import type { AddExpenseMutation, UpdateExpenseMutation } from '../../../graphql/generated/graphql';
 
 type UseExpenseActionsOptions = {
   /** Extra queries to refetch after mutation (prefer cache updates when possible). */
@@ -29,7 +22,7 @@ export const useExpenseActions = (options?: UseExpenseActionsOptions) => {
     }
   };
 
-  const [add, { loading: adding }] = useMutation<AddExpenseMutationData>(ADD_EXPENSE, {
+  const [add, { loading: adding }] = useMutation<AddExpenseMutation>(ADD_EXPENSE, {
     update(cache, { data }) {
       const expense = data?.addExpense ?? null;
       addExpenseToCache(cache, expense);
@@ -38,7 +31,7 @@ export const useExpenseActions = (options?: UseExpenseActionsOptions) => {
     refetchQueries: extraRefetchQueries,
   });
 
-  const [update, { loading: updating }] = useMutation<UpdateExpenseMutationData>(UPDATE_EXPENSE, {
+  const [update, { loading: updating }] = useMutation<UpdateExpenseMutation>(UPDATE_EXPENSE, {
     update(cache, { data }) {
       const expense = data?.updateExpense ?? null;
       updateExpenseInCache(cache, expense);
