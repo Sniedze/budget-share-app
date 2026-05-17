@@ -1061,6 +1061,7 @@ export const listInvitations = async (viewer: GroupViewer): Promise<GroupInvitat
       WHERE gi.status = 'Pending'
         AND (
           gi.email = ?
+          OR gi.invited_user_id = ?
           OR (
             ? IS NOT NULL
             AND gi.email IN (SELECT email FROM users WHERE id = ?)
@@ -1068,7 +1069,7 @@ export const listInvitations = async (viewer: GroupViewer): Promise<GroupInvitat
         )
       ORDER BY gi.invited_at DESC, gi.id DESC
     `,
-    [normalizedEmail, viewerUserId, viewerUserId],
+    [normalizedEmail, viewerUserId, viewerUserId, viewerUserId],
   );
 
   return rows.map((row) => ({

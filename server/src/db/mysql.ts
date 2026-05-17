@@ -406,6 +406,32 @@ export const migrateSchema = async (): Promise<void> => {
       `);
   }
 
+  const [invitedUserIdCols] = await db.query<ColumnCheckRow[]>(
+    `
+        SELECT COLUMN_NAME AS columnName
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'group_invitations'
+          AND COLUMN_NAME IN ('invited_user_id')
+      `,
+  );
+  const invitedUserIdColumnSet = new Set(invitedUserIdCols.map((row) => row.columnName));
+  if (!invitedUserIdColumnSet.has('invited_user_id')) {
+    await db.execute(`
+        ALTER TABLE group_invitations
+        ADD COLUMN invited_user_id INT NULL,
+        ADD CONSTRAINT fk_group_invitations_user
+          FOREIGN KEY (invited_user_id) REFERENCES users(id)
+          ON DELETE SET NULL
+      `);
+    await db.execute(`
+        UPDATE group_invitations gi
+        INNER JOIN users u ON LOWER(TRIM(u.email)) = LOWER(TRIM(gi.email))
+        SET gi.invited_user_id = u.id
+        WHERE gi.invited_user_id IS NULL
+      `);
+  }
+
   const [groupColumns] = await db.query<ColumnCheckRow[]>(
     `
         SELECT COLUMN_NAME AS columnName
@@ -427,6 +453,7 @@ export const migrateSchema = async (): Promise<void> => {
   await ensureIndex('group_members', 'idx_group_members_email', 'email');
   await ensureIndex('group_members', 'idx_group_members_user_id', 'user_id');
   await ensureIndex('group_invitations', 'idx_group_invitations_email_status', 'email, status');
+  await ensureIndex('group_invitations', 'idx_group_invitations_invited_user_status', 'invited_user_id, status');
   await db.execute(`
     CREATE TABLE IF NOT EXISTS settlement_payments (
     id INT AUTO_INCREMENT PRIMARY KEY,

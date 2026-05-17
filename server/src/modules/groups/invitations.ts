@@ -9,6 +9,7 @@ import {
   type GroupViewer,
   groupMemberMatchesViewerClause,
   groupMemberMatchesViewerParams,
+  loadUserIdsByEmails,
   normalizeMemberEmail,
   parseViewerUserId,
 } from './memberIdentity.js';
@@ -68,14 +69,19 @@ export const upsertPendingInvitations = async (
   if (emails.length === 0) {
     return;
   }
-  const invitationPlaceholders = buildBulkInsertPlaceholders(emails.length, 2);
-  const invitationValues = emails.flatMap((email) => [groupId, email]);
+  const userIdsByEmail = await loadUserIdsByEmails(emails);
+  const invitationPlaceholders = buildBulkInsertPlaceholders(emails.length, 3);
+  const invitationValues = emails.flatMap((email) => {
+    const normalized = normalizeMemberEmail(email);
+    return [groupId, normalized, userIdsByEmail.get(normalized) ?? null];
+  });
   await connection.execute(
     `
-      INSERT INTO group_invitations (group_id, email, status, email_delivery_status)
-      VALUES ${invitationPlaceholders.replace(/\(\?, \?\)/g, "(?, ?, 'Pending', 'pending_email')")}
+      INSERT INTO group_invitations (group_id, email, invited_user_id, status, email_delivery_status)
+      VALUES ${invitationPlaceholders.replace(/\(\?, \?, \?\)/g, "(?, ?, ?, 'Pending', 'pending_email')")}
       ON DUPLICATE KEY UPDATE
         status = 'Pending',
+        invited_user_id = VALUES(invited_user_id),
         accepted_at = NULL,
         email_delivery_status = 'pending_email'
     `,
