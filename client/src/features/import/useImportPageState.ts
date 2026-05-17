@@ -16,7 +16,7 @@ import { useAuth } from '../auth';
 import { GET_GROUPS } from '../groups';
 import { refetchGroups } from '../groups/groupCacheUpdates';
 import type { GetGroupsQueryResult } from '../groups';
-import { APP_CURRENCY_CODE, normalizeStatementCurrency } from '../../format/currency';
+import { normalizeStatementCurrency } from '../../format/currency';
 import {
   ALLOWED_FILE_EXTENSIONS,
   ALLOWED_MIME_TYPES,
@@ -456,13 +456,6 @@ export const useImportPageState = () => {
         setImportError(`Shared row "${expenseTitle}" requires household and expense group.`);
         return;
       }
-      const rowCurrencyCode = normalizeStatementCurrency(row.currency);
-      if (rowCurrencyCode !== APP_CURRENCY_CODE) {
-        setImportError(
-          `Row "${expenseTitle}" is ${rowCurrencyCode}, not ${APP_CURRENCY_CODE}. Fix the currency or remove the row.`,
-        );
-        return;
-      }
     }
 
     const importRows = selectedRows.map((row) => {
@@ -475,7 +468,7 @@ export const useImportPageState = () => {
         split: isIncoming ? 'Personal' : row.split,
         groupId: isIncoming ? undefined : row.split === 'Shared' ? row.groupId : undefined,
         expenseGroup: isIncoming ? undefined : row.split === 'Shared' ? row.expenseGroup : undefined,
-        currency: APP_CURRENCY_CODE,
+        currency: normalizeStatementCurrency(row.currency),
         flow: isIncoming ? 'Incoming' : 'Outgoing',
       };
       return { clientRowId: row.id, ...expense };

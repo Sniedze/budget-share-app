@@ -19,6 +19,18 @@ describe('expenses validation', () => {
     assert.equal(parsed.currency, 'DKK');
   });
 
+  it('accepts non-DKK ISO currency codes', () => {
+    const parsed = parseCreateExpenseInput({
+      title: 'Hotel',
+      amount: 100,
+      transactionDate: '2026-05-01',
+      category: 'Travel',
+      split: 'Personal',
+      currency: 'EUR',
+    });
+    assert.equal(parsed.currency, 'EUR');
+  });
+
   it('rejects empty title', () => {
     assert.throws(
       () =>

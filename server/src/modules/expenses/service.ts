@@ -11,6 +11,7 @@ import type {
 } from './types.js';
 import { AppError } from '../../graphql/appError.js';
 import { db } from '../../db/mysql.js';
+import { DEFAULT_CURRENCY, normalizeExpenseCurrency } from '../../lib/currency.js';
 import { toIsoString } from '../../lib/dates.js';
 import { logAuditEvent } from '../audit/service.js';
 import { appError, ErrorCode } from '../../graphql/appError.js';
@@ -26,8 +27,6 @@ import {
   groupMemberMatchesViewerParams,
 } from '../groups/memberIdentity.js';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
-
-const APP_CURRENCY = 'DKK';
 
 type ExpenseRow = {
   id: number;
@@ -89,23 +88,12 @@ const normalizeExpenseFlow = (raw: string | null | undefined): ExpenseFlow => {
   return 'Outgoing';
 };
 
-const normalizeExpenseCurrency = (input?: string | null): string => {
-  const raw = (input ?? APP_CURRENCY).trim().toUpperCase();
-  if (!/^[A-Z]{3}$/.test(raw)) {
-    throw appError(ErrorCode.BAD_USER_INPUT, 'Currency must be a 3-letter ISO code.');
-  }
-  if (raw !== APP_CURRENCY) {
-    throw appError(ErrorCode.BAD_USER_INPUT, `Only ${APP_CURRENCY} expenses are supported.`);
-  }
-  return raw;
-};
-
 const rowCurrency = (row: { currency?: string | null }): string => {
   const c = row.currency;
   if (typeof c === 'string' && c.trim().length > 0) {
     return c.trim().toUpperCase();
   }
-  return APP_CURRENCY;
+  return DEFAULT_CURRENCY;
 };
 
 const validateAmount = (amount: number): void => {
