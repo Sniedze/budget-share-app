@@ -48,3 +48,16 @@ export const LOGOUT_ALL_DEVICES = gql`
     logoutAllDevices
   }
 `;
+
+export const CHANGE_PASSWORD = gql`
+  mutation ChangePassword($input: ChangePasswordInput!) {
+    changePassword(input: $input) {
+      user {
+        id
+        email
+        fullName
+        createdAt
+      }
+    }
+  }
+`;

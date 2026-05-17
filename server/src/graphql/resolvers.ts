@@ -21,7 +21,14 @@ import {
   deleteExpenseGroup,
   upsertSplitTemplate,
 } from '../modules/groups/service.js';
-import { login, logoutSession, refreshSession, register, revokeRefreshTokens } from '../modules/auth/service.js';
+import {
+  changePassword,
+  login,
+  logoutSession,
+  refreshSession,
+  register,
+  revokeRefreshTokens,
+} from '../modules/auth/service.js';
 import { clearSessionCookies, getRefreshTokenFromCookies, setSessionCookies } from '../modules/auth/cookies.js';
 import { appError, ErrorCode } from './appError.js';
 import {
@@ -38,7 +45,7 @@ import {
   parseUpdateGroupInput,
   parseUpsertSplitTemplateInput,
 } from '../modules/groups/validation.js';
-import type { LoginInput, RegisterInput } from '../modules/auth/types.js';
+import type { ChangePasswordInput, LoginInput, RegisterInput } from '../modules/auth/types.js';
 import {
   getUserWorkspaceSettings,
   saveUserWorkspaceSettings,
@@ -157,6 +164,16 @@ export const resolvers = {
       await revokeRefreshTokens(user.id);
       clearSessionCookies(context.res);
       return true;
+    },
+    changePassword: async (
+      _parent: unknown,
+      args: { input: ChangePasswordInput },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      const payload = await changePassword(user.id, args.input);
+      setSessionCookies(context.res, payload.accessToken, payload.refreshToken, { remember: true });
+      return { user: payload.user };
     },
     upsertGroupSplitTemplate: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
       const user = requireAuth(context);

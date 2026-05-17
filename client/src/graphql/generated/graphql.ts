@@ -45,6 +45,11 @@ export type BudgetAssumptionsInput = {
   startingBalance: Scalars['Float']['input'];
 };
 
+export type ChangePasswordInput = {
+  currentPassword: Scalars['String']['input'];
+  newPassword: Scalars['String']['input'];
+};
+
 export type CreateGroupInput = {
   description?: InputMaybe<Scalars['String']['input']>;
   members: Array<GroupMemberInput>;
@@ -250,6 +255,7 @@ export type Mutation = {
   __typename?: 'Mutation';
   acceptGroupInvitation: GroupInvitation;
   addExpense: Expense;
+  changePassword: AuthPayload;
   createGroup: Group;
   declineExpenseGroupParticipation: Scalars['Boolean']['output'];
   declineGroupInvitation: GroupInvitation;
@@ -276,6 +282,11 @@ export type MutationAcceptGroupInvitationArgs = {
 
 export type MutationAddExpenseArgs = {
   input: AddExpenseInput;
+};
+
+
+export type MutationChangePasswordArgs = {
+  input: ChangePasswordInput;
 };
 
 
@@ -570,6 +581,13 @@ export type LogoutAllDevicesMutationVariables = Exact<{ [key: string]: never; }>
 
 
 export type LogoutAllDevicesMutation = { __typename?: 'Mutation', logoutAllDevices: boolean };
+
+export type ChangePasswordMutationVariables = Exact<{
+  input: ChangePasswordInput;
+}>;
+
+
+export type ChangePasswordMutation = { __typename?: 'Mutation', changePassword: { __typename?: 'AuthPayload', user: { __typename?: 'User', id: string, email: string, fullName: string, createdAt: string } } };
 
 export type ExpenseFieldsFragment = { __typename?: 'Expense', id: string, title: string, amount: number, currency: string, createdAt: string, transactionDate: string, category: string, expenseGroup: string | null, split: SplitType, groupId: string | null, createdByUserId: string | null, paidByUserId: string | null, isPrivate: boolean, flow: ExpenseFlow, splitDetails: Array<{ __typename?: 'SplitAllocation', participant: string, ratio: number, amount: number }> };
 
