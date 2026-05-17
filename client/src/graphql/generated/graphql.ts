@@ -721,6 +721,8 @@ export type UpsertGroupSplitTemplateMutationVariables = Exact<{
 
 export type UpsertGroupSplitTemplateMutation = { __typename?: 'Mutation', upsertGroupSplitTemplate: { __typename?: 'SplitTemplate', id: string, groupId: string, category: string, templateName: string, splitDetails: Array<{ __typename?: 'SplitAllocation', participant: string, ratio: number }> } };
 
+export type GroupFieldsFragment = { __typename?: 'Group', id: string, name: string, description: string | null, totalSpent: number, yourShare: number, expenseGroupLabels: Array<string>, pendingInvitations: Array<{ __typename?: 'GroupPendingInvitation', email: string, name: string, status: GroupInvitationStatus, emailDeliveryStatus: InvitationEmailDeliveryStatus | null }>, members: Array<{ __typename?: 'GroupMember', userId: string | null, name: string, email: string, ratio: number }>, expenses: Array<{ __typename?: 'GroupExpense', date: string, expenseGroup: string | null, category: string, description: string, paidBy: string, total: number, yourShare: number, isPrivate: boolean, currency: string }> };
+
 export type GetHouseholdSettlementsQueryVariables = Exact<{
   period?: InputMaybe<SettlementPeriod>;
 }>;

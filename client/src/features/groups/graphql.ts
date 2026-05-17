@@ -1,37 +1,13 @@
 import { gql } from '@apollo/client';
+import { GROUP_FIELDS } from './groupFields';
+
+export { GROUP_FIELDS };
 
 export const GET_GROUPS = gql`
+  ${GROUP_FIELDS}
   query GetGroups {
     groups {
-      id
-      name
-      description
-      totalSpent
-      yourShare
-      expenseGroupLabels
-      pendingInvitations {
-        email
-        name
-        status
-        emailDeliveryStatus
-      }
-      members {
-        userId
-        name
-        email
-        ratio
-      }
-      expenses {
-        date
-        expenseGroup
-        category
-        description
-        paidBy
-        total
-        yourShare
-        isPrivate
-        currency
-      }
+      ...GroupFields
     }
   }
 `;
@@ -52,73 +28,19 @@ export const GET_GROUP_SPLIT_TEMPLATES = gql`
 `;
 
 export const CREATE_GROUP = gql`
+  ${GROUP_FIELDS}
   mutation CreateGroup($input: CreateGroupInput!) {
     createGroup(input: $input) {
-      id
-      name
-      description
-      totalSpent
-      yourShare
-      expenseGroupLabels
-      pendingInvitations {
-        email
-        name
-        status
-        emailDeliveryStatus
-      }
-      members {
-        userId
-        name
-        email
-        ratio
-      }
-      expenses {
-        date
-        expenseGroup
-        category
-        description
-        paidBy
-        total
-        yourShare
-        isPrivate
-        currency
-      }
+      ...GroupFields
     }
   }
 `;
 
 export const UPDATE_GROUP = gql`
+  ${GROUP_FIELDS}
   mutation UpdateGroup($input: UpdateGroupInput!) {
     updateGroup(input: $input) {
-      id
-      name
-      description
-      totalSpent
-      yourShare
-      expenseGroupLabels
-      pendingInvitations {
-        email
-        name
-        status
-        emailDeliveryStatus
-      }
-      members {
-        userId
-        name
-        email
-        ratio
-      }
-      expenses {
-        date
-        expenseGroup
-        category
-        description
-        paidBy
-        total
-        yourShare
-        isPrivate
-        currency
-      }
+      ...GroupFields
     }
   }
 `;
