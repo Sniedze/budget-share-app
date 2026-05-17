@@ -30,6 +30,13 @@ import {
   mapInvitationStatus,
   upsertPendingInvitations,
 } from './invitations.js';
+import {
+  type GroupViewer,
+  groupMemberMatchesViewerClause,
+  groupMemberMatchesViewerParams,
+  loadUserIdsByEmails,
+  normalizeMemberEmail,
+} from './memberIdentity.js';
 import { buildOptimizedTransfers } from './settlementTransfers.js';
 import { parseSettlementPeriod, settlementPeriodRange } from './settlementPeriod.js';
 
@@ -469,9 +476,8 @@ type AccessibleGroupWithMembers = {
 };
 
 const loadAccessibleGroupsWithMembers = async (
-  userEmail: string,
+  viewer: GroupViewer,
 ): Promise<AccessibleGroupWithMembers[]> => {
-  const normalizedEmail = userEmail.trim().toLowerCase();
   const [groupRows] = await db.query<GroupRow[]>(
     `
       SELECT id, name, description
@@ -481,12 +487,12 @@ const loadAccessibleGroupsWithMembers = async (
         FROM group_members gm
         LEFT JOIN group_invitations gi
           ON gi.group_id = gm.group_id AND gi.email = gm.email
-        WHERE gm.email = ?
+        WHERE ${groupMemberMatchesViewerClause('gm')}
           AND (gi.id IS NULL OR gi.status = 'Accepted')
       )
       ORDER BY created_at DESC, id DESC
     `,
-    [normalizedEmail],
+    groupMemberMatchesViewerParams(viewer),
   );
 
   if (groupRows.length === 0) {
@@ -522,9 +528,10 @@ const loadAccessibleGroupsWithMembers = async (
   }));
 };
 
-export const listGroups = async (userEmail: string, viewerUserId: string): Promise<Group[]> => {
-  const normalizedEmail = userEmail.trim().toLowerCase();
-  const accessibleGroups = await loadAccessibleGroupsWithMembers(userEmail);
+export const listGroups = async (viewer: GroupViewer): Promise<Group[]> => {
+  const normalizedEmail = normalizeMemberEmail(viewer.email);
+  const viewerUserId = viewer.userId;
+  const accessibleGroups = await loadAccessibleGroupsWithMembers(viewer);
   if (accessibleGroups.length === 0) {
     return [];
   }
@@ -677,7 +684,7 @@ export const listGroups = async (userEmail: string, viewerUserId: string): Promi
   }));
 };
 
-export const createGroup = async (input: CreateGroupInput, actorEmail: string): Promise<Group> => {
+export const createGroup = async (input: CreateGroupInput, actor: GroupViewer): Promise<Group> => {
   const name = stripControlCharacters(input.name.trim());
   if (!name) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Group name is required.');
@@ -704,7 +711,7 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
     duplicateEmails.add(member.email);
   }
 
-  const normalizedActorEmail = actorEmail.trim().toLowerCase();
+  const normalizedActorEmail = normalizeMemberEmail(actor.email);
   const actorInMembers = members.some((member) => member.email === normalizedActorEmail);
   if (!actorInMembers) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Group creator must be included in members.');
@@ -726,30 +733,30 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
 
     groupId = insertResult.insertId;
 
+    const userIdsByEmail = await loadUserIdsByEmails(members.map((member) => member.email));
+
     if (members.length > 0) {
-      const memberPlaceholders = buildBulkInsertPlaceholders(members.length, 4);
-      const memberValues = members.flatMap((member) => [groupId, member.name, member.email, member.ratio]);
+      const memberPlaceholders = buildBulkInsertPlaceholders(members.length, 5);
+      const memberValues = members.flatMap((member) => [
+        groupId,
+        member.name,
+        member.email,
+        member.ratio,
+        userIdsByEmail.get(member.email) ?? null,
+      ]);
       await connection.execute(
         `
-          INSERT INTO group_members (group_id, name, email, ratio)
+          INSERT INTO group_members (group_id, name, email, ratio, user_id)
           VALUES ${memberPlaceholders}
         `,
         memberValues,
       );
     }
 
-    const [existingUsers] = await connection.query<RowDataPacket[]>(
-      `
-        SELECT email
-        FROM users
-        WHERE email IN (?)
-      `,
-      [members.map((member) => member.email)],
-    );
     memberEmailsHavingAccounts = new Set(
-      existingUsers.map((row) =>
-        typeof row.email === 'string' ? row.email.trim().toLowerCase() : '',
-      ),
+      members
+        .filter((member) => userIdsByEmail.has(member.email))
+        .map((member) => member.email),
     );
 
     const invitedEmails = members
@@ -805,10 +812,7 @@ export const createGroup = async (input: CreateGroupInput, actorEmail: string): 
   };
 };
 
-export const updateGroup = async (
-  input: UpdateGroupInput,
-  actor: { userId: string; email: string },
-): Promise<Group> => {
+export const updateGroup = async (input: UpdateGroupInput, actor: GroupViewer): Promise<Group> => {
   const numericGroupId = Number(input.id);
   if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid group id.');
@@ -840,7 +844,7 @@ export const updateGroup = async (
     duplicateEmails.add(member.email);
   }
 
-  const normalizedActorEmail = actor.email.trim().toLowerCase();
+  const normalizedActorEmail = normalizeMemberEmail(actor.email);
   const [beforeRows] = await db.query<GroupRow[]>(
     `
       SELECT id, name, description
@@ -867,15 +871,17 @@ export const updateGroup = async (
     `
       SELECT id
       FROM group_members
-      WHERE group_id = ? AND email = ?
+      WHERE group_id = ?
+        AND ${groupMemberMatchesViewerClause()}
       LIMIT 1
     `,
-    [numericGroupId, normalizedActorEmail],
+    [numericGroupId, ...groupMemberMatchesViewerParams(actor)],
   );
   if (membershipRows.length === 0) {
     logAuthzDenied('group_access_denied', {
       groupId: String(numericGroupId),
       email: normalizedActorEmail,
+      userId: actor.userId,
       action: 'updateGroup',
     });
     throw appError(ErrorCode.FORBIDDEN, 'Not authorized for this group.');
@@ -909,35 +915,30 @@ export const updateGroup = async (
       [numericGroupId],
     );
 
+    const userIdsByEmail = await loadUserIdsByEmails(members.map((member) => member.email));
+
     if (members.length > 0) {
-      const memberPlaceholders = buildBulkInsertPlaceholders(members.length, 4);
+      const memberPlaceholders = buildBulkInsertPlaceholders(members.length, 5);
       const memberValues = members.flatMap((member) => [
         numericGroupId,
         member.name,
         member.email,
         member.ratio,
+        userIdsByEmail.get(member.email) ?? null,
       ]);
       await connection.execute(
         `
-          INSERT INTO group_members (group_id, name, email, ratio)
+          INSERT INTO group_members (group_id, name, email, ratio, user_id)
           VALUES ${memberPlaceholders}
         `,
         memberValues,
       );
     }
 
-    const [existingUsers] = await connection.query<RowDataPacket[]>(
-      `
-        SELECT email
-        FROM users
-        WHERE email IN (?)
-      `,
-      [members.map((member) => member.email)],
-    );
     memberEmailsHavingAccounts = new Set(
-      existingUsers.map((row) =>
-        typeof row.email === 'string' ? row.email.trim().toLowerCase() : '',
-      ),
+      members
+        .filter((member) => userIdsByEmail.has(member.email))
+        .map((member) => member.email),
     );
 
     const newInvitedEmails = members
@@ -1067,13 +1068,13 @@ export const listInvitations = async (userEmail: string): Promise<GroupInvitatio
   }));
 };
 
-export const listSplitTemplates = async (groupId: string, userEmail: string): Promise<SplitTemplate[]> => {
+export const listSplitTemplates = async (groupId: string, viewer: GroupViewer): Promise<SplitTemplate[]> => {
   const numericGroupId = Number(groupId);
   if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid groupId.');
   }
 
-  await assertActiveGroupMembership(numericGroupId, userEmail, 'listSplitTemplates');
+  await assertActiveGroupMembership(numericGroupId, viewer, 'listSplitTemplates');
 
   const [rows] = await db.query<SplitTemplateRow[]>(
     `
@@ -1101,15 +1102,15 @@ export const listSplitTemplates = async (groupId: string, userEmail: string): Pr
 
 export const upsertSplitTemplate = async (
   input: UpsertSplitTemplateInput,
-  userEmail: string,
+  viewer: GroupViewer,
 ): Promise<SplitTemplate> => {
   const numericGroupId = Number(input.groupId);
   if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid groupId.');
   }
 
-  const normalizedEmail = userEmail.trim().toLowerCase();
-  await assertActiveGroupMembership(numericGroupId, userEmail, 'upsertSplitTemplate');
+  const normalizedEmail = normalizeMemberEmail(viewer.email);
+  await assertActiveGroupMembership(numericGroupId, viewer, 'upsertSplitTemplate');
 
   const category = input.category.trim();
   const templateName = input.templateName.trim();
@@ -1226,7 +1227,7 @@ export const upsertSplitTemplate = async (
 export const deleteExpenseGroup = async (
   groupId: string,
   category: string,
-  userEmail: string,
+  viewer: GroupViewer,
 ): Promise<boolean> => {
   const numericGroupId = Number(groupId);
   if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
@@ -1237,7 +1238,7 @@ export const deleteExpenseGroup = async (
     throw appError(ErrorCode.BAD_USER_INPUT, 'Expense group category is required.');
   }
 
-  await assertActiveGroupMembership(numericGroupId, userEmail, 'deleteExpenseGroup');
+  await assertActiveGroupMembership(numericGroupId, viewer, 'deleteExpenseGroup');
 
   const [result] = await db.execute<ResultSetHeader>(
     'DELETE FROM group_split_templates WHERE group_id = ? AND category = ?',
@@ -1288,12 +1289,11 @@ const listSettlementPaymentRows = async (
 };
 
 export const listHouseholdSettlements = async (
-  userEmail: string,
-  viewerUserId: string,
+  viewer: GroupViewer,
   periodInput?: unknown,
 ): Promise<HouseholdSettlement[]> => {
   try {
-    return await listHouseholdSettlementsImpl(userEmail, viewerUserId, periodInput);
+    return await listHouseholdSettlementsImpl(viewer, periodInput);
   } catch (error) {
     console.error('[listHouseholdSettlements]', error);
     throw error;
@@ -1301,13 +1301,12 @@ export const listHouseholdSettlements = async (
 };
 
 const listHouseholdSettlementsImpl = async (
-  userEmail: string,
-  _viewerUserId: string,
+  viewer: GroupViewer,
   periodInput?: unknown,
 ): Promise<HouseholdSettlement[]> => {
   const period = parseSettlementPeriod(periodInput);
   const { startIso: periodStartIso } = settlementPeriodRange(period);
-  const groups = await loadAccessibleGroupsWithMembers(userEmail);
+  const groups = await loadAccessibleGroupsWithMembers(viewer);
   if (groups.length === 0) {
     return [];
   }
@@ -1426,26 +1425,28 @@ const listHouseholdSettlementsImpl = async (
 
 export const recordSettlementPayment = async (
   input: RecordSettlementPaymentInput,
-  userEmail: string,
+  viewer: GroupViewer,
 ): Promise<SettlementPayment> => {
   const groupId = Number(input.groupId);
   if (!Number.isFinite(groupId) || groupId <= 0) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid groupId.');
   }
-  const normalizedEmail = userEmail.trim().toLowerCase();
+  const normalizedEmail = normalizeMemberEmail(viewer.email);
   const [membershipRows] = await db.query<RowDataPacket[]>(
     `
       SELECT id
       FROM group_members
-      WHERE group_id = ? AND email = ?
+      WHERE group_id = ?
+        AND ${groupMemberMatchesViewerClause()}
       LIMIT 1
     `,
-    [groupId, normalizedEmail],
+    [groupId, ...groupMemberMatchesViewerParams(viewer)],
   );
   if (membershipRows.length === 0) {
     logAuthzDenied('group_access_denied', {
       groupId: String(groupId),
       email: normalizedEmail,
+      userId: viewer.userId,
       action: 'recordSettlementPayment',
     });
     throw appError(ErrorCode.FORBIDDEN, 'Not authorized for this group.');

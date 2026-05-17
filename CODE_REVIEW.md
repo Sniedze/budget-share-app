@@ -76,7 +76,7 @@ This is genuinely good shipping. With the security posture and observability in 
 | # | Finding | Status |
 |---|---|---|
 | 1.10 | Raw `Error` messages leak | **◐ Partially resolved** — `errorHandler` rewrites 500s to "Internal server error." (`middleware/errorHandler.ts:29`). GraphQL resolver errors still expose raw `Error.message` to the client; need `formatError` to scrub. |
-| 1.11 | Email-as-identity | **✗ Still open** — `group_members.email` is still the authorization key everywhere (`expenses/service.ts:209-221`, `groups/service.ts:312-326`). |
+| 1.11 | Email-as-identity | **◐ Partially resolved** — `group_members.user_id` added, backfilled, and used for membership auth (with email fallback for invitees without accounts). Email remains the display/invitation key. |
 | 1.12 | Dedup hash edit footgun | **✗ Still open** — same logic. |
 | 1.13 | Currency half-implemented | **✗ Still open** — `normalizeExpenseCurrency` still throws "Only DKK supported" if anything else slips through (`expenses/service.ts:83-92`). |
 | 1.14 | Password policy minimal | **◐ Partially resolved** — register/change require ≥8 chars, letter + digit, max 72 bytes; `changePassword` revokes all refresh sessions then issues a new session for the current device. No breached-password (zxcvbn) check yet. |
@@ -277,7 +277,7 @@ If a library attaches a malicious `statusCode = "1000"` string, `Number("1000") 
 
 The previous top-10 list is mostly done. Here's what's left, ordered by impact ÷ effort.
 
-1. **Email-as-identity → user IDs** (1.11) — `group_members.user_id` as auth key. Large migration.
+1. **Email-as-identity → user IDs** (1.11) — **◐ Partial** — `user_id` on `group_members` + auth checks; finish removing email-only paths and invitation flows keyed solely by email.
 2. **Adopt GraphQL codegen for all client operations** (6.2) — expand beyond generated schema types.
 3. **Currency beyond DKK** (1.13) — product decision + schema/API work.
 4. **Email invitation resend flow** (A.2) — **✓ Done** — `email_delivery_status` on invitations; `resendGroupInvitation` mutation + household UI.

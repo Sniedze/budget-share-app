@@ -21,7 +21,8 @@ await verifyUserLogin(email, password);
 console.log('Login check: OK');
 
 const today = new Date().toISOString().slice(0, 10);
-let groups = await listGroups(email, userId);
+const viewer = { userId, email };
+let groups = await listGroups(viewer);
 let household = groups.find((group) => group.name === DEMO_HOUSEHOLD_NAME);
 
 if (!household) {
@@ -34,7 +35,7 @@ if (!household) {
         { name: PARTNER_NAME, email: PARTNER_EMAIL, ratio: 50 },
       ],
     },
-    email,
+    viewer,
   );
   household = created;
   console.log(`Created household "${DEMO_HOUSEHOLD_NAME}" (id ${created.id}).`);
@@ -69,7 +70,7 @@ if (!hasSampleExpenses) {
     { userId, email },
   );
   console.log('Added sample shared expenses (Groceries, Utilities).');
-  groups = await listGroups(email, userId);
+  groups = await listGroups(viewer);
   household = groups.find((group) => group.id === household?.id) ?? household;
 }
 

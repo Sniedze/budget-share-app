@@ -21,6 +21,10 @@ import {
   transactionDedupFieldsUnchanged,
 } from './transactionDedup.js';
 import { toStoredSplitDetails } from './splitAllocation.js';
+import {
+  groupMemberMatchesViewerClause,
+  groupMemberMatchesViewerParams,
+} from '../groups/memberIdentity.js';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 const APP_CURRENCY = 'DKK';
@@ -181,10 +185,10 @@ const isMysqlDuplicateKeyError = (error: unknown): boolean => {
   );
 };
 
-const loadMemberGroupIds = async (userEmail: string): Promise<Set<number>> => {
+const loadMemberGroupIds = async (actor: { userId: string; email: string }): Promise<Set<number>> => {
   const [rows] = await db.query<RowDataPacket[]>(
-    'SELECT group_id FROM group_members WHERE email = ?',
-    [userEmail],
+    `SELECT group_id FROM group_members WHERE ${groupMemberMatchesViewerClause()}`,
+    groupMemberMatchesViewerParams(actor),
   );
   return new Set(rows.map((row) => Number(row.group_id)));
 };
@@ -378,7 +382,7 @@ const canAccessExpense = (row: ExpenseRow, userId: string, memberGroupIds: Set<n
 };
 
 export const listExpenses = async (userId: string, userEmail: string): Promise<Expense[]> => {
-  const memberGroupIds = await loadMemberGroupIds(userEmail);
+  const memberGroupIds = await loadMemberGroupIds({ userId, email: userEmail });
   const [rows] = await db.query<ExpenseRow[]>(
     'SELECT id, title, amount, currency, created_at, transaction_date, category, expense_group, split_type, split_details, group_id, created_by_user_id, paid_by_user_id, transaction_dedup_hash, is_private, expense_flow FROM expenses ORDER BY transaction_date DESC, id DESC',
   );
@@ -420,7 +424,7 @@ export const createExpense = async (
   input: CreateExpenseInput,
   actor: { userId: string; email: string },
 ): Promise<Expense> => {
-  const memberGroupIds = await loadMemberGroupIds(actor.email);
+  const memberGroupIds = await loadMemberGroupIds(actor);
   return createExpenseWithContext(input, actor, {
     memberGroupIds,
     templateCache: new Map(),
@@ -462,7 +466,7 @@ export const importExpenses = async (
   }
 
   const batch: CreateExpenseBatchContext = {
-    memberGroupIds: await loadMemberGroupIds(actor.email),
+    memberGroupIds: await loadMemberGroupIds(actor),
     templateCache: new Map(),
   };
 
@@ -514,7 +518,7 @@ export const deleteExpense = async (id: string, actor: { userId: string; email: 
       throw appError(ErrorCode.FORBIDDEN, 'Not authorized to delete this expense.');
     }
   } else {
-    const memberGroupIds = await loadMemberGroupIds(actor.email);
+    const memberGroupIds = await loadMemberGroupIds(actor);
     if (!memberGroupIds.has(row.group_id)) {
       logAuthzDenied('expense_delete_denied', { expenseId: id, userId: actor.userId, reason: 'not_group_member' });
       throw appError(ErrorCode.FORBIDDEN, 'Not authorized to delete this expense.');
@@ -571,7 +575,7 @@ export const updateExpense = async (
     return null;
   }
 
-  const memberGroupIds = await loadMemberGroupIds(actor.email);
+  const memberGroupIds = await loadMemberGroupIds(actor);
   const existingGroupId = existing.group_id;
   const canEdit =
     existingGroupId === null
