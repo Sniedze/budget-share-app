@@ -43,6 +43,13 @@ import {
   parseViewerUserId,
 } from './memberIdentity.js';
 import { buildOptimizedTransfers } from './settlementTransfers.js';
+import {
+  GROUP_CORE_COLUMNS,
+  GROUP_LIST_EXPENSE_COLUMNS,
+  GROUP_MEMBER_COLUMNS,
+  PENDING_GROUP_INVITATION_COLUMNS,
+  SETTLEMENT_EXPENSE_COLUMNS,
+} from '../../db/sqlColumns.js';
 import { parseSettlementPeriod, settlementPeriodRange } from './settlementPeriod.js';
 import {
   parseExpenseSettlementAmounts,
@@ -411,7 +418,7 @@ const loadAccessibleGroupsWithMembers = async (
 ): Promise<AccessibleGroupWithMembers[]> => {
   const [groupRows] = await db.query<GroupRow[]>(
     `
-      SELECT id, name, description
+      SELECT ${GROUP_CORE_COLUMNS}
       FROM \`groups\`
       WHERE id IN (
         SELECT gm.group_id
@@ -432,7 +439,7 @@ const loadAccessibleGroupsWithMembers = async (
 
   const [memberRows] = await db.query<GroupMemberRow[]>(
     `
-      SELECT group_id AS groupId, name, email, ratio, user_id AS userId
+      SELECT ${GROUP_MEMBER_COLUMNS}
       FROM group_members
       WHERE group_id IN (?)
       ORDER BY id ASC
@@ -473,19 +480,7 @@ export const listGroups = async (viewer: GroupViewer): Promise<Group[]> => {
   const [expenseRows] = await db.query<GroupExpenseRow[]>(
     `
       SELECT
-        e.id,
-        e.group_id AS groupId,
-        e.title,
-        e.expense_group AS expenseGroup,
-        e.category,
-        e.amount,
-        e.currency,
-        e.split_type AS splitType,
-        e.split_details AS splitDetails,
-        e.transaction_date AS transactionDate,
-        u.full_name AS paidByName,
-        COALESCE(e.is_private, 0) AS isPrivate,
-        e.created_by_user_id AS createdByUserId
+        ${GROUP_LIST_EXPENSE_COLUMNS}
       FROM expenses e
       LEFT JOIN users u ON u.id = e.paid_by_user_id
       WHERE e.group_id IN (?)
@@ -577,11 +572,7 @@ export const listGroups = async (viewer: GroupViewer): Promise<Group[]> => {
     >(
       `
         SELECT
-          gi.group_id AS groupId,
-          gi.email,
-          gm.name,
-          gi.status,
-          gi.email_delivery_status AS emailDeliveryStatus
+          ${PENDING_GROUP_INVITATION_COLUMNS}
         FROM group_invitations gi
         INNER JOIN group_members gm
           ON gm.group_id = gi.group_id AND gm.email = gi.email
@@ -778,7 +769,7 @@ export const updateGroup = async (input: UpdateGroupInput, actor: GroupViewer): 
   const normalizedActorEmail = normalizeMemberEmail(actor.email);
   const [beforeRows] = await db.query<GroupRow[]>(
     `
-      SELECT id, name, description
+      SELECT ${GROUP_CORE_COLUMNS}
       FROM \`groups\`
       WHERE id = ?
       LIMIT 1
@@ -791,7 +782,7 @@ export const updateGroup = async (input: UpdateGroupInput, actor: GroupViewer): 
   }
   const [beforeMemberRows] = await db.query<GroupMemberRow[]>(
     `
-      SELECT group_id AS groupId, name, email, ratio, user_id AS userId
+      SELECT ${GROUP_MEMBER_COLUMNS}
       FROM group_members
       WHERE group_id = ?
       ORDER BY id ASC
@@ -909,7 +900,7 @@ export const updateGroup = async (input: UpdateGroupInput, actor: GroupViewer): 
 
   const [groupRows] = await db.query<GroupRow[]>(
     `
-      SELECT id, name, description
+      SELECT ${GROUP_CORE_COLUMNS}
       FROM \`groups\`
       WHERE id = ?
       LIMIT 1
@@ -1119,7 +1110,7 @@ export const upsertSplitTemplate = async (
   if (addedParticipantNames.length > 0) {
     const [groupRows] = await db.query<GroupRow[]>(
       `
-        SELECT id, name, description
+        SELECT ${GROUP_CORE_COLUMNS}
         FROM \`groups\`
         WHERE id = ?
         LIMIT 1
@@ -1129,7 +1120,7 @@ export const upsertSplitTemplate = async (
     const groupName = groupRows[0]?.name ?? 'Household';
     const [householdMembers] = await db.query<GroupMemberRow[]>(
       `
-        SELECT group_id AS groupId, name, email, ratio, user_id AS userId
+        SELECT ${GROUP_MEMBER_COLUMNS}
         FROM group_members
         WHERE group_id = ?
       `,
@@ -1362,15 +1353,7 @@ const listHouseholdSettlementsImpl = async (
   const [expenseRows] = await db.query<SettlementExpenseRow[]>(
     `
       SELECT
-        e.id,
-        e.group_id AS groupId,
-        e.amount,
-        e.currency,
-        e.expense_group AS expenseGroup,
-        e.category,
-        e.split_type AS splitType,
-        e.split_details AS splitDetails,
-        payer.full_name AS paidByName
+        ${SETTLEMENT_EXPENSE_COLUMNS}
       FROM expenses e
       LEFT JOIN users payer ON payer.id = e.paid_by_user_id
       WHERE e.group_id IN (?)

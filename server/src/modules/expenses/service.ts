@@ -403,7 +403,7 @@ export const importExpenses = async (
 
 export const deleteExpense = async (id: string, actor: { userId: string; email: string }): Promise<boolean> => {
   const [rows] = await db.query<ExpenseRow[]>(
-    'SELECT id, group_id, created_by_user_id, paid_by_user_id, title, amount, currency, created_at, transaction_date, category, expense_group, split_type, split_details, transaction_dedup_hash, is_private FROM expenses WHERE id = ? LIMIT 1',
+    `SELECT ${EXPENSE_SELECT_COLUMNS} FROM expenses WHERE id = ? LIMIT 1`,
     [id],
   );
   const row = rows[0];

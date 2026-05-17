@@ -1,17 +1,9 @@
+import pino from 'pino';
 import { ErrorCode } from './graphql/appError.js';
-
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 type LogFields = Record<string, unknown>;
 
-const LEVEL_RANK: Record<LogLevel, number> = {
-  debug: 10,
-  info: 20,
-  warn: 30,
-  error: 40,
-};
-
-const parseMinLogLevel = (): LogLevel => {
+const parseLevel = (): pino.Level => {
   const raw = process.env.LOG_LEVEL?.trim().toLowerCase();
   if (raw === 'debug' || raw === 'info' || raw === 'warn' || raw === 'error') {
     return raw;
@@ -19,30 +11,17 @@ const parseMinLogLevel = (): LogLevel => {
   return 'info';
 };
 
-const minLogLevel = parseMinLogLevel();
+const rootLogger = pino({
+  level: parseLevel(),
+  base: undefined,
+  timestamp: pino.stdTimeFunctions.isoTime,
+  formatters: {
+    level: (label) => ({ level: label }),
+  },
+});
 
-const shouldLog = (level: LogLevel): boolean => LEVEL_RANK[level] >= LEVEL_RANK[minLogLevel];
-
-const write = (level: LogLevel, event: string, fields: LogFields): void => {
-  if (!shouldLog(level)) {
-    return;
-  }
-  const payload = {
-    level,
-    event,
-    time: new Date().toISOString(),
-    ...fields,
-  };
-  const line = JSON.stringify(payload);
-  if (level === 'error') {
-    console.error(line);
-    return;
-  }
-  if (level === 'warn') {
-    console.warn(line);
-    return;
-  }
-  console.log(line);
+const write = (level: pino.Level, event: string, fields: LogFields): void => {
+  rootLogger[level]({ event, ...fields });
 };
 
 export const logRequestCompleted = (fields: {
