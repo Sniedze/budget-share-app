@@ -61,7 +61,13 @@ export const ensureSchema = async (): Promise<void> => {
     full_name VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    refresh_token_version INT NOT NULL DEFAULT 0
+    refresh_token_version INT NOT NULL DEFAULT 0,
+    phone VARCHAR(32) NULL,
+    timezone VARCHAR(64) NULL,
+    preferred_currency VARCHAR(8) NOT NULL DEFAULT 'DKK',
+    pending_email VARCHAR(255) NULL,
+    email_change_token_hash CHAR(64) NULL,
+    email_change_expires_at TIMESTAMP NULL
   )
     `);
 
@@ -72,11 +78,15 @@ export const ensureSchema = async (): Promise<void> => {
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
     ratio DECIMAL(6, 2) NOT NULL,
+    user_id INT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uniq_group_member_email (group_id, email),
     CONSTRAINT fk_group_members_group
       FOREIGN KEY (group_id) REFERENCES \`groups\`(id)
-      ON DELETE CASCADE
+      ON DELETE CASCADE,
+    CONSTRAINT fk_group_members_user
+      FOREIGN KEY (user_id) REFERENCES users(id)
+      ON DELETE SET NULL
   )
     `);
 
@@ -352,7 +362,7 @@ export const migrateSchema = async (): Promise<void> => {
         FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
           AND TABLE_NAME = 'users'
-          AND COLUMN_NAME IN ('refresh_token_version')
+          AND COLUMN_NAME IN ('refresh_token_version', 'phone', 'timezone', 'preferred_currency', 'pending_email', 'email_change_token_hash', 'email_change_expires_at')
       `,
   );
   const userColumnSet = new Set(userCols.map((row) => row.columnName));
@@ -360,6 +370,42 @@ export const migrateSchema = async (): Promise<void> => {
     await db.execute(`
         ALTER TABLE users
         ADD COLUMN refresh_token_version INT NOT NULL DEFAULT 0
+      `);
+  }
+  if (!userColumnSet.has('phone')) {
+    await db.execute(`
+        ALTER TABLE users
+        ADD COLUMN phone VARCHAR(32) NULL
+      `);
+  }
+  if (!userColumnSet.has('timezone')) {
+    await db.execute(`
+        ALTER TABLE users
+        ADD COLUMN timezone VARCHAR(64) NULL
+      `);
+  }
+  if (!userColumnSet.has('preferred_currency')) {
+    await db.execute(`
+        ALTER TABLE users
+        ADD COLUMN preferred_currency VARCHAR(8) NOT NULL DEFAULT 'DKK'
+      `);
+  }
+  if (!userColumnSet.has('pending_email')) {
+    await db.execute(`
+        ALTER TABLE users
+        ADD COLUMN pending_email VARCHAR(255) NULL
+      `);
+  }
+  if (!userColumnSet.has('email_change_token_hash')) {
+    await db.execute(`
+        ALTER TABLE users
+        ADD COLUMN email_change_token_hash CHAR(64) NULL
+      `);
+  }
+  if (!userColumnSet.has('email_change_expires_at')) {
+    await db.execute(`
+        ALTER TABLE users
+        ADD COLUMN email_change_expires_at TIMESTAMP NULL
       `);
   }
 
@@ -393,10 +439,7 @@ export const migrateSchema = async (): Promise<void> => {
   if (!groupMemberColumnSet.has('user_id')) {
     await db.execute(`
         ALTER TABLE group_members
-        ADD COLUMN user_id INT NULL,
-        ADD CONSTRAINT fk_group_members_user
-          FOREIGN KEY (user_id) REFERENCES users(id)
-          ON DELETE SET NULL
+        ADD COLUMN user_id INT NULL
       `);
     await db.execute(`
         UPDATE group_members gm
@@ -404,6 +447,24 @@ export const migrateSchema = async (): Promise<void> => {
         SET gm.user_id = u.id
         WHERE gm.user_id IS NULL
       `);
+    const [fkRows] = await db.query<RowDataPacket[]>(
+      `
+        SELECT 1
+        FROM information_schema.TABLE_CONSTRAINTS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'group_members'
+          AND CONSTRAINT_NAME = 'fk_group_members_user'
+        LIMIT 1
+      `,
+    );
+    if (fkRows.length === 0) {
+      await db.execute(`
+          ALTER TABLE group_members
+          ADD CONSTRAINT fk_group_members_user
+            FOREIGN KEY (user_id) REFERENCES users(id)
+            ON DELETE SET NULL
+        `);
+    }
   }
 
   const [invitedUserIdCols] = await db.query<ColumnCheckRow[]>(
@@ -477,7 +538,18 @@ export const migrateSchema = async (): Promise<void> => {
   await ensureIndex('expenses', 'idx_expenses_group_transaction', 'group_id, transaction_date DESC');
   await ensureIndex('expenses', 'idx_expenses_creator_transaction', 'created_by_user_id, transaction_date DESC');
   await ensureIndex('group_members', 'idx_group_members_email', 'email');
-  await ensureIndex('group_members', 'idx_group_members_user_id', 'user_id');
+  const [groupMemberUserIdCol] = await db.query<ColumnCheckRow[]>(
+    `
+        SELECT COLUMN_NAME AS columnName
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'group_members'
+          AND COLUMN_NAME = 'user_id'
+      `,
+  );
+  if (groupMemberUserIdCol.length > 0) {
+    await ensureIndex('group_members', 'idx_group_members_user_id', 'user_id');
+  }
   await ensureIndex('group_invitations', 'idx_group_invitations_email_status', 'email, status');
   await ensureIndex('group_invitations', 'idx_group_invitations_invited_user_status', 'invited_user_id, status');
   await db.execute(`

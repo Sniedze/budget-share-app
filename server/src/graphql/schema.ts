@@ -172,6 +172,10 @@ export const typeDefs = `#graphql
     email: String!
     fullName: String!
     createdAt: String!
+    phone: String
+    timezone: String!
+    preferredCurrency: String!
+    pendingEmail: String
   }
 
   type AuthPayload {
@@ -217,6 +221,14 @@ export const typeDefs = `#graphql
   input ChangePasswordInput {
     currentPassword: String!
     newPassword: String!
+  }
+
+  input UpdateProfileInput {
+    fullName: String!
+    email: String!
+    phone: String
+    timezone: String!
+    preferredCurrency: String!
   }
 
   input RefreshSessionInput {
@@ -428,6 +440,10 @@ export const typeDefs = `#graphql
     logout: Boolean!
     logoutAllDevices: Boolean!
     changePassword(input: ChangePasswordInput!): AuthPayload!
+    updateProfile(input: UpdateProfileInput!): User!
+    confirmEmailChange(token: String!): User!
+    cancelPendingEmailChange: User!
+    resendEmailChangeConfirmation: User!
     upsertGroupSplitTemplate(input: UpsertSplitTemplateInput!): Group!
     recordSettlementPayment(
       input: RecordSettlementPaymentInput!

@@ -7,6 +7,10 @@ export const ME = gql`
       email
       fullName
       createdAt
+      phone
+      timezone
+      preferredCurrency
+      pendingEmail
     }
   }
 `;
@@ -19,6 +23,10 @@ export const LOGIN = gql`
         email
         fullName
         createdAt
+        phone
+        timezone
+        preferredCurrency
+        pendingEmail
       }
     }
   }
@@ -32,6 +40,10 @@ export const REGISTER = gql`
         email
         fullName
         createdAt
+        phone
+        timezone
+        preferredCurrency
+        pendingEmail
       }
     }
   }
@@ -57,7 +69,71 @@ export const CHANGE_PASSWORD = gql`
         email
         fullName
         createdAt
+        phone
+        timezone
+        preferredCurrency
+        pendingEmail
       }
+    }
+  }
+`;
+
+export const UPDATE_PROFILE = gql`
+  mutation UpdateProfile($input: UpdateProfileInput!) {
+    updateProfile(input: $input) {
+      id
+      email
+      fullName
+      createdAt
+      phone
+      timezone
+      preferredCurrency
+      pendingEmail
+    }
+  }
+`;
+
+export const CONFIRM_EMAIL_CHANGE = gql`
+  mutation ConfirmEmailChange($token: String!) {
+    confirmEmailChange(token: $token) {
+      id
+      email
+      fullName
+      createdAt
+      phone
+      timezone
+      preferredCurrency
+      pendingEmail
+    }
+  }
+`;
+
+export const CANCEL_PENDING_EMAIL_CHANGE = gql`
+  mutation CancelPendingEmailChange {
+    cancelPendingEmailChange {
+      id
+      email
+      fullName
+      createdAt
+      phone
+      timezone
+      preferredCurrency
+      pendingEmail
+    }
+  }
+`;
+
+export const RESEND_EMAIL_CHANGE_CONFIRMATION = gql`
+  mutation ResendEmailChangeConfirmation {
+    resendEmailChangeConfirmation {
+      id
+      email
+      fullName
+      createdAt
+      phone
+      timezone
+      preferredCurrency
+      pendingEmail
     }
   }
 `;

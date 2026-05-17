@@ -8,6 +8,8 @@ export const MAX_PASSWORD_LENGTH = 72;
 export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_EMAIL_LENGTH = 254;
 export const MAX_FULL_NAME_LENGTH = 255;
+export const MAX_PHONE_LENGTH = 32;
+export const MAX_TIMEZONE_LENGTH = 64;
 
 export { stripControlCharacters };
 
@@ -36,6 +38,36 @@ export const validateEmailFormat = (email: string, mode: 'login' | 'register'): 
       mode === 'login' ? loginMessage : 'Enter a valid email address.',
     );
   }
+};
+
+export const normalizeOptionalPhone = (phone: string | null | undefined): string | null => {
+  const stripped = stripControlCharacters(phone ?? '').trim();
+  if (stripped.length === 0) {
+    return null;
+  }
+  if (stripped.length > MAX_PHONE_LENGTH) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Phone number is too long.');
+  }
+  if (!/^[\d\s+().-]+$/.test(stripped)) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Enter a valid phone number.');
+  }
+  return stripped;
+};
+
+export const normalizeTimezone = (timezone: string): string => {
+  const stripped = stripControlCharacters(timezone).trim();
+  if (stripped.length === 0) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Timezone is required.');
+  }
+  if (stripped.length > MAX_TIMEZONE_LENGTH) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Timezone is too long.');
+  }
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: stripped });
+  } catch {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Enter a valid IANA timezone (e.g. Europe/Copenhagen).');
+  }
+  return stripped;
 };
 
 export const normalizeFullNameForRegister = (fullName: string): string => {

@@ -3,17 +3,34 @@ import bcrypt from 'bcryptjs';
 import { db } from '../../db/mysql.js';
 import { queryOne } from '../../db/queryHelpers.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from './jwt.js';
-import type { AuthPayload, ChangePasswordInput, LoginInput, RegisterInput, User } from './types.js';
+import type {
+  AuthPayload,
+  ChangePasswordInput,
+  LoginInput,
+  RegisterInput,
+  UpdateProfileInput,
+  User,
+} from './types.js';
 import { appError, ErrorCode } from '../../graphql/appError.js';
+import { toIsoString } from '../../lib/dates.js';
+import { normalizeExpenseCurrency } from '../../lib/currency.js';
 import {
   assertCurrentPasswordForChange,
   assertPasswordAcceptableForRegister,
   assertPasswordLengthForLogin,
   assertNewPasswordRules,
   normalizeFullNameForRegister,
+  normalizeOptionalPhone,
+  normalizeTimezone,
   stripControlCharacters,
   validateEmailFormat,
 } from './validation.js';
+import {
+  clearPendingEmailChange,
+  confirmEmailChangeByToken,
+  resendPendingEmailChange,
+  startPendingEmailChange,
+} from './emailChange.js';
 import {
   createRefreshSession,
   isRefreshSessionActive,
@@ -29,9 +46,18 @@ type UserRow = {
   email: string;
   full_name: string;
   password_hash: string;
-  created_at: string;
+  created_at: Date | string;
   refresh_token_version: number;
+  phone: string | null;
+  timezone: string | null;
+  preferred_currency: string | null;
+  pending_email: string | null;
+  email_change_token_hash: string | null;
+  email_change_expires_at: Date | string | null;
 } & RowDataPacket;
+
+const USER_COLUMNS =
+  'id, email, full_name, password_hash, created_at, refresh_token_version, phone, timezone, preferred_currency, pending_email, email_change_token_hash, email_change_expires_at';
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 
@@ -39,7 +65,11 @@ const toUser = (row: UserRow): User => ({
   id: String(row.id),
   email: row.email,
   fullName: row.full_name,
-  createdAt: row.created_at,
+  createdAt: toIsoString(row.created_at),
+  phone: row.phone,
+  timezone: row.timezone ?? 'UTC',
+  preferredCurrency: row.preferred_currency ?? 'DKK',
+  pendingEmail: row.pending_email,
 });
 
 const issueAuthPayload = async (row: UserRow, sessionId: string): Promise<AuthPayload> => {
@@ -55,7 +85,7 @@ const issueAuthPayload = async (row: UserRow, sessionId: string): Promise<AuthPa
 const getUserByEmail = async (email: string): Promise<UserRow | null> => {
   return queryOne<UserRow>(
     `
-      SELECT id, email, full_name, password_hash, created_at, refresh_token_version
+      SELECT ${USER_COLUMNS}
       FROM users
       WHERE email = ?
       LIMIT 1
@@ -87,7 +117,7 @@ export const register = async (input: RegisterInput): Promise<AuthPayload> => {
 
   const userRow = await queryOne<UserRow>(
     `
-      SELECT id, email, full_name, password_hash, created_at, refresh_token_version
+      SELECT ${USER_COLUMNS}
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -163,7 +193,7 @@ export const refreshSession = async (refreshToken: string): Promise<AuthPayload>
 
   const user = await queryOne<UserRow>(
     `
-      SELECT id, email, full_name, password_hash, created_at, refresh_token_version
+      SELECT ${USER_COLUMNS}
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -187,7 +217,7 @@ export const changePassword = async (
 
   const user = await queryOne<UserRow>(
     `
-      SELECT id, email, full_name, password_hash, created_at, refresh_token_version
+      SELECT ${USER_COLUMNS}
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -222,7 +252,7 @@ export const changePassword = async (
 
   const updatedUser = await queryOne<UserRow>(
     `
-      SELECT id, email, full_name, password_hash, created_at, refresh_token_version
+      SELECT ${USER_COLUMNS}
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -264,10 +294,71 @@ export const revokeRefreshTokens = async (userId: string): Promise<void> => {
   await revokeAllRefreshSessions(userId);
 };
 
+export const updateProfile = async (userId: string, input: UpdateProfileInput): Promise<User> => {
+  const email = normalizeEmail(stripControlCharacters(input.email));
+  validateEmailFormat(email, 'register');
+  const fullName = normalizeFullNameForRegister(input.fullName);
+  const phone = normalizeOptionalPhone(input.phone);
+  const timezone = normalizeTimezone(input.timezone);
+  const preferredCurrency = normalizeExpenseCurrency(input.preferredCurrency);
+
+  const user = await queryOne<UserRow>(
+    `
+      SELECT ${USER_COLUMNS}
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [userId],
+  );
+  if (!user) {
+    throw appError(ErrorCode.NOT_FOUND, 'User not found.');
+  }
+
+  if (email === user.email) {
+    if (user.pending_email) {
+      await clearPendingEmailChange(userId);
+    }
+    await db.execute(
+      `
+        UPDATE users
+        SET full_name = ?, phone = ?, timezone = ?, preferred_currency = ?
+        WHERE id = ?
+      `,
+      [fullName, phone, timezone, preferredCurrency, userId],
+    );
+  } else {
+    await startPendingEmailChange(userId, email, fullName, user.email);
+    await db.execute(
+      `
+        UPDATE users
+        SET full_name = ?, phone = ?, timezone = ?, preferred_currency = ?
+        WHERE id = ?
+      `,
+      [fullName, phone, timezone, preferredCurrency, userId],
+    );
+  }
+
+  const updatedUser = await queryOne<UserRow>(
+    `
+      SELECT ${USER_COLUMNS}
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [userId],
+  );
+  if (!updatedUser) {
+    throw appError(ErrorCode.INTERNAL_SERVER_ERROR, 'Failed to load updated user.');
+  }
+
+  return toUser(updatedUser);
+};
+
 export const getUserById = async (userId: string): Promise<User | null> => {
   const row = await queryOne<UserRow>(
     `
-      SELECT id, email, full_name, password_hash, created_at, refresh_token_version
+      SELECT ${USER_COLUMNS}
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -275,4 +366,31 @@ export const getUserById = async (userId: string): Promise<User | null> => {
     [userId],
   );
   return row ? toUser(row) : null;
+};
+
+export const confirmEmailChange = async (token: string): Promise<User> => {
+  const userId = await confirmEmailChangeByToken(token);
+  const user = await getUserById(userId);
+  if (!user) {
+    throw appError(ErrorCode.INTERNAL_SERVER_ERROR, 'Failed to load user after email confirmation.');
+  }
+  return user;
+};
+
+export const cancelPendingEmailChangeForUser = async (userId: string): Promise<User> => {
+  await clearPendingEmailChange(userId);
+  const user = await getUserById(userId);
+  if (!user) {
+    throw appError(ErrorCode.NOT_FOUND, 'User not found.');
+  }
+  return user;
+};
+
+export const resendEmailChangeConfirmationForUser = async (userId: string): Promise<User> => {
+  await resendPendingEmailChange(userId);
+  const user = await getUserById(userId);
+  if (!user) {
+    throw appError(ErrorCode.NOT_FOUND, 'User not found.');
+  }
+  return user;
 };

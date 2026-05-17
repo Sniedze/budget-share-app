@@ -25,12 +25,16 @@ import {
 } from '../modules/groups/service.js';
 import { getFxRate } from '../lib/fxRates.js';
 import {
+  cancelPendingEmailChangeForUser,
   changePassword,
+  confirmEmailChange,
   login,
   logoutSession,
   refreshSession,
   register,
+  resendEmailChangeConfirmationForUser,
   revokeRefreshTokens,
+  updateProfile,
 } from '../modules/auth/service.js';
 import { clearSessionCookies, getRefreshTokenFromCookies, setSessionCookies } from '../modules/auth/cookies.js';
 import { appError, ErrorCode } from './appError.js';
@@ -48,7 +52,12 @@ import {
   parseUpdateGroupInput,
   parseUpsertSplitTemplateInput,
 } from '../modules/groups/validation.js';
-import type { ChangePasswordInput, LoginInput, RegisterInput } from '../modules/auth/types.js';
+import type {
+  ChangePasswordInput,
+  LoginInput,
+  RegisterInput,
+  UpdateProfileInput,
+} from '../modules/auth/types.js';
 import {
   getUserWorkspaceSettings,
   saveUserWorkspaceSettings,
@@ -180,6 +189,26 @@ export const resolvers = {
       const payload = await changePassword(user.id, args.input);
       setSessionCookies(context.res, payload.accessToken, payload.refreshToken, { remember: true });
       return { user: payload.user };
+    },
+    updateProfile: async (
+      _parent: unknown,
+      args: { input: UpdateProfileInput },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      return updateProfile(user.id, args.input);
+    },
+    confirmEmailChange: async (_parent: unknown, args: { token: string }) => {
+      const user = await confirmEmailChange(args.token);
+      return user;
+    },
+    cancelPendingEmailChange: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
+      const user = requireAuth(context);
+      return cancelPendingEmailChangeForUser(user.id);
+    },
+    resendEmailChangeConfirmation: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
+      const user = requireAuth(context);
+      return resendEmailChangeConfirmationForUser(user.id);
     },
     upsertGroupSplitTemplate: async (_parent: unknown, args: { input: unknown }, context: GraphqlContext) => {
       const user = requireAuth(context);
