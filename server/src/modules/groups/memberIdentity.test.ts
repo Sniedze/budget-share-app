@@ -23,6 +23,8 @@ describe('memberIdentity', () => {
 
   it('builds membership match clause and params', () => {
     assert.match(groupMemberMatchesViewerClause('gm'), /gm\.user_id = \?/);
+    assert.match(groupMemberMatchesViewerClause(), /(?<![.\w])user_id = \?/);
+    assert.doesNotMatch(groupMemberMatchesViewerClause(), /gm\.user_id/);
     assert.deepEqual(groupMemberMatchesViewerParams({ userId: '3', email: 'A@b.com' }), [3, 'a@b.com']);
   });
 

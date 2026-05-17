@@ -116,12 +116,12 @@ const QueuedCell = styled.td`
 
 type ExpenseFormProps = {
   title: string;
+  description: string;
   amount: string;
   transactionDate: string;
   category: string;
   groupId: string;
   expenseGroup: string;
-  isPrivate: boolean;
   split: SplitType;
   splitDetails: SplitAllocationInput[];
   categoryOptions: string[];
@@ -138,12 +138,12 @@ type ExpenseFormProps = {
   onCancel: () => void;
   queuedExpenses: Array<{
     title: string;
+    description: string;
     amount: string;
     transactionDate: string;
     category: string;
     split: SplitType;
     expenseGroup: string;
-    isPrivate: boolean;
   }>;
   queuedExpensesCount: number;
   onQueueExpense: () => void;
@@ -153,12 +153,12 @@ type ExpenseFormProps = {
 
 export const ExpenseForm = ({
   title,
+  description,
   amount,
   transactionDate,
   category,
   groupId,
   expenseGroup,
-  isPrivate,
   split,
   splitDetails,
   categoryOptions,
@@ -291,6 +291,15 @@ export const ExpenseForm = ({
           </Input>
         </FieldGroup>
       </Row>
+      <FieldGroup>
+        <LabelText>Description / comments</LabelText>
+        <Input
+          name="description"
+          value={description}
+          onChange={onInputChange}
+          placeholder="Optional notes (e.g. items purchased, trip details)"
+        />
+      </FieldGroup>
 
       <ModeRow>
         <FieldGroup>
@@ -348,24 +357,15 @@ export const ExpenseForm = ({
               </Input>
             </FieldGroup>
           </ModeRow>
-          <MutedText>Shared expense requires both household and expense group.</MutedText>
-          <FieldGroup>
-            <LabelText style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}>
-              <Input
-                type="checkbox"
-                name="isPrivate"
-                checked={isPrivate}
-                onChange={onInputChange}
-                style={{ minWidth: 'auto', width: 'auto' }}
-              />
-              Private in this household (only you see it; excluded from household total and settlements)
-            </LabelText>
-          </FieldGroup>
+          <MutedText>Shared expense requires both household and expense group. Only members of that expense group can see it.</MutedText>
         </>
       ) : null}
       {split === 'Custom' ? (
         <SplitDetails>
-          <MutedText>One-time custom split for this expense only.</MutedText>
+          <MutedText>
+            One-time custom split. Everyone listed below can see this expense on Personal Finances (match their
+            account name or email).
+          </MutedText>
           {splitDetails.map((detail, index) => (
             <SplitRow key={`split-detail-${index}`}>
               <Input
@@ -404,12 +404,12 @@ export const ExpenseForm = ({
             <thead>
               <tr>
                 <QueuedHeadCell>Merchant</QueuedHeadCell>
+                <QueuedHeadCell>Description</QueuedHeadCell>
                 <QueuedHeadCell>Amount ({APP_CURRENCY_CODE})</QueuedHeadCell>
                 <QueuedHeadCell>Date</QueuedHeadCell>
                 <QueuedHeadCell>Category</QueuedHeadCell>
                 <QueuedHeadCell>Split</QueuedHeadCell>
                 <QueuedHeadCell>Expense Group</QueuedHeadCell>
-                <QueuedHeadCell>Private</QueuedHeadCell>
                 <QueuedHeadCell>Action</QueuedHeadCell>
               </tr>
             </thead>
@@ -417,12 +417,12 @@ export const ExpenseForm = ({
               {queuedExpenses.map((queuedExpense, index) => (
                 <tr key={`${queuedExpense.title}-${queuedExpense.transactionDate}-${index}`}>
                   <QueuedCell>{queuedExpense.title}</QueuedCell>
+                  <QueuedCell>{queuedExpense.description.trim() || '—'}</QueuedCell>
                   <QueuedCell>{queuedExpense.amount}</QueuedCell>
                   <QueuedCell>{queuedExpense.transactionDate}</QueuedCell>
                   <QueuedCell>{queuedExpense.category}</QueuedCell>
                   <QueuedCell>{queuedExpense.split}</QueuedCell>
                   <QueuedCell>{queuedExpense.expenseGroup || '-'}</QueuedCell>
-                  <QueuedCell>{queuedExpense.split === 'Shared' && queuedExpense.isPrivate ? 'Yes' : '—'}</QueuedCell>
                   <QueuedCell>
                     <Button
                       type="button"

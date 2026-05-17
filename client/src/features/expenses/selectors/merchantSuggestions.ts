@@ -7,7 +7,6 @@ export type MerchantSuggestion = {
   split: SplitType;
   groupId?: string;
   expenseGroup?: string;
-  isPrivate: boolean;
   splitDetails: SplitAllocationInput[];
 };
 
@@ -23,7 +22,6 @@ const toSuggestionFromExpense = (expense: Expense): MerchantSuggestion => ({
   split: expense.split,
   groupId: expense.groupId ?? undefined,
   expenseGroup: expense.split === 'Shared' ? (expense.expenseGroup ?? expense.category) : undefined,
-  isPrivate: expense.isPrivate ?? false,
   splitDetails: toSplitDetails(expense),
 });
 
@@ -52,7 +50,6 @@ export type MerchantFormSuggestionPatch = {
   split: SplitType;
   groupId: string;
   expenseGroup: string;
-  isPrivate: boolean;
   splitDetails: SplitAllocationInput[];
 };
 
@@ -70,7 +67,6 @@ export const getMerchantSuggestionPatch = (
       split: suggestion.split,
       groupId: suggestion.groupId ?? '',
       expenseGroup: suggestion.expenseGroup ?? '',
-      isPrivate: suggestion.isPrivate,
       splitDetails: defaults.defaultSplitDetails.map((detail) => ({ ...detail })),
     };
   }
@@ -85,7 +81,6 @@ export const getMerchantSuggestionPatch = (
       split: suggestion.split,
       groupId: '',
       expenseGroup: '',
-      isPrivate: false,
       splitDetails,
     };
   }
@@ -95,7 +90,6 @@ export const getMerchantSuggestionPatch = (
     split: suggestion.split,
     groupId: '',
     expenseGroup: '',
-    isPrivate: false,
     splitDetails: defaults.defaultSplitDetails.map((detail) => ({ ...detail })),
   };
 };

@@ -1,4 +1,4 @@
-import { EXPENSE_TITLE_DESCRIPTION_SEPARATOR } from '../../format/expenseTitle';
+import { combineExpenseTitle } from '../../format/expenseTitle';
 import { normalizeStatementCurrency } from '../../format/currency';
 import type { SplitType } from '../expenses';
 import { normalizeAmountValue, resolveRowAmountAndFlow } from './amountParse';
@@ -25,14 +25,8 @@ export const buildImportSignature = (row: {
   return row.flow === 'in' ? `${base}|in` : base;
 };
 
-export const buildExpenseTitleForImport = (row: ImportedRow): string => {
-  const merchant = row.title.trim();
-  const desc = row.description.trim();
-  if (merchant && desc && desc !== merchant) {
-    return `${merchant}${EXPENSE_TITLE_DESCRIPTION_SEPARATOR}${desc}`;
-  }
-  return merchant || desc;
-};
+export const buildExpenseTitleForImport = (row: ImportedRow): string =>
+  combineExpenseTitle(row.title, row.description);
 
 export const applyDuplicateFlags = (
   importedRows: ImportedRow[],

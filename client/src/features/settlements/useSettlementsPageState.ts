@@ -25,6 +25,7 @@ import {
   settlementDueStatus,
 } from './settlementSelectors';
 import type { GetHouseholdSettlementsResponse, SettlementTransfer } from '../../graphql/operationTypes';
+import { isPersonalCustomSettlement } from './constants';
 
 export type SettlementDetailsTab = 'pending' | 'history' | 'monthly';
 
@@ -83,6 +84,10 @@ export const useSettlementsPageState = () => {
   const activeHousehold = useMemo(
     () => households.find((item) => item.groupId === activeGroupId) ?? households[0],
     [activeGroupId, households],
+  );
+  const isPersonalCustomSettlementActive = useMemo(
+    () => (activeHousehold ? isPersonalCustomSettlement(activeHousehold.groupId) : false),
+    [activeHousehold],
   );
 
   useEffect(() => {
@@ -208,6 +213,9 @@ export const useSettlementsPageState = () => {
     if (!activeHousehold) {
       return 'No household selected.';
     }
+    if (isPersonalCustomSettlementActive) {
+      return 'Recording payments for personal custom splits is not supported yet.';
+    }
     const confirmed = window.confirm(
       `Mark ${formatSettlementAmount(transfer.amount)} as paid from ${transfer.fromMember} to ${transfer.toMember}?\n\nThis records a settlement payment for ${activeHousehold.groupName}.`,
     );
@@ -238,6 +246,10 @@ export const useSettlementsPageState = () => {
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
+    if (isPersonalCustomSettlementActive) {
+      setFormError('Recording payments for personal custom splits is not supported yet.');
+      return;
+    }
     const parsedAmount = Number(amount);
     if (
       !activeHousehold ||
@@ -280,6 +292,7 @@ export const useSettlementsPageState = () => {
     error,
     households,
     activeHousehold,
+    isPersonalCustomSettlementActive,
     mixedCurrencyWarning,
     settlementCurrency,
     setSettlementCurrency,

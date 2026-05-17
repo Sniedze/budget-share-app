@@ -1,10 +1,11 @@
 import { useQuery } from '@apollo/client/react';
-import { ChangeEvent, FormEvent, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, Suspense, lazy, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { MonthlyOverviewSection, RecentExpensesSection, StatsSection } from '../components/sections';
 import { Sidebar } from '../components/sections/Sidebar';
 import { AppLayout, HeaderRow, HeaderText, MutedText, PageSurface, SectionSubtitle, SectionTitle, UserMenu } from '../components/ui';
 import { APP_CURRENCY_CODE } from '../format/currency';
+import { combineExpenseTitle, splitExpenseTitleForDisplay } from '../format/expenseTitle';
 import { useAuth } from '../features/auth';
 import {
   DEFAULT_EXPENSE_CATEGORIES,
@@ -65,45 +66,48 @@ const AnalyticsTabButton = styled.button<{ $isActive: boolean }>`
 
 type ExpenseFormValues = {
   title: string;
+  description: string;
   amount: string;
   transactionDate: string;
   category: string;
   groupId: string;
   expenseGroup: string;
-  isPrivate: boolean;
   split: SplitType;
   splitDetails: SplitAllocationInput[];
 };
 
 const getInitialFormValues = (): ExpenseFormValues => ({
   title: '',
+  description: '',
   amount: '',
   transactionDate: getTodayDateInput(),
   category: DEFAULT_CATEGORY,
   groupId: '',
   expenseGroup: '',
-  isPrivate: false,
   split: DEFAULT_SPLIT,
   splitDetails: DEFAULT_CUSTOM_SPLIT_DETAILS,
 });
 
-const toFormValuesFromExpense = (expense: Expense): ExpenseFormValues => ({
-  title: expense.title,
-  amount: String(expense.amount),
-  transactionDate: expense.transactionDate.slice(0, 10),
-  category: expense.category,
-  groupId: expense.groupId ?? '',
-  expenseGroup: expense.groupId ? (expense.expenseGroup ?? '') : '',
-  isPrivate: expense.isPrivate ?? false,
-  split: expense.split,
-  splitDetails:
-    expense.splitDetails.length > 0
-      ? expense.splitDetails.map((detail) => ({
-          participant: detail.participant,
-          ratio: detail.ratio,
-        }))
-      : DEFAULT_CUSTOM_SPLIT_DETAILS,
-});
+const toFormValuesFromExpense = (expense: Expense): ExpenseFormValues => {
+  const { merchant, description } = splitExpenseTitleForDisplay(expense.title);
+  return {
+    title: merchant,
+    description,
+    amount: String(expense.amount),
+    transactionDate: expense.transactionDate.slice(0, 10),
+    category: expense.category,
+    groupId: expense.groupId ?? '',
+    expenseGroup: expense.groupId ? (expense.expenseGroup ?? '') : '',
+    split: expense.split,
+    splitDetails:
+      expense.splitDetails.length > 0
+        ? expense.splitDetails.map((detail) => ({
+            participant: detail.participant,
+            ratio: detail.ratio,
+          }))
+        : DEFAULT_CUSTOM_SPLIT_DETAILS,
+  };
+};
 
 export const HomePage = (): JSX.Element => {
   const { user } = useAuth();
@@ -115,7 +119,6 @@ export const HomePage = (): JSX.Element => {
   const { data, loading, error } = useQuery<GetExpensesResponse>(GET_EXPENSES);
   const { data: groupsData } = useQuery<GetGroupsQueryResult>(GET_GROUPS);
   const { addExpense, updateExpense, deleteExpense, isMutating } = useExpenseActions();
-  const hasDefaultedSharedSplit = useRef(false);
   const { data: groupTemplatesData } = useQuery<GetGroupSplitTemplatesQueryResult>(GET_GROUP_SPLIT_TEMPLATES, {
     variables: { groupId: formValues.groupId },
     skip: !formValues.groupId || formValues.split !== 'Shared',
@@ -190,18 +193,6 @@ export const HomePage = (): JSX.Element => {
     [groupTemplatesData?.groupSplitTemplates],
   );
 
-  useEffect(() => {
-    if (hasDefaultedSharedSplit.current || editingId || householdOptions.length === 0) {
-      return;
-    }
-    hasDefaultedSharedSplit.current = true;
-    setFormValues((previous) =>
-      previous.split === 'Personal' && previous.title.trim().length === 0
-        ? { ...previous, split: 'Shared' }
-        : previous,
-    );
-  }, [editingId, householdOptions.length]);
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -232,7 +223,7 @@ export const HomePage = (): JSX.Element => {
         .filter((detail) => detail.participant.length > 0 && Number.isFinite(detail.ratio) && detail.ratio > 0);
 
       return {
-        title: values.title.trim(),
+        title: combineExpenseTitle(values.title, values.description),
         amount: parsedAmount,
         transactionDate: values.transactionDate,
         category: values.category,
@@ -240,7 +231,6 @@ export const HomePage = (): JSX.Element => {
         split: values.split,
         splitDetails: values.split === 'Custom' ? normalizedSplitDetails : undefined,
         groupId: values.split === 'Shared' ? values.groupId : undefined,
-        isPrivate: values.split === 'Shared' && Boolean(values.groupId) ? values.isPrivate : false,
         currency: APP_CURRENCY_CODE,
         flow: 'Outgoing' as const,
       };
@@ -281,14 +271,6 @@ export const HomePage = (): JSX.Element => {
   };
 
   const onInputChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const target = event.target;
-    if (target instanceof HTMLInputElement && target.name === 'isPrivate') {
-      setFormValues((previous) => ({
-        ...previous,
-        isPrivate: target.checked,
-      }));
-      return;
-    }
     const { name, value } = event.target;
     setFormValues((previous) => {
       const nextValue =
@@ -312,7 +294,7 @@ export const HomePage = (): JSX.Element => {
         next = { ...next, splitDetails: DEFAULT_CUSTOM_SPLIT_DETAILS };
       }
       if (name === 'split' && value !== 'Shared') {
-        next = { ...next, groupId: '', expenseGroup: '', isPrivate: false };
+        next = { ...next, groupId: '', expenseGroup: '' };
       }
       if (name === 'groupId') {
         next = { ...next, expenseGroup: '' };

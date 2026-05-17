@@ -53,6 +53,12 @@ import {
 } from '../../db/sqlColumns.js';
 import { parseSettlementPeriod, settlementPeriodRange } from './settlementPeriod.js';
 import {
+  loadExpenseViewerProfile,
+  PERSONAL_CUSTOM_SETTLEMENT_GROUP_ID,
+  viewerParticipatesInCustomSplit,
+  viewerParticipatesInExpenseGroup,
+} from './expenseVisibility.js';
+import {
   parseExpenseSettlementAmounts,
   parseTemplateSplitRatios,
 } from './splitDetailsParse.js';
@@ -138,6 +144,8 @@ type SettlementExpenseRow = {
   category: string | null;
   splitType: string | null;
   splitDetails: string | null;
+  isPrivate: number;
+  createdByUserId: number | null;
   paidByName: string | null;
 } & RowDataPacket;
 
@@ -217,7 +225,7 @@ const listExpenseGroupLabelsByGroupId = async (groupIds: number[]): Promise<Map<
   return map;
 };
 
-const listTemplateSplitDetailsByGroupAndCategory = async (
+export const listTemplateSplitDetailsByGroupAndCategory = async (
   groupIds: number[],
 ): Promise<Map<string, Array<{ participant: string; ratio: number }>>> => {
   const map = new Map<string, Array<{ participant: string; ratio: number }>>();
@@ -493,28 +501,39 @@ export const listGroups = async (viewer: GroupViewer): Promise<Group[]> => {
   const templateSplitByKey = await listTemplateSplitDetailsByGroupAndCategory(groupRows.map((group) => group.id));
 
   for (const row of expenseRows) {
-    const isPrivate = expenseRowIsPrivate(row);
-    if (isPrivate && String(row.createdByUserId ?? '') !== viewerUserId) {
+    if (expenseRowIsPrivate(row)) {
       continue;
     }
     const groupMembers = membersByGroupId.get(row.groupId) ?? [];
     const viewerMember = findViewerGroupMember(groupMembers, viewer);
+    if (!viewerMember) {
+      continue;
+    }
     const amount = Number(row.amount);
+    const expenseGroupKey = (row.expenseGroup ?? row.category).trim().toLowerCase();
+    const templateSplit = templateSplitByKey.get(`${row.groupId}:${expenseGroupKey}`) ?? [];
+    if (
+      !viewerParticipatesInExpenseGroup(
+        viewerMember.name,
+        row.splitType ?? 'Shared',
+        typeof row.splitDetails === 'string' ? row.splitDetails : null,
+        templateSplit,
+        amount,
+      )
+    ) {
+      continue;
+    }
     const splitDetails = parseExpenseSettlementAmounts(
       typeof row.splitDetails === 'string' ? row.splitDetails : null,
       amount,
     );
 
     let yourShare = 0;
-    if (isPrivate && String(row.createdByUserId ?? '') === viewerUserId) {
-      yourShare = amount;
-    } else if (viewerMember) {
+    if (viewerMember) {
       const viewerNameKey = viewerMember.name.trim().toLowerCase();
       const shareFromDetails = splitDetails.find(
         (share) => share.participant.trim().toLowerCase() === viewerNameKey,
       );
-      const expenseGroupKey = (row.expenseGroup ?? row.category).trim().toLowerCase();
-      const templateSplit = templateSplitByKey.get(`${row.groupId}:${expenseGroupKey}`) ?? [];
       const templateAllocation = templateSplit.find(
         (allocation) => allocation.participant.trim().toLowerCase() === viewerNameKey,
       );
@@ -541,15 +560,13 @@ export const listGroups = async (viewer: GroupViewer): Promise<Group[]> => {
       paidBy: row.paidByName ?? 'Member',
       total: amount,
       yourShare,
-      isPrivate,
+      isPrivate: false,
       currency: row.currency && row.currency.trim() ? row.currency.trim().toUpperCase() : 'DKK',
     });
     expensesByGroupId.set(row.groupId, groupExpenses);
 
     const runningTotals = totalsByGroupId.get(row.groupId) ?? { totalSpent: 0, yourShare: 0 };
-    if (!isPrivate) {
-      runningTotals.totalSpent = Number((runningTotals.totalSpent + amount).toFixed(2));
-    }
+    runningTotals.totalSpent = Number((runningTotals.totalSpent + amount).toFixed(2));
     runningTotals.yourShare = Number((runningTotals.yourShare + yourShare).toFixed(2));
     totalsByGroupId.set(row.groupId, runningTotals);
   }
@@ -1313,6 +1330,154 @@ const groupSettlementExpensesByCurrency = (
   return byCurrency;
 };
 
+const normalizeYouParticipantInSplitDetails = (
+  splitDetailsJson: string | null,
+  creatorDisplayName: string | null,
+): string | null => {
+  if (!splitDetailsJson?.trim() || !creatorDisplayName?.trim()) {
+    return splitDetailsJson;
+  }
+  try {
+    const raw = JSON.parse(splitDetailsJson) as Array<{ participant?: string }>;
+    if (!Array.isArray(raw)) {
+      return splitDetailsJson;
+    }
+    const normalized = raw.map((entry) => {
+      const participant = typeof entry.participant === 'string' ? entry.participant : '';
+      return {
+        ...entry,
+        participant:
+          participant.trim().toLowerCase() === 'you' ? creatorDisplayName.trim() : participant,
+      };
+    });
+    return JSON.stringify(normalized);
+  } catch {
+    return splitDetailsJson;
+  }
+};
+
+const loadCreatorDisplayNames = async (userIds: number[]): Promise<Map<number, string>> => {
+  const map = new Map<number, string>();
+  if (userIds.length === 0) {
+    return map;
+  }
+  const [rows] = await db.query<Array<{ id: number; full_name: string } & RowDataPacket>>(
+    'SELECT id, full_name FROM users WHERE id IN (?)',
+    [userIds],
+  );
+  for (const row of rows) {
+    const name = row.full_name?.trim();
+    if (name) {
+      map.set(row.id, name);
+    }
+  }
+  return map;
+};
+
+const buildPersonalCustomSplitSettlement = async (
+  viewer: GroupViewer,
+  periodStartIso: string,
+): Promise<HouseholdSettlement | null> => {
+  const viewerProfile = await loadExpenseViewerProfile(viewer.userId, viewer.email);
+  const [rows] = await db.query<SettlementExpenseRow[]>(
+    `
+      SELECT
+        ${SETTLEMENT_EXPENSE_COLUMNS}
+      FROM expenses e
+      LEFT JOIN users payer ON payer.id = e.paid_by_user_id
+      WHERE e.group_id IS NULL
+        AND e.split_type = 'Custom'
+        AND COALESCE(e.is_private, 0) = 0
+        AND COALESCE(e.expense_flow, 'Outgoing') = 'Outgoing'
+        AND e.transaction_date >= ?
+      ORDER BY e.transaction_date DESC, e.id DESC
+    `,
+    [periodStartIso],
+  );
+
+  const candidateRows = rows.filter(
+    (row) =>
+      !expenseRowIsPrivate(row) &&
+      viewerParticipatesInCustomSplit(
+        typeof row.splitDetails === 'string' ? row.splitDetails : null,
+        Number(row.amount),
+        viewerProfile,
+        row.createdByUserId,
+      ),
+  );
+  if (candidateRows.length === 0) {
+    return null;
+  }
+
+  const creatorIds = [
+    ...new Set(
+      candidateRows
+        .map((row) => row.createdByUserId)
+        .filter((id): id is number => id !== null && Number.isFinite(id)),
+    ),
+  ];
+  const creatorNamesById = await loadCreatorDisplayNames(creatorIds);
+
+  const visibleExpenses: SettlementExpenseRow[] = candidateRows.map((row) => {
+    const creatorName =
+      row.createdByUserId !== null ? creatorNamesById.get(row.createdByUserId) ?? null : null;
+    return {
+      ...row,
+      groupId: 0,
+      splitType: 'Custom',
+      splitDetails: normalizeYouParticipantInSplitDetails(row.splitDetails, creatorName),
+    };
+  });
+
+  const participantNames = new Set<string>();
+  for (const expense of visibleExpenses) {
+    const shares = parseExpenseSettlementAmounts(expense.splitDetails as unknown, Number(expense.amount));
+    shares.forEach((share) => {
+      const name = share.participant.trim();
+      if (name) {
+        participantNames.add(name);
+      }
+    });
+    if (expense.paidByName?.trim()) {
+      participantNames.add(expense.paidByName.trim());
+    }
+  }
+
+  const members: GroupMember[] = Array.from(participantNames)
+    .sort((left, right) => left.localeCompare(right))
+    .map((name) => ({
+      name,
+      email: '',
+      ratio: 0,
+    }));
+
+  const templateSplitByKey = new Map<string, Array<{ participant: string; ratio: number }>>();
+  const payments: SettlementPayment[] = [];
+  const byCurrency = groupSettlementExpensesByCurrency(visibleExpenses);
+  const currencies = Array.from(byCurrency.keys()).sort();
+  const currencyScopes = currencies.map((currency) =>
+    buildCurrencySettlementScope(
+      currency,
+      members,
+      byCurrency.get(currency) ?? [],
+      payments,
+      templateSplitByKey,
+    ),
+  );
+  const primary = currencyScopes[0];
+
+  return {
+    groupId: PERSONAL_CUSTOM_SETTLEMENT_GROUP_ID,
+    groupName: 'Personal custom splits',
+    balances: primary?.balances ?? [],
+    transfers: primary?.transfers ?? [],
+    expenseGroups: primary?.expenseGroups ?? [],
+    payments,
+    mixedCurrencyWarning: currencies.length > 1,
+    currencyScopes,
+  };
+};
+
 const listHouseholdSettlementsImpl = async (
   viewer: GroupViewer,
   periodInput?: unknown,
@@ -1324,11 +1489,10 @@ const listHouseholdSettlementsImpl = async (
   if (filterGroupId !== undefined) {
     groups = groups.filter((group) => group.id === filterGroupId);
   }
-  if (groups.length === 0) {
-    return [];
-  }
 
+  const householdSettlements: HouseholdSettlement[] = [];
   const groupIds = groups.map((group) => group.id);
+  if (groupIds.length > 0) {
   const templateSplitByKey = await listTemplateSplitDetailsByGroupAndCategory(groupIds);
   const [expenseRows] = await db.query<SettlementExpenseRow[]>(
     `
@@ -1337,7 +1501,6 @@ const listHouseholdSettlementsImpl = async (
       FROM expenses e
       LEFT JOIN users payer ON payer.id = e.paid_by_user_id
       WHERE e.group_id IN (?)
-        AND COALESCE(e.is_private, 0) = 0
         AND COALESCE(e.expense_flow, 'Outgoing') = 'Outgoing'
         AND e.transaction_date >= ?
       ORDER BY e.transaction_date DESC, e.id DESC
@@ -1347,11 +1510,32 @@ const listHouseholdSettlementsImpl = async (
   const paymentRows = await listSettlementPaymentRows(groupIds, periodStartIso);
 
   const expensesByGroupId = new Map<number, SettlementExpenseRow[]>();
-  expenseRows.forEach((row) => {
+  for (const row of expenseRows) {
+    if (expenseRowIsPrivate(row)) {
+      continue;
+    }
+    const group = groups.find((entry) => entry.id === row.groupId);
+    const viewerMember = group ? findViewerGroupMember(group.members, viewer) : undefined;
+    if (!viewerMember) {
+      continue;
+    }
+    const expenseGroupKey = (row.expenseGroup ?? row.category ?? 'General').trim().toLowerCase();
+    const templateSplit = templateSplitByKey.get(`${row.groupId}:${expenseGroupKey}`) ?? [];
+    if (
+      !viewerParticipatesInExpenseGroup(
+        viewerMember.name,
+        row.splitType ?? 'Shared',
+        typeof row.splitDetails === 'string' ? row.splitDetails : null,
+        templateSplit,
+        Number(row.amount),
+      )
+    ) {
+      continue;
+    }
     const existing = expensesByGroupId.get(row.groupId) ?? [];
     existing.push(row);
     expensesByGroupId.set(row.groupId, existing);
-  });
+  }
   const paymentsByGroupId = new Map<number, SettlementPayment[]>();
   paymentRows.forEach((row) => {
     const existing = paymentsByGroupId.get(row.groupId) ?? [];
@@ -1369,33 +1553,45 @@ const listHouseholdSettlementsImpl = async (
     paymentsByGroupId.set(row.groupId, existing);
   });
 
-  return groups.map((group) => {
-    const groupExpenses = expensesByGroupId.get(group.id) ?? [];
-    const groupPayments = paymentsByGroupId.get(group.id) ?? [];
-    const byCurrency = groupSettlementExpensesByCurrency(groupExpenses);
-    const currencies = Array.from(byCurrency.keys()).sort();
-    const currencyScopes = currencies.map((currency) =>
-      buildCurrencySettlementScope(
-        currency,
-        group.members,
-        byCurrency.get(currency) ?? [],
-        groupPayments,
-        templateSplitByKey,
-      ),
-    );
-    const primary = currencyScopes[0];
+  householdSettlements.push(
+    ...groups.map((group) => {
+      const groupExpenses = expensesByGroupId.get(group.id) ?? [];
+      const groupPayments = paymentsByGroupId.get(group.id) ?? [];
+      const byCurrency = groupSettlementExpensesByCurrency(groupExpenses);
+      const currencies = Array.from(byCurrency.keys()).sort();
+      const currencyScopes = currencies.map((currency) =>
+        buildCurrencySettlementScope(
+          currency,
+          group.members,
+          byCurrency.get(currency) ?? [],
+          groupPayments,
+          templateSplitByKey,
+        ),
+      );
+      const primary = currencyScopes[0];
 
-    return {
-      groupId: String(group.id),
-      groupName: group.name,
-      balances: primary?.balances ?? [],
-      transfers: primary?.transfers ?? [],
-      expenseGroups: primary?.expenseGroups ?? [],
-      payments: groupPayments,
-      mixedCurrencyWarning: currencies.length > 1,
-      currencyScopes,
-    };
-  });
+      return {
+        groupId: String(group.id),
+        groupName: group.name,
+        balances: primary?.balances ?? [],
+        transfers: primary?.transfers ?? [],
+        expenseGroups: primary?.expenseGroups ?? [],
+        payments: groupPayments,
+        mixedCurrencyWarning: currencies.length > 1,
+        currencyScopes,
+      };
+    }),
+  );
+  }
+
+  if (filterGroupId === undefined) {
+    const customSettlement = await buildPersonalCustomSplitSettlement(viewer, periodStartIso);
+    if (customSettlement) {
+      householdSettlements.push(customSettlement);
+    }
+  }
+
+  return householdSettlements;
 };
 
 export const recordSettlementPayment = async (
@@ -1403,6 +1599,12 @@ export const recordSettlementPayment = async (
   viewer: GroupViewer,
   periodInput?: unknown,
 ): Promise<RecordSettlementPaymentResult> => {
+  if (input.groupId === PERSONAL_CUSTOM_SETTLEMENT_GROUP_ID) {
+    throw appError(
+      ErrorCode.BAD_USER_INPUT,
+      'Recording payments for personal custom splits is not supported yet.',
+    );
+  }
   const groupId = Number(input.groupId);
   if (!Number.isFinite(groupId) || groupId <= 0) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid groupId.');

@@ -121,6 +121,7 @@ export const HouseholdPage = (): JSX.Element => {
     loading,
     error,
     activeGroup,
+    sharedHouseholdExpenses,
     setModalOpen,
     openAddExpenseModal,
     activeExpenseGroup,
@@ -171,8 +172,6 @@ export const HouseholdPage = (): JSX.Element => {
     sortedExpenseCategories,
     expenseMembers,
     selectedExpenseTemplate,
-    expenseIsPrivate,
-    setExpenseIsPrivate,
     expenseError,
     isCreatingExpense,
     isExpenseSubmitDisabled,
@@ -308,9 +307,9 @@ export const HouseholdPage = (): JSX.Element => {
               >
                 <Row>
                   <strong>All expenses</strong>
-                  <Badge $variant="accent">{activeGroup.expenses.length}</Badge>
+                  <Badge $variant="accent">{sharedHouseholdExpenses.length}</Badge>
                 </Row>
-                <MutedText>Every household expense, including from Personal Finances.</MutedText>
+                <MutedText>Shared household expenses for expense groups you belong to.</MutedText>
               </GroupCard>
             ) : null}
             {splitTemplates.map((template) => {
@@ -371,8 +370,8 @@ export const HouseholdPage = (): JSX.Element => {
                 <>
                   {isViewingAllExpenseGroups ? (
                     <MutedText>
-                      Expenses added on Personal Finances appear here when split type is Shared and a household is
-                      selected.
+                      Shared expenses from Personal Finances appear here when a household is selected. Only members of
+                      each expense group can see its expenses.
                     </MutedText>
                   ) : activeExpenseGroup ? (
                     <ExpenseGroupsGrid>
@@ -415,7 +414,6 @@ export const HouseholdPage = (): JSX.Element => {
                           <Th>Total</Th>
                           <Th>Expense Ratio</Th>
                           <Th>Your Share</Th>
-                          <Th>Private</Th>
                         </Tr>
                       </Thead>
                       <Tbody>
@@ -445,13 +443,12 @@ export const HouseholdPage = (): JSX.Element => {
                                   )?.ratio,
                             )}</Td>
                             <Td>{formatCurrency(expense.yourShare, expense.currency)}</Td>
-                            <Td>{expense.isPrivate ? 'Yes' : '—'}</Td>
                           </Tr>
                           );
                         })}
                         {activeExpenseGroupExpenses.length === 0 ? (
                           <Tr key="no-expense-group-expenses">
-                            <Td colSpan={isViewingAllExpenseGroups ? 10 : 9}>
+                            <Td colSpan={isViewingAllExpenseGroups ? 9 : 8}>
                               {isViewingAllExpenseGroups
                                 ? 'No household expenses yet. Add one here or on Personal Finances with split type Shared.'
                                 : 'No expenses for this expense group yet.'}
@@ -528,8 +525,6 @@ export const HouseholdPage = (): JSX.Element => {
         categoryOptions={sortedExpenseCategories}
         expenseMembers={expenseMembers}
         hasPredefinedSplit={Boolean(selectedExpenseTemplate)}
-        expenseIsPrivate={expenseIsPrivate}
-        onExpensePrivateChange={setExpenseIsPrivate}
         expenseError={expenseError}
         isSubmitting={isCreatingExpense}
         isSubmitDisabled={isExpenseSubmitDisabled}
