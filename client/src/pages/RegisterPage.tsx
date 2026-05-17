@@ -1,6 +1,7 @@
 import { FormEvent, useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth';
+import { PERSONAL_FINANCES_PATH } from '../routes';
 import { isPasswordStrong, passwordPolicyHint } from '../features/auth/passwordPolicy';
 import {
   AuthActions,
@@ -44,7 +45,7 @@ export const RegisterPage = (): JSX.Element => {
 
     try {
       await register(fullName.trim(), email.trim(), password);
-      navigate('/', { replace: true });
+      navigate(PERSONAL_FINANCES_PATH, { replace: true });
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : 'Registration failed.');
     }
