@@ -90,28 +90,28 @@ export const RESEND_GROUP_INVITATION = gql`
 `;
 
 export const DECLINE_EXPENSE_GROUP_PARTICIPATION = gql`
+  ${GROUP_FIELDS}
   mutation DeclineExpenseGroupParticipation($groupId: ID!, $category: String!) {
-    declineExpenseGroupParticipation(groupId: $groupId, category: $category)
+    declineExpenseGroupParticipation(groupId: $groupId, category: $category) {
+      ...GroupFields
+    }
   }
 `;
 
 export const DELETE_EXPENSE_GROUP = gql`
+  ${GROUP_FIELDS}
   mutation DeleteExpenseGroup($groupId: ID!, $category: String!) {
-    deleteExpenseGroup(groupId: $groupId, category: $category)
+    deleteExpenseGroup(groupId: $groupId, category: $category) {
+      ...GroupFields
+    }
   }
 `;
 
 export const UPSERT_GROUP_SPLIT_TEMPLATE = gql`
+  ${GROUP_FIELDS}
   mutation UpsertGroupSplitTemplate($input: UpsertSplitTemplateInput!) {
     upsertGroupSplitTemplate(input: $input) {
-      id
-      groupId
-      category
-      templateName
-      splitDetails {
-        participant
-        ratio
-      }
+      ...GroupFields
     }
   }
 `;

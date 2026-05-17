@@ -1,5 +1,7 @@
-import { useQuery } from '@apollo/client/react';
+import { useApolloClient, useQuery } from '@apollo/client/react';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { APP_CURRENCY_CODE, formatCurrency } from '../../format/currency';
+import { FX_RATE } from './graphql';
 import { useAuth } from '../auth';
 import {
   buildForecastChartRows,
@@ -17,8 +19,11 @@ import {
   projectedYearEndBalance,
   suggestMonthBudgetsFromPreviousMonth,
   sumByCategory,
+  expenseCurrencyCode,
   sumExpenseAmounts,
+  sumExpenseAmountsWithFx,
   toYearMonthKey,
+  ytdOutgoingExpensesThrough,
   totalSpendByYear,
   yearsPresentInExpenses,
   ytdExpensesThrough,
@@ -26,7 +31,6 @@ import {
   ytdIncomeFromMonthlyEstimate,
   pad2,
 } from './selectors';
-import { formatCurrency } from '../../format/currency';
 import { useUserWorkspaceSettings } from '../userSettings';
 import type { BudgetAssumptions } from './storage';
 import { CATEGORY_DOT_COLORS, DEFAULT_CATEGORY_OPTIONS } from './budgetPageStyles';
@@ -39,6 +43,7 @@ import {
 
 export const useBudgetPageState = () => {
   const { user } = useAuth();
+  const client = useApolloClient();
   const userId = user?.id ?? '';
   const now = useMemo(() => new Date(), []);
   const [viewYear, setViewYear] = useState(now.getFullYear());
@@ -83,6 +88,62 @@ export const useBudgetPageState = () => {
   const formatBudgetAmount = useCallback(
     (value: number) => formatCurrency(value, budgetCurrency),
     [budgetCurrency],
+  );
+
+  const [fxRatesToAppCurrency, setFxRatesToAppCurrency] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!mixedCurrencyWarning) {
+      setFxRatesToAppCurrency({});
+      return;
+    }
+    const foreignCodes = [
+      ...new Set(viewYearExpenses.map(expenseCurrencyCode)),
+    ].filter((code) => code !== APP_CURRENCY_CODE);
+    if (foreignCodes.length === 0) {
+      setFxRatesToAppCurrency({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const pairs = await Promise.all(
+        foreignCodes.map(async (code) => {
+          const { data } = await client.query<{ fxRate: number }>({
+            query: FX_RATE,
+            variables: { from: code, to: APP_CURRENCY_CODE },
+            fetchPolicy: 'cache-first',
+          });
+          return [code, data?.fxRate ?? 0] as const;
+        }),
+      );
+      if (!cancelled) {
+        setFxRatesToAppCurrency(Object.fromEntries(pairs.filter(([, rate]) => rate > 0)));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, mixedCurrencyWarning, viewYearExpenses]);
+
+  const indicativeYtdExpenses = useMemo(() => {
+    if (!mixedCurrencyWarning) {
+      return null;
+    }
+    const foreignCodes = [...new Set(viewYearExpenses.map(expenseCurrencyCode))].filter(
+      (code) => code !== APP_CURRENCY_CODE,
+    );
+    if (foreignCodes.some((code) => fxRatesToAppCurrency[code] === undefined)) {
+      return null;
+    }
+    return sumExpenseAmountsWithFx(
+      ytdOutgoingExpensesThrough(expenses, now),
+      fxRatesToAppCurrency,
+      APP_CURRENCY_CODE,
+    );
+  }, [mixedCurrencyWarning, viewYearExpenses, fxRatesToAppCurrency, expenses, now]);
+
+  const formatIndicativeAppAmount = useCallback(
+    (value: number) => formatCurrency(value, APP_CURRENCY_CODE),
+    [],
   );
 
   const categories = useMemo(
@@ -436,5 +497,7 @@ export const useBudgetPageState = () => {
     mixedCurrencyWarning,
     budgetCurrency,
     formatBudgetAmount,
+    indicativeYtdExpenses,
+    formatIndicativeAppAmount,
   };
 };

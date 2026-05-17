@@ -11,6 +11,7 @@ import type {
   InvitationEmailDeliveryStatus,
   HouseholdSettlement,
   RecordSettlementPaymentInput,
+  RecordSettlementPaymentResult,
   SettlementBalance,
   SettlementPayment,
   SettlementTransfer,
@@ -535,6 +536,11 @@ const loadAccessibleGroupsWithMembers = async (
     description: group.description,
     members: membersByGroupId.get(group.id) ?? [],
   }));
+};
+
+export const getGroupForViewer = async (viewer: GroupViewer, groupId: string): Promise<Group | null> => {
+  const groups = await listGroups(viewer);
+  return groups.find((group) => group.id === groupId) ?? null;
 };
 
 export const listGroups = async (viewer: GroupViewer): Promise<Group[]> => {
@@ -1119,7 +1125,7 @@ export const listSplitTemplates = async (groupId: string, viewer: GroupViewer): 
 export const upsertSplitTemplate = async (
   input: UpsertSplitTemplateInput,
   viewer: GroupViewer,
-): Promise<SplitTemplate> => {
+): Promise<Group> => {
   const numericGroupId = Number(input.groupId);
   if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid groupId.');
@@ -1231,20 +1237,18 @@ export const upsertSplitTemplate = async (
     }
   }
 
-  return {
-    id: String(row.id),
-    groupId: String(row.groupId),
-    category: row.category,
-    templateName: row.templateName,
-    splitDetails: parseTemplateSplitDetails(row.splitDetails),
-  };
+  const group = await getGroupForViewer(viewer, input.groupId);
+  if (!group) {
+    throw appError(ErrorCode.NOT_FOUND, 'Household not found.');
+  }
+  return group;
 };
 
 export const deleteExpenseGroup = async (
   groupId: string,
   category: string,
   viewer: GroupViewer,
-): Promise<boolean> => {
+): Promise<Group> => {
   const numericGroupId = Number(groupId);
   if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid groupId.');
@@ -1256,12 +1260,16 @@ export const deleteExpenseGroup = async (
 
   await assertActiveGroupMembership(numericGroupId, viewer, 'deleteExpenseGroup');
 
-  const [result] = await db.execute<ResultSetHeader>(
+  await db.execute<ResultSetHeader>(
     'DELETE FROM group_split_templates WHERE group_id = ? AND category = ?',
     [numericGroupId, normalizedCategory],
   );
 
-  return result.affectedRows > 0;
+  const group = await getGroupForViewer(viewer, groupId);
+  if (!group) {
+    throw appError(ErrorCode.NOT_FOUND, 'Household not found.');
+  }
+  return group;
 };
 
 const listSettlementPaymentRows = async (
@@ -1314,6 +1322,19 @@ export const listHouseholdSettlements = async (
     console.error('[listHouseholdSettlements]', error);
     throw error;
   }
+};
+
+export const getHouseholdSettlement = async (
+  viewer: GroupViewer,
+  groupId: string,
+  periodInput?: unknown,
+): Promise<HouseholdSettlement | null> => {
+  const numericGroupId = Number(groupId);
+  if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
+    return null;
+  }
+  const settlements = await listHouseholdSettlementsImpl(viewer, periodInput, numericGroupId);
+  return settlements[0] ?? null;
 };
 
 type SanitizedSettlementScope = {
@@ -1407,10 +1428,14 @@ const groupSettlementExpensesByCurrency = (
 const listHouseholdSettlementsImpl = async (
   viewer: GroupViewer,
   periodInput?: unknown,
+  filterGroupId?: number,
 ): Promise<HouseholdSettlement[]> => {
   const period = parseSettlementPeriod(periodInput);
   const { startIso: periodStartIso } = settlementPeriodRange(period);
-  const groups = await loadAccessibleGroupsWithMembers(viewer);
+  let groups = await loadAccessibleGroupsWithMembers(viewer);
+  if (filterGroupId !== undefined) {
+    groups = groups.filter((group) => group.id === filterGroupId);
+  }
   if (groups.length === 0) {
     return [];
   }
@@ -1496,7 +1521,8 @@ const listHouseholdSettlementsImpl = async (
 export const recordSettlementPayment = async (
   input: RecordSettlementPaymentInput,
   viewer: GroupViewer,
-): Promise<SettlementPayment> => {
+  periodInput?: unknown,
+): Promise<RecordSettlementPaymentResult> => {
   const groupId = Number(input.groupId);
   if (!Number.isFinite(groupId) || groupId <= 0) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid groupId.');
@@ -1574,7 +1600,7 @@ export const recordSettlementPayment = async (
   if (!row) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Unable to record settlement payment.');
   }
-  return {
+  const payment: SettlementPayment = {
     id: String(row.id),
     groupId: String(row.groupId),
     expenseGroup: row.expenseGroup ?? undefined,
@@ -1584,4 +1610,9 @@ export const recordSettlementPayment = async (
     note: row.note ?? undefined,
     settledAt: toSettlementDateString(row.settledAt),
   };
+  const householdSettlement = await getHouseholdSettlement(viewer, input.groupId, periodInput);
+  if (!householdSettlement) {
+    throw appError(ErrorCode.NOT_FOUND, 'Household settlement not found.');
+  }
+  return { payment, householdSettlement };
 };

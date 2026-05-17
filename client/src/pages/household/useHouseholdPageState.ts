@@ -1,4 +1,5 @@
-import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
+import type { ApolloCache } from '@apollo/client';
+import { useMutation, useQuery } from '@apollo/client/react';
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../features/auth';
 import {
@@ -15,15 +16,19 @@ import {
   GET_GROUPS,
   GET_GROUP_SPLIT_TEMPLATES,
   mergeGroupIntoCache,
-  refetchGroups,
   UPDATE_GROUP,
   UPSERT_GROUP_SPLIT_TEMPLATE,
   type GetGroupSplitTemplatesQueryResult,
   type GetGroupsQueryResult,
   type GroupMember,
+  type GroupSummary,
   type SplitTemplate,
 } from '../../features/groups';
-import type { CreateGroupMutation, DeleteExpenseGroupMutation, UpdateGroupMutation } from '../../graphql/generated/graphql';
+import type {
+  CreateGroupMutation,
+  DeleteExpenseGroupMutation,
+  UpdateGroupMutation,
+} from '../../graphql/generated/graphql';
 import { APP_CURRENCY_CODE } from '../../format/currency';
 
 
@@ -76,7 +81,6 @@ export const ALL_HOUSEHOLD_EXPENSE_GROUPS = '__all__';
 
 export const useHouseholdPageState = () => {
   const { user } = useAuth();
-  const client = useApolloClient();
   const { data, loading, error } = useQuery<GetGroupsQueryResult>(GET_GROUPS);
   const { data: expensesData } = useQuery<GetExpensesResponse>(GET_EXPENSES);
   const { addExpense, isMutating: isCreatingExpense } = useExpenseActions();
@@ -90,23 +94,31 @@ export const useHouseholdPageState = () => {
       mergeGroupIntoCache(cache, data?.updateGroup ?? null);
     },
   });
-  const refreshHouseholdGroups = useCallback(() => {
-    void refetchGroups(client);
-  }, [client]);
+  const mergeGroupFromMutation = useCallback((cache: ApolloCache, result: { data?: unknown }) => {
+    if (!result.data || typeof result.data !== 'object') {
+      return;
+    }
+    const record = result.data as Record<string, GroupSummary | undefined>;
+    const group =
+      record.upsertGroupSplitTemplate ??
+      record.declineExpenseGroupParticipation ??
+      record.deleteExpenseGroup;
+    mergeGroupIntoCache(cache, group);
+  }, []);
 
   const [upsertTemplateMutation, { loading: savingTemplate }] = useMutation(UPSERT_GROUP_SPLIT_TEMPLATE, {
-    onCompleted: refreshHouseholdGroups,
+    update: mergeGroupFromMutation,
   });
   const [declineExpenseGroupMutation, { loading: isDecliningExpenseGroup }] = useMutation(
     DECLINE_EXPENSE_GROUP_PARTICIPATION,
     {
-      onCompleted: refreshHouseholdGroups,
+      update: mergeGroupFromMutation,
     },
   );
   const [deleteExpenseGroupMutation, { loading: isDeletingExpenseGroup }] = useMutation<DeleteExpenseGroupMutation>(
     DELETE_EXPENSE_GROUP,
     {
-      onCompleted: refreshHouseholdGroups,
+      update: mergeGroupFromMutation,
     },
   );
   const groups = useMemo(() => data?.groups ?? [], [data?.groups]);
@@ -919,7 +931,7 @@ export const useHouseholdPageState = () => {
           category: editingTemplateCategory,
         },
       });
-      if (!deleted.data?.deleteExpenseGroup) {
+      if (!deleted.data?.deleteExpenseGroup?.id) {
         setTemplateError('Expense group was not found or could not be deleted.');
         return;
       }

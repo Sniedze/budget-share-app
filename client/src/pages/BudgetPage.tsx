@@ -28,6 +28,13 @@ export const BudgetPage = (): JSX.Element => {
           <MutedText style={{ marginBottom: spacing.md }}>
             This year includes expenses in more than one currency. Totals and charts use {state.budgetCurrency} only;
             other currencies still appear in recent transactions.
+            {state.indicativeYtdExpenses !== null ? (
+              <>
+                {' '}
+                Indicative year-to-date spend in all currencies (ECB rates → DKK):{' '}
+                {state.formatIndicativeAppAmount(state.indicativeYtdExpenses)}.
+              </>
+            ) : null}
           </MutedText>
         ) : null}
 

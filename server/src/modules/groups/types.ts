@@ -147,3 +147,8 @@ export type RecordSettlementPaymentInput = {
   note?: string;
   settledAt: string;
 };
+
+export type RecordSettlementPaymentResult = {
+  payment: SettlementPayment;
+  householdSettlement: HouseholdSettlement;
+};

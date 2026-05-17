@@ -2,6 +2,7 @@
 import { appError, ErrorCode } from '../../graphql/appError.js';
 import { stripControlCharacters } from '../../lib/sanitize.js';
 import { isCommonPassword } from './commonPasswords.js';
+import { isHibpPasswordCheckEnabled, isPasswordBreached } from './hibp.js';
 
 export const MAX_PASSWORD_LENGTH = 72;
 export const MIN_PASSWORD_LENGTH = 8;
@@ -73,14 +74,29 @@ export const assertPasswordNotCommon = (password: string): void => {
   }
 };
 
-export const assertPasswordAcceptableForRegister = (password: string): void => {
-  assertPasswordStrength(password);
-  assertPasswordNotCommon(password);
+export const assertPasswordNotBreached = async (password: string): Promise<void> => {
+  if (!isHibpPasswordCheckEnabled()) {
+    return;
+  }
+  const breached = await isPasswordBreached(password);
+  if (breached) {
+    throw appError(
+      ErrorCode.BAD_USER_INPUT,
+      'That password has appeared in a data breach. Choose a different password.',
+    );
+  }
 };
 
-export const assertNewPasswordRules = (password: string): void => {
+export const assertPasswordAcceptableForRegister = async (password: string): Promise<void> => {
   assertPasswordStrength(password);
   assertPasswordNotCommon(password);
+  await assertPasswordNotBreached(password);
+};
+
+export const assertNewPasswordRules = async (password: string): Promise<void> => {
+  assertPasswordStrength(password);
+  assertPasswordNotCommon(password);
+  await assertPasswordNotBreached(password);
 };
 
 export const assertCurrentPasswordForChange = (password: string): void => {
