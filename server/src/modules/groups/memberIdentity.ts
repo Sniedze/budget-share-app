@@ -26,6 +26,18 @@ export const groupMemberMatchesViewerParams = (viewer: GroupViewer): [number, st
 export const groupMemberMatchesViewerClause = (alias = 'gm'): string =>
   `(${alias}.user_id = ? OR (${alias}.user_id IS NULL AND ${alias}.email = ?))`;
 
+export const findViewerGroupMember = <T extends { userId?: string; email: string }>(
+  members: T[],
+  viewer: GroupViewer,
+): T | undefined => {
+  const normalizedEmail = normalizeMemberEmail(viewer.email);
+  const byUserId = members.find((member) => member.userId === viewer.userId);
+  if (byUserId) {
+    return byUserId;
+  }
+  return members.find((member) => normalizeMemberEmail(member.email) === normalizedEmail);
+};
+
 export const loadUserIdsByEmails = async (emails: string[]): Promise<Map<string, number>> => {
   if (emails.length === 0) {
     return new Map();

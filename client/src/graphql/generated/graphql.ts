@@ -141,6 +141,7 @@ export type GroupMember = {
   email: Scalars['String']['output'];
   name: Scalars['String']['output'];
   ratio: Scalars['Float']['output'];
+  userId: Maybe<Scalars['ID']['output']>;
 };
 
 export type GroupMemberInput = {
@@ -634,7 +635,7 @@ export type DeleteExpenseMutation = { __typename?: 'Mutation', deleteExpense: bo
 export type GetGroupsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetGroupsQuery = { __typename?: 'Query', groups: Array<{ __typename?: 'Group', id: string, name: string, description: string | null, totalSpent: number, yourShare: number, expenseGroupLabels: Array<string>, pendingInvitations: Array<{ __typename?: 'GroupPendingInvitation', email: string, name: string, status: GroupInvitationStatus, emailDeliveryStatus: InvitationEmailDeliveryStatus | null }>, members: Array<{ __typename?: 'GroupMember', name: string, email: string, ratio: number }>, expenses: Array<{ __typename?: 'GroupExpense', date: string, expenseGroup: string | null, category: string, description: string, paidBy: string, total: number, yourShare: number, isPrivate: boolean, currency: string }> }> };
+export type GetGroupsQuery = { __typename?: 'Query', groups: Array<{ __typename?: 'Group', id: string, name: string, description: string | null, totalSpent: number, yourShare: number, expenseGroupLabels: Array<string>, pendingInvitations: Array<{ __typename?: 'GroupPendingInvitation', email: string, name: string, status: GroupInvitationStatus, emailDeliveryStatus: InvitationEmailDeliveryStatus | null }>, members: Array<{ __typename?: 'GroupMember', userId: string | null, name: string, email: string, ratio: number }>, expenses: Array<{ __typename?: 'GroupExpense', date: string, expenseGroup: string | null, category: string, description: string, paidBy: string, total: number, yourShare: number, isPrivate: boolean, currency: string }> }> };
 
 export type GetGroupSplitTemplatesQueryVariables = Exact<{
   groupId: Scalars['ID']['input'];
@@ -648,14 +649,14 @@ export type CreateGroupMutationVariables = Exact<{
 }>;
 
 
-export type CreateGroupMutation = { __typename?: 'Mutation', createGroup: { __typename?: 'Group', id: string, name: string, description: string | null, totalSpent: number, yourShare: number, expenseGroupLabels: Array<string>, pendingInvitations: Array<{ __typename?: 'GroupPendingInvitation', email: string, name: string, status: GroupInvitationStatus, emailDeliveryStatus: InvitationEmailDeliveryStatus | null }>, members: Array<{ __typename?: 'GroupMember', name: string, email: string, ratio: number }>, expenses: Array<{ __typename?: 'GroupExpense', date: string, expenseGroup: string | null, category: string, description: string, paidBy: string, total: number, yourShare: number, isPrivate: boolean, currency: string }> } };
+export type CreateGroupMutation = { __typename?: 'Mutation', createGroup: { __typename?: 'Group', id: string, name: string, description: string | null, totalSpent: number, yourShare: number, expenseGroupLabels: Array<string>, pendingInvitations: Array<{ __typename?: 'GroupPendingInvitation', email: string, name: string, status: GroupInvitationStatus, emailDeliveryStatus: InvitationEmailDeliveryStatus | null }>, members: Array<{ __typename?: 'GroupMember', userId: string | null, name: string, email: string, ratio: number }>, expenses: Array<{ __typename?: 'GroupExpense', date: string, expenseGroup: string | null, category: string, description: string, paidBy: string, total: number, yourShare: number, isPrivate: boolean, currency: string }> } };
 
 export type UpdateGroupMutationVariables = Exact<{
   input: UpdateGroupInput;
 }>;
 
 
-export type UpdateGroupMutation = { __typename?: 'Mutation', updateGroup: { __typename?: 'Group', id: string, name: string, description: string | null, totalSpent: number, yourShare: number, expenseGroupLabels: Array<string>, pendingInvitations: Array<{ __typename?: 'GroupPendingInvitation', email: string, name: string, status: GroupInvitationStatus, emailDeliveryStatus: InvitationEmailDeliveryStatus | null }>, members: Array<{ __typename?: 'GroupMember', name: string, email: string, ratio: number }>, expenses: Array<{ __typename?: 'GroupExpense', date: string, expenseGroup: string | null, category: string, description: string, paidBy: string, total: number, yourShare: number, isPrivate: boolean, currency: string }> } };
+export type UpdateGroupMutation = { __typename?: 'Mutation', updateGroup: { __typename?: 'Group', id: string, name: string, description: string | null, totalSpent: number, yourShare: number, expenseGroupLabels: Array<string>, pendingInvitations: Array<{ __typename?: 'GroupPendingInvitation', email: string, name: string, status: GroupInvitationStatus, emailDeliveryStatus: InvitationEmailDeliveryStatus | null }>, members: Array<{ __typename?: 'GroupMember', userId: string | null, name: string, email: string, ratio: number }>, expenses: Array<{ __typename?: 'GroupExpense', date: string, expenseGroup: string | null, category: string, description: string, paidBy: string, total: number, yourShare: number, isPrivate: boolean, currency: string }> } };
 
 export type GetMyInvitationsQueryVariables = Exact<{ [key: string]: never; }>;
 

@@ -486,7 +486,7 @@ export const HouseholdPage = (): JSX.Element => {
         onGroupNameChange={setGroupName}
         onDescriptionChange={setDescription}
         onMemberChange={updateMember}
-        onAddMember={() => setMembers((prev) => [...prev, { name: '', email: '', ratio: 0 }])}
+        onAddMember={() => setMembers((prev) => [...prev, { userId: null, name: '', email: '', ratio: 0 }])}
         onRemoveMember={(index) => setMembers((prev) => prev.filter((_, idx) => idx !== index))}
         onToggleCreateExpenseGroups={(enabled) => {
           setCreateExpenseGroupsOnHouseholdCreate(enabled);

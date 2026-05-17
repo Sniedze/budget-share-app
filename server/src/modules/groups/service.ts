@@ -32,6 +32,7 @@ import {
 } from './invitations.js';
 import {
   type GroupViewer,
+  findViewerGroupMember,
   groupMemberMatchesViewerClause,
   groupMemberMatchesViewerParams,
   loadUserIdsByEmails,
@@ -51,7 +52,15 @@ type GroupMemberRow = {
   name: string;
   email: string;
   ratio: number | string;
+  userId: number | null;
 } & RowDataPacket;
+
+const mapGroupMemberRow = (row: GroupMemberRow): GroupMember => ({
+  userId: row.userId !== null && row.userId !== undefined ? String(row.userId) : undefined,
+  name: row.name,
+  email: row.email,
+  ratio: toNumericRatio(row.ratio),
+});
 
 type GroupInvitationRow = {
   id: number;
@@ -501,7 +510,7 @@ const loadAccessibleGroupsWithMembers = async (
 
   const [memberRows] = await db.query<GroupMemberRow[]>(
     `
-      SELECT group_id AS groupId, name, email, ratio
+      SELECT group_id AS groupId, name, email, ratio, user_id AS userId
       FROM group_members
       WHERE group_id IN (?)
       ORDER BY id ASC
@@ -512,11 +521,7 @@ const loadAccessibleGroupsWithMembers = async (
   const membersByGroupId = new Map<number, GroupMember[]>();
   for (const row of memberRows) {
     const existingMembers = membersByGroupId.get(row.groupId) ?? [];
-    existingMembers.push({
-      name: row.name,
-      email: row.email,
-      ratio: toNumericRatio(row.ratio),
-    });
+    existingMembers.push(mapGroupMemberRow(row));
     membersByGroupId.set(row.groupId, existingMembers);
   }
 
@@ -529,7 +534,6 @@ const loadAccessibleGroupsWithMembers = async (
 };
 
 export const listGroups = async (viewer: GroupViewer): Promise<Group[]> => {
-  const normalizedEmail = normalizeMemberEmail(viewer.email);
   const viewerUserId = viewer.userId;
   const accessibleGroups = await loadAccessibleGroupsWithMembers(viewer);
   if (accessibleGroups.length === 0) {
@@ -574,7 +578,7 @@ export const listGroups = async (viewer: GroupViewer): Promise<Group[]> => {
       continue;
     }
     const groupMembers = membersByGroupId.get(row.groupId) ?? [];
-    const viewerMember = groupMembers.find((member) => member.email.trim().toLowerCase() === normalizedEmail);
+    const viewerMember = findViewerGroupMember(groupMembers, viewer);
     const amount = Number(row.amount);
     const splitDetails = parseExpenseSplitDetails(
       typeof row.splitDetails === 'string' ? row.splitDetails : null,
@@ -860,7 +864,7 @@ export const updateGroup = async (input: UpdateGroupInput, actor: GroupViewer): 
   }
   const [beforeMemberRows] = await db.query<GroupMemberRow[]>(
     `
-      SELECT group_id AS groupId, name, email, ratio
+      SELECT group_id AS groupId, name, email, ratio, user_id AS userId
       FROM group_members
       WHERE group_id = ?
       ORDER BY id ASC
@@ -1190,7 +1194,7 @@ export const upsertSplitTemplate = async (
     const groupName = groupRows[0]?.name ?? 'Household';
     const [householdMembers] = await db.query<GroupMemberRow[]>(
       `
-        SELECT group_id AS groupId, name, email, ratio
+        SELECT group_id AS groupId, name, email, ratio, user_id AS userId
         FROM group_members
         WHERE group_id = ?
       `,

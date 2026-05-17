@@ -41,6 +41,7 @@ export const typeDefs = `#graphql
   }
 
   type GroupMember {
+    userId: ID
     name: String!
     email: String!
     ratio: Float!
