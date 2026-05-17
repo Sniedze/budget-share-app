@@ -2,6 +2,7 @@ import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { db } from '../../db/mysql.js';
 import type {
   CreateGroupInput,
+  CurrencySettlementScope,
   ExpenseGroupSettlement,
   Group,
   GroupInvitation,
@@ -17,6 +18,7 @@ import type {
   UpdateGroupInput,
   UpsertSplitTemplateInput,
 } from './types.js';
+import { normalizeExpenseCurrency } from '../../lib/currency.js';
 import { appError, ErrorCode } from '../../graphql/appError.js';
 import { logAuditEvent } from '../audit/service.js';
 import { logAuthzDenied } from '../../logger.js';
@@ -117,6 +119,7 @@ type SettlementExpenseRow = {
   id: number;
   groupId: number;
   amount: string;
+  currency: string | null;
   expenseGroup: string | null;
   category: string | null;
   splitType: string | null;
@@ -1304,6 +1307,94 @@ export const listHouseholdSettlements = async (
   }
 };
 
+type SanitizedSettlementScope = {
+  balances: SettlementBalance[];
+  transfers: SettlementTransfer[];
+  totalExpenses: number;
+};
+
+const sanitizeSettlementScope = (computed: {
+  balances: SettlementBalance[];
+  transfers: SettlementTransfer[];
+  totalExpenses: number;
+}): SanitizedSettlementScope => ({
+  totalExpenses: toSafeGraphqlFloat(computed.totalExpenses),
+  balances: computed.balances.map((balance) => ({
+    memberName: balance.memberName,
+    amount: toSafeGraphqlFloat(balance.amount),
+  })),
+  transfers: computed.transfers.map((transfer) => ({
+    fromMember: transfer.fromMember,
+    toMember: transfer.toMember,
+    amount: toSafeGraphqlFloat(transfer.amount),
+  })),
+});
+
+const buildExpenseGroupSettlements = (
+  members: GroupMember[],
+  groupExpenses: SettlementExpenseRow[],
+  groupPayments: SettlementPayment[],
+  templateSplitByKey: Awaited<ReturnType<typeof listTemplateSplitDetailsByGroupAndCategory>>,
+): ExpenseGroupSettlement[] => {
+  const expenseGroupNames = new Set(groupExpenses.map((expense) => readExpenseGroupLabel(expense)));
+  return Array.from(expenseGroupNames)
+    .sort((left, right) => left.localeCompare(right))
+    .map((expenseGroupName) => {
+      const scopedExpenses = groupExpenses.filter(
+        (expense) => readExpenseGroupLabel(expense).toLowerCase() === expenseGroupName.toLowerCase(),
+      );
+      const scopedPayments = groupPayments.filter(
+        (payment) => payment.expenseGroup?.trim().toLowerCase() === expenseGroupName.toLowerCase(),
+      );
+      const computed = sanitizeSettlementScope(
+        buildSettlementForScope(members, scopedExpenses, scopedPayments, templateSplitByKey),
+      );
+      return {
+        expenseGroup: expenseGroupName,
+        totalExpenses: computed.totalExpenses,
+        balances: computed.balances,
+        transfers: computed.transfers,
+      };
+    });
+};
+
+const buildCurrencySettlementScope = (
+  currency: string,
+  members: GroupMember[],
+  groupExpenses: SettlementExpenseRow[],
+  groupPayments: SettlementPayment[],
+  templateSplitByKey: Awaited<ReturnType<typeof listTemplateSplitDetailsByGroupAndCategory>>,
+): CurrencySettlementScope => {
+  const householdComputed = sanitizeSettlementScope(
+    buildSettlementForScope(
+      members,
+      groupExpenses,
+      groupPayments.filter((payment) => !payment.expenseGroup),
+      templateSplitByKey,
+    ),
+  );
+  return {
+    currency,
+    totalExpenses: householdComputed.totalExpenses,
+    balances: householdComputed.balances,
+    transfers: householdComputed.transfers,
+    expenseGroups: buildExpenseGroupSettlements(members, groupExpenses, groupPayments, templateSplitByKey),
+  };
+};
+
+const groupSettlementExpensesByCurrency = (
+  expenses: SettlementExpenseRow[],
+): Map<string, SettlementExpenseRow[]> => {
+  const byCurrency = new Map<string, SettlementExpenseRow[]>();
+  for (const expense of expenses) {
+    const currency = normalizeExpenseCurrency(expense.currency);
+    const bucket = byCurrency.get(currency) ?? [];
+    bucket.push(expense);
+    byCurrency.set(currency, bucket);
+  }
+  return byCurrency;
+};
+
 const listHouseholdSettlementsImpl = async (
   viewer: GroupViewer,
   periodInput?: unknown,
@@ -1323,6 +1414,7 @@ const listHouseholdSettlementsImpl = async (
         e.id,
         e.group_id AS groupId,
         e.amount,
+        e.currency,
         e.expense_group AS expenseGroup,
         e.category,
         e.split_type AS splitType,
@@ -1363,66 +1455,31 @@ const listHouseholdSettlementsImpl = async (
     paymentsByGroupId.set(row.groupId, existing);
   });
 
-  const sanitizeSettlementScope = (computed: {
-    balances: SettlementBalance[];
-    transfers: SettlementTransfer[];
-    totalExpenses: number;
-  }): {
-    balances: SettlementBalance[];
-    transfers: SettlementTransfer[];
-    totalExpenses: number;
-  } => ({
-    totalExpenses: toSafeGraphqlFloat(computed.totalExpenses),
-    balances: computed.balances.map((balance) => ({
-      memberName: balance.memberName,
-      amount: toSafeGraphqlFloat(balance.amount),
-    })),
-    transfers: computed.transfers.map((transfer) => ({
-      fromMember: transfer.fromMember,
-      toMember: transfer.toMember,
-      amount: toSafeGraphqlFloat(transfer.amount),
-    })),
-  });
-
   return groups.map((group) => {
     const groupExpenses = expensesByGroupId.get(group.id) ?? [];
     const groupPayments = paymentsByGroupId.get(group.id) ?? [];
-    const householdComputed = sanitizeSettlementScope(
-      buildSettlementForScope(
+    const byCurrency = groupSettlementExpensesByCurrency(groupExpenses);
+    const currencies = Array.from(byCurrency.keys()).sort();
+    const currencyScopes = currencies.map((currency) =>
+      buildCurrencySettlementScope(
+        currency,
         group.members,
-        groupExpenses,
-        groupPayments.filter((payment) => !payment.expenseGroup),
+        byCurrency.get(currency) ?? [],
+        groupPayments,
         templateSplitByKey,
       ),
     );
-    const expenseGroupNames = new Set(groupExpenses.map((expense) => readExpenseGroupLabel(expense)));
-    const expenseGroups: ExpenseGroupSettlement[] = Array.from(expenseGroupNames)
-      .sort((left, right) => left.localeCompare(right))
-      .map((expenseGroupName) => {
-        const scopedExpenses = groupExpenses.filter(
-          (expense) => readExpenseGroupLabel(expense).toLowerCase() === expenseGroupName.toLowerCase(),
-        );
-        const scopedPayments = groupPayments.filter(
-          (payment) => payment.expenseGroup?.trim().toLowerCase() === expenseGroupName.toLowerCase(),
-        );
-        const computed = sanitizeSettlementScope(
-          buildSettlementForScope(group.members, scopedExpenses, scopedPayments, templateSplitByKey),
-        );
-        return {
-          expenseGroup: expenseGroupName,
-          totalExpenses: computed.totalExpenses,
-          balances: computed.balances,
-          transfers: computed.transfers,
-        };
-      });
+    const primary = currencyScopes[0];
 
     return {
       groupId: String(group.id),
       groupName: group.name,
-      balances: householdComputed.balances,
-      transfers: householdComputed.transfers,
-      expenseGroups,
+      balances: primary?.balances ?? [],
+      transfers: primary?.transfers ?? [],
+      expenseGroups: primary?.expenseGroups ?? [],
       payments: groupPayments,
+      mixedCurrencyWarning: currencies.length > 1,
+      currencyScopes,
     };
   });
 };

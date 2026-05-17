@@ -56,11 +56,10 @@ import {
   ToolbarRow,
   ToolbarSelect,
 } from '../features/settlements/settlementsPageStyles';
-import { formatAppCurrency } from '../format/currency';
 import { spacing } from '../styles/tokens';
 
-const formatSignedCurrency = (value: number): string => {
-  const formatted = formatAppCurrency(Math.abs(value));
+const formatSignedCurrency = (value: number, formatAmount: (amount: number) => string): string => {
+  const formatted = formatAmount(Math.abs(value));
   if (value > 0.01) {
     return `+${formatted}`;
   }
@@ -82,6 +81,12 @@ export const SettlementsPage = (): JSX.Element => {
     error,
     households,
     activeHousehold,
+    mixedCurrencyWarning,
+    settlementCurrency,
+    setSettlementCurrency,
+    settlementCurrencyCodes,
+    formatSettlementAmount,
+    scopeExpenseGroups,
     activeGroupId,
     setActiveGroupId,
     scope,
@@ -206,12 +211,27 @@ export const SettlementsPage = (): JSX.Element => {
                   </ToolbarSelect>
                 </ToolbarField>
               ) : null}
-              {activeHousehold.expenseGroups.length > 0 ? (
+              {mixedCurrencyWarning && settlementCurrencyCodes.length > 1 ? (
+                <ToolbarField>
+                  Currency
+                  <ToolbarSelect
+                    value={settlementCurrency ?? settlementCurrencyCodes[0]}
+                    onChange={(event) => setSettlementCurrency(event.currentTarget.value)}
+                  >
+                    {settlementCurrencyCodes.map((code) => (
+                      <option key={code} value={code}>
+                        {code}
+                      </option>
+                    ))}
+                  </ToolbarSelect>
+                </ToolbarField>
+              ) : null}
+              {scopeExpenseGroups.length > 0 ? (
                 <ToolbarField>
                   Scope
                   <ToolbarSelect value={scope} onChange={(event) => setScope(event.currentTarget.value)}>
                     <option value="__household__">Total household</option>
-                    {activeHousehold.expenseGroups.map((group) => (
+                    {scopeExpenseGroups.map((group) => (
                       <option key={`${activeHousehold.groupId}-${group.expenseGroup}`} value={group.expenseGroup}>
                         {group.expenseGroup}
                       </option>
@@ -220,6 +240,13 @@ export const SettlementsPage = (): JSX.Element => {
                 </ToolbarField>
               ) : null}
             </ToolbarRow>
+
+            {mixedCurrencyWarning ? (
+              <MutedText style={{ marginBottom: spacing.md }}>
+                This household has expenses in more than one currency. Balances and transfers are shown per currency —
+                switch the currency selector to see each total.
+              </MutedText>
+            ) : null}
 
             <SummaryGrid>
               <SummaryCard $featured>
@@ -230,7 +257,9 @@ export const SettlementsPage = (): JSX.Element => {
                   </IconBadge>
                 </SummaryCardTop>
                 <div>
-                  <SummaryValue $featured>{formatSignedCurrency(summary.netBalance)}</SummaryValue>
+                  <SummaryValue $featured>
+                    {formatSignedCurrency(summary.netBalance, formatSettlementAmount)}
+                  </SummaryValue>
                   <SummaryHint $featured>{netHint}</SummaryHint>
                 </div>
               </SummaryCard>
@@ -243,7 +272,9 @@ export const SettlementsPage = (): JSX.Element => {
                   </IconBadge>
                 </SummaryCardTop>
                 <div>
-                  <SummaryValue $tone="positive">{formatSignedCurrency(summary.youAreOwed)}</SummaryValue>
+                  <SummaryValue $tone="positive">
+                    {formatSignedCurrency(summary.youAreOwed, formatSettlementAmount)}
+                  </SummaryValue>
                   <SummaryHint>
                     From {summary.owedByCount} {summary.owedByCount === 1 ? 'person' : 'people'}
                   </SummaryHint>
@@ -258,7 +289,9 @@ export const SettlementsPage = (): JSX.Element => {
                   </IconBadge>
                 </SummaryCardTop>
                 <div>
-                  <SummaryValue $tone="negative">-{formatAppCurrency(summary.youOwe)}</SummaryValue>
+                  <SummaryValue $tone="negative">
+                    -{formatSettlementAmount(summary.youOwe)}
+                  </SummaryValue>
                   <SummaryHint>
                     To {summary.oweToCount} {summary.oweToCount === 1 ? 'person' : 'people'}
                   </SummaryHint>
@@ -295,7 +328,7 @@ export const SettlementsPage = (): JSX.Element => {
                         </div>
                       </BalanceIdentity>
                       <BalanceAmount $tone={row.netRelativeToViewer >= 0 ? 'positive' : 'negative'}>
-                        {formatSignedCurrency(row.netRelativeToViewer)}
+                        {formatSignedCurrency(row.netRelativeToViewer, formatSettlementAmount)}
                       </BalanceAmount>
                     </BalanceRow>
                   ))}
@@ -342,7 +375,7 @@ export const SettlementsPage = (): JSX.Element => {
                           <Tr key={`${transfer.fromMember}-${transfer.toMember}-${index}`}>
                             <Td>{transfer.fromMember}</Td>
                             <Td>{transfer.toMember}</Td>
-                            <Td>{formatAppCurrency(transfer.amount)}</Td>
+                            <Td>{formatSettlementAmount(transfer.amount)}</Td>
                             <Td>{periodLabel}</Td>
                             <Td>{dueDateLabel}</Td>
                             <Td>
@@ -419,7 +452,7 @@ export const SettlementsPage = (): JSX.Element => {
                         <Tr key={payment.id}>
                           <Td>{payment.fromMember}</Td>
                           <Td>{payment.toMember}</Td>
-                          <Td>{formatAppCurrency(payment.amount)}</Td>
+                          <Td>{formatSettlementAmount(payment.amount)}</Td>
                           <Td>{payment.expenseGroup ?? 'Total household'}</Td>
                           <Td>{payment.settledAt}</Td>
                           <Td>
@@ -446,7 +479,7 @@ export const SettlementsPage = (): JSX.Element => {
                     monthlyGroups.map((group) => (
                       <MonthlyGroup key={group.monthKey}>
                         <MonthlyGroupTitle>
-                          {group.label} · {formatAppCurrency(group.total)} ({group.payments.length} payments)
+                          {group.label} · {formatSettlementAmount(group.total)} ({group.payments.length} payments)
                         </MonthlyGroupTitle>
                         <TableWrapper>
                           <Table>
@@ -464,7 +497,7 @@ export const SettlementsPage = (): JSX.Element => {
                                 <Tr key={payment.id}>
                                   <Td>{payment.fromMember}</Td>
                                   <Td>{payment.toMember}</Td>
-                                  <Td>{formatAppCurrency(payment.amount)}</Td>
+                                  <Td>{formatSettlementAmount(payment.amount)}</Td>
                                   <Td>{payment.expenseGroup ?? 'Total household'}</Td>
                                   <Td>{payment.settledAt}</Td>
                                 </Tr>

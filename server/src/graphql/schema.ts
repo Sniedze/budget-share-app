@@ -130,6 +130,15 @@ export const typeDefs = `#graphql
     transfers: [SettlementTransfer!]!
   }
 
+  """Settlement totals for one ISO 4217 currency within a household."""
+  type CurrencySettlementScope {
+    currency: String!
+    totalExpenses: Float!
+    balances: [SettlementBalance!]!
+    transfers: [SettlementTransfer!]!
+    expenseGroups: [ExpenseGroupSettlement!]!
+  }
+
   type SettlementPayment {
     id: ID!
     groupId: ID!
@@ -148,6 +157,9 @@ export const typeDefs = `#graphql
     transfers: [SettlementTransfer!]!
     expenseGroups: [ExpenseGroupSettlement!]!
     payments: [SettlementPayment!]!
+    """True when period expenses use more than one currency; use currencyScopes for accurate totals."""
+    mixedCurrencyWarning: Boolean!
+    currencyScopes: [CurrencySettlementScope!]!
   }
 
   type User {
