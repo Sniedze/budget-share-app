@@ -153,6 +153,17 @@ export const DECLINE_GROUP_INVITATION = gql`
   }
 `;
 
+export const RESEND_GROUP_INVITATION = gql`
+  mutation ResendGroupInvitation($groupId: ID!, $email: String!) {
+    resendGroupInvitation(groupId: $groupId, email: $email) {
+      email
+      name
+      status
+      emailDeliveryStatus
+    }
+  }
+`;
+
 export const DECLINE_EXPENSE_GROUP_PARTICIPATION = gql`
   mutation DeclineExpenseGroupParticipation($groupId: ID!, $category: String!) {
     declineExpenseGroupParticipation(groupId: $groupId, category: $category)

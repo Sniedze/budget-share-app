@@ -406,6 +406,7 @@ export const typeDefs = `#graphql
     recordSettlementPayment(input: RecordSettlementPaymentInput!): SettlementPayment!
     acceptGroupInvitation(id: ID!): GroupInvitation!
     declineGroupInvitation(id: ID!): GroupInvitation!
+    resendGroupInvitation(groupId: ID!, email: String!): GroupPendingInvitation!
     declineExpenseGroupParticipation(groupId: ID!, category: String!): Boolean!
     deleteExpenseGroup(groupId: ID!, category: String!): Boolean!
     saveUserWorkspaceSettings(input: SaveUserWorkspaceSettingsInput!): UserWorkspaceSettings!

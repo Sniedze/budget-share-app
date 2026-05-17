@@ -3,7 +3,14 @@ import { db } from '../../db/mysql.js';
 import { toIsoString } from '../../lib/dates.js';
 import { appError, ErrorCode } from '../../graphql/appError.js';
 import { logAuthzDenied } from '../../logger.js';
-import type { GroupInvitation, GroupInvitationStatus } from './types.js';
+import { updateInvitationEmailDeliveryStatus } from '../email/invitationEmailStatus.js';
+import { sendHouseholdMemberInviteEmails } from '../email/sendMemberNotifications.js';
+import type {
+  GroupInvitation,
+  GroupInvitationStatus,
+  GroupPendingInvitation,
+  InvitationEmailDeliveryStatus,
+} from './types.js';
 
 const buildBulkInsertPlaceholders = (rows: number, width: number): string =>
   Array.from({ length: rows }, () => `(${Array.from({ length: width }, () => '?').join(', ')})`).join(', ');
@@ -29,6 +36,23 @@ export const mapInvitationStatus = (status: string): GroupInvitationStatus => {
   return 'Pending';
 };
 
+const mapInvitationEmailDeliveryStatus = (
+  raw: string | null | undefined,
+): InvitationEmailDeliveryStatus | undefined => {
+  switch (raw) {
+    case 'pending_email':
+      return 'PendingEmail';
+    case 'email_sent':
+      return 'EmailSent';
+    case 'email_failed':
+      return 'EmailFailed';
+    case 'email_skipped':
+      return 'EmailSkipped';
+    default:
+      return undefined;
+  }
+};
+
 export const upsertPendingInvitations = async (
   connection: PoolConnection,
   groupId: number,
@@ -41,12 +65,12 @@ export const upsertPendingInvitations = async (
   const invitationValues = emails.flatMap((email) => [groupId, email]);
   await connection.execute(
     `
-      INSERT INTO group_invitations (group_id, email, status)
-      VALUES ${invitationPlaceholders.replace(/\(\?, \?\)/g, "(?, ?, 'Pending')")}
+      INSERT INTO group_invitations (group_id, email, status, email_delivery_status)
+      VALUES ${invitationPlaceholders.replace(/\(\?, \?\)/g, "(?, ?, 'Pending', 'pending_email')")}
       ON DUPLICATE KEY UPDATE
         status = 'Pending',
         accepted_at = NULL,
-        email_delivery_status = NULL
+        email_delivery_status = 'pending_email'
     `,
     invitationValues,
   );
@@ -380,4 +404,118 @@ export const declineExpenseGroupParticipation = async (
   );
 
   return updateResult.affectedRows > 0;
+};
+
+export const resendGroupInvitation = async (
+  groupId: string,
+  inviteeEmail: string,
+  actorEmail: string,
+): Promise<GroupPendingInvitation> => {
+  const numericGroupId = Number(groupId);
+  if (!Number.isFinite(numericGroupId) || numericGroupId <= 0) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Invalid group id.');
+  }
+  const normalizedEmail = inviteeEmail.trim().toLowerCase();
+  if (!normalizedEmail) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Invitee email is required.');
+  }
+
+  await assertActiveGroupMembership(numericGroupId, actorEmail, 'resend_group_invitation');
+
+  const normalizedActorEmail = actorEmail.trim().toLowerCase();
+  if (normalizedEmail === normalizedActorEmail) {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Cannot resend an invitation to yourself.');
+  }
+
+  const [invitationRows] = await db.query<
+    Array<{ status: string; emailDeliveryStatus: string | null } & RowDataPacket>
+  >(
+    `
+      SELECT status, email_delivery_status AS emailDeliveryStatus
+      FROM group_invitations
+      WHERE group_id = ?
+        AND email = ?
+      LIMIT 1
+    `,
+    [numericGroupId, normalizedEmail],
+  );
+  const invitation = invitationRows[0];
+  if (!invitation) {
+    throw appError(ErrorCode.NOT_FOUND, 'Pending invitation not found.');
+  }
+  if (invitation.status !== 'Pending') {
+    throw appError(ErrorCode.BAD_USER_INPUT, 'Only pending invitations can be resent.');
+  }
+
+  const [memberRows] = await db.query<Array<{ name: string } & RowDataPacket>>(
+    `
+      SELECT name
+      FROM group_members
+      WHERE group_id = ?
+        AND email = ?
+      LIMIT 1
+    `,
+    [numericGroupId, normalizedEmail],
+  );
+  const memberName = memberRows[0]?.name;
+  if (!memberName) {
+    throw appError(ErrorCode.NOT_FOUND, 'Invitee is not a member of this household.');
+  }
+
+  const [groupRows] = await db.query<Array<{ name: string } & RowDataPacket>>(
+    `
+      SELECT name
+      FROM \`groups\`
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [numericGroupId],
+  );
+  const groupName = groupRows[0]?.name;
+  if (!groupName) {
+    throw appError(ErrorCode.NOT_FOUND, 'Group not found.');
+  }
+
+  const [userRows] = await db.query<RowDataPacket[]>(
+    `
+      SELECT id
+      FROM users
+      WHERE email = ?
+      LIMIT 1
+    `,
+    [normalizedEmail],
+  );
+
+  await updateInvitationEmailDeliveryStatus(numericGroupId, normalizedEmail, 'pending_email');
+
+  await sendHouseholdMemberInviteEmails({
+    groupId: numericGroupId,
+    groupName,
+    actorEmail: normalizedActorEmail,
+    targets: [
+      {
+        email: normalizedEmail,
+        name: memberName,
+        hasAccount: userRows.length > 0,
+      },
+    ],
+  });
+
+  const [statusRows] = await db.query<Array<{ emailDeliveryStatus: string | null } & RowDataPacket>>(
+    `
+      SELECT email_delivery_status AS emailDeliveryStatus
+      FROM group_invitations
+      WHERE group_id = ?
+        AND email = ?
+      LIMIT 1
+    `,
+    [numericGroupId, normalizedEmail],
+  );
+
+  return {
+    email: normalizedEmail,
+    name: memberName,
+    status: 'Pending',
+    emailDeliveryStatus: mapInvitationEmailDeliveryStatus(statusRows[0]?.emailDeliveryStatus),
+  };
 };

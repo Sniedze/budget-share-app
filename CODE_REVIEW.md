@@ -280,7 +280,7 @@ The previous top-10 list is mostly done. Here's what's left, ordered by impact �
 1. **Email-as-identity → user IDs** (1.11) — `group_members.user_id` as auth key. Large migration.
 2. **Adopt GraphQL codegen for all client operations** (6.2) — expand beyond generated schema types.
 3. **Currency beyond DKK** (1.13) — product decision + schema/API work.
-4. **Email invitation resend flow** (A.2) — delivery status exists; add resend if needed.
+4. **Email invitation resend flow** (A.2) — **✓ Done** — `email_delivery_status` on invitations; `resendGroupInvitation` mutation + household UI.
 5. **Duplication cleanup** — shared `roundCents`, expense projections, invitation email templates (A.3).
 6. **Stronger password policy** (1.14) — complexity / breached-password check; call `revokeRefreshTokens` on password change.
 7. **Dedup hash on edit** (1.12) — **✓ Done**

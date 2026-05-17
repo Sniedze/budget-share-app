@@ -9,6 +9,7 @@ import {
   acceptGroupInvitation,
   declineExpenseGroupParticipation,
   declineGroupInvitation,
+  resendGroupInvitation,
 } from '../modules/groups/invitations.js';
 import {
   createGroup,
@@ -181,6 +182,14 @@ export const resolvers = {
     ) => {
       const user = requireAuth(context);
       return declineGroupInvitation(args.id, user.email);
+    },
+    resendGroupInvitation: async (
+      _parent: unknown,
+      args: { groupId: string; email: string },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      return resendGroupInvitation(args.groupId, args.email, user.email);
     },
     declineExpenseGroupParticipation: async (
       _parent: unknown,
