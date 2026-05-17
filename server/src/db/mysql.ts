@@ -157,7 +157,7 @@ export const ensureSchema = async (): Promise<void> => {
   await db.execute(`
     CREATE TABLE IF NOT EXISTS audit_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    actor_user_id INT NULL,
+    actor_user_id INT NOT NULL,
     actor_email VARCHAR(255) NOT NULL,
     action VARCHAR(64) NOT NULL,
     entity_type VARCHAR(64) NOT NULL,
@@ -445,6 +445,32 @@ export const migrateSchema = async (): Promise<void> => {
     await db.execute(`
         ALTER TABLE \`groups\`
         ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      `);
+  }
+
+  const [auditActorUserIdCols] = await db.query<(ColumnCheckRow & { isNullable: string })[]>(
+    `
+        SELECT COLUMN_NAME AS columnName, IS_NULLABLE AS isNullable
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'audit_logs'
+          AND COLUMN_NAME = 'actor_user_id'
+      `,
+  );
+  if (auditActorUserIdCols[0]?.isNullable === 'YES') {
+    await db.execute(`
+        UPDATE audit_logs al
+        INNER JOIN users u ON LOWER(TRIM(u.email)) = LOWER(TRIM(al.actor_email))
+        SET al.actor_user_id = u.id
+        WHERE al.actor_user_id IS NULL
+      `);
+    await db.execute(`
+        DELETE FROM audit_logs
+        WHERE actor_user_id IS NULL
+      `);
+    await db.execute(`
+        ALTER TABLE audit_logs
+        MODIFY actor_user_id INT NOT NULL
       `);
   }
 
