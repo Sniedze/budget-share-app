@@ -123,20 +123,24 @@ const defaultOrigin =
 
   it('logoutAllDevices revokes every refresh session for the user', async () => {
     const email = `it-logout-all-${Date.now()}@example.com`;
+    const password = 'password12';
     const deviceA = request.agent(bundle.app);
     const deviceB = request.agent(bundle.app);
 
-    const register = (agent: ReturnType<typeof request.agent>) =>
-      agent
-        .post('/graphql')
-        .set('Origin', defaultOrigin)
-        .send({
-          query: `mutation R($input: RegisterInput!) { register(input: $input) { user { id } } }`,
-          variables: { input: { email, password: 'password12', fullName: 'All Devices User' } },
-        });
-
-    await register(deviceA);
-    await register(deviceB);
+    await deviceA
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({
+        query: `mutation R($input: RegisterInput!) { register(input: $input) { user { id } } }`,
+        variables: { input: { email, password, fullName: 'All Devices User' } },
+      });
+    await deviceB
+      .post('/graphql')
+      .set('Origin', defaultOrigin)
+      .send({
+        query: `mutation L($input: LoginInput!) { login(input: $input) { user { id } } }`,
+        variables: { input: { email, password, rememberMe: true } },
+      });
 
     const logoutAll = await deviceA
       .post('/graphql')
