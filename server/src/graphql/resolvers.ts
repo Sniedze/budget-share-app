@@ -74,7 +74,7 @@ export const resolvers = {
     },
     myInvitations: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
       const user = requireAuth(context);
-      return listInvitations(user.email);
+      return listInvitations({ userId: user.id, email: user.email });
     },
     groupSplitTemplates: async (
       _parent: unknown,
