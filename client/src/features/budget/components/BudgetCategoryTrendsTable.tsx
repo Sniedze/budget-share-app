@@ -1,6 +1,7 @@
 import { TrendingUp } from 'lucide-react';
 import { MutedText, Table, TableWrapper, Tbody, Td, Th, Thead, Tr } from '../../../components/ui';
 import { formatAppCurrency } from '../../../format/currency';
+import { colors } from '../../../styles/tokens';
 import { CATEGORY_DOT_COLORS } from '../budgetPageStyles';
 import type { CategoryTrendRow } from '../budgetPageTypes';
 import { Dot, MiniTrend } from '../budgetPageStyles';
@@ -58,14 +59,14 @@ export const BudgetCategoryTrendsTable = ({
                 </Td>
               ))}
               <Td style={{ textAlign: 'right' }}>{r.cap > 0 ? formatAmount(r.cap) : '—'}</Td>
-              <Td style={{ textAlign: 'right', color: '#0891b2', fontWeight: 600 }}>
+              <Td style={{ textAlign: 'right', color: colors.primary, fontWeight: 600 }}>
                 {formatAmount(r.ytd)}
               </Td>
               <Td
                 style={{
                   textAlign: 'right',
                   fontWeight: 600,
-                  color: r.cap > 0 && r.avg > r.cap ? '#dc2626' : '#16a34a',
+                  color: r.cap > 0 && r.avg > r.cap ? colors.amountNegative : colors.amountPositive,
                 }}
               >
                 {formatAmount(r.avg)}
@@ -78,7 +79,7 @@ export const BudgetCategoryTrendsTable = ({
               </Td>
             </Tr>
           ))}
-          <Tr style={{ fontWeight: 700, background: '#f8fafc' }}>
+          <Tr style={{ fontWeight: 700, background: colors.tableHeaderBg }}>
             <Td>Total</Td>
             {columnTotals.map((t, i) => (
               <Td key={`tot-${monthIndices[i]}`} style={{ textAlign: 'right' }}>
@@ -86,7 +87,7 @@ export const BudgetCategoryTrendsTable = ({
               </Td>
             ))}
             <Td>—</Td>
-            <Td style={{ textAlign: 'right', color: '#0891b2' }}>
+            <Td style={{ textAlign: 'right', color: colors.primary }}>
               {formatAmount(rows.reduce((s, r) => s + r.ytd, 0))}
             </Td>
             <Td>—</Td>

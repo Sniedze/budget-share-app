@@ -52,4 +52,4 @@ export type {
   SplitAllocationInput,
   SplitType,
   UpdateExpenseInput,
-} from './types';
+} from '../../graphql/operationTypes';

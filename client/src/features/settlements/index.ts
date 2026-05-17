@@ -1,2 +1,9 @@
 export * from './graphql';
-export * from './types';
+export type {
+  ExpenseGroupSettlement,
+  GetHouseholdSettlementsResponse,
+  HouseholdSettlement,
+  SettlementBalance,
+  SettlementPayment,
+  SettlementTransfer,
+} from '../../graphql/operationTypes';

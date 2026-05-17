@@ -1,7 +1,11 @@
 # Production-style stack for a single VPS: MySQL (no host port), API, Caddy (SPA + /graphql proxy + auto HTTPS).
-# Create `.env` from `.env.example`. Required in `.env` or environment:
-#   MYSQL_*, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, ALLOWED_ORIGINS
-# Optional (loaded via env_file): APP_PUBLIC_URL, SMTP_*, VITE_GRAPHQL_URL
+#
+# Create `.env` from `.env.example`. The `api` service loads it via `env_file` — set at least:
+#   MYSQL_ROOT_PASSWORD, MYSQL_DATABASE, MYSQL_USER, MYSQL_PASSWORD
+#   JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, ALLOWED_ORIGINS, APP_PUBLIC_URL
+# Optional in the same `.env`: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
+#   HIBP_PASSWORD_CHECK, LOG_LEVEL, VITE_GRAPHQL_URL (build-time for client image)
+#
 # Then: docker compose -f docker-compose.prod.yml up -d --build
 # Caddy fetches Let's Encrypt certificates automatically on first request to the public domain.
 

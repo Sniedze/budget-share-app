@@ -28,6 +28,15 @@ export const colors = {
   danger: '#ef4444',
   dangerHover: '#dc2626',
   success: '#16a34a',
+  /** Semantic amounts and chart chrome (budget, dashboards). */
+  amountPositive: '#16a34a',
+  amountNegative: '#dc2626',
+  chartGrid: '#e5e7eb',
+  chartAccent: '#f97316',
+  chartAccentFill: '#ffedd5',
+  chartMutedStroke: '#94a3b8',
+  chartMutedFill: '#e2e8f0',
+  tableHeaderBg: '#f8fafc',
 
   sidebarBg: '#ffffff',
   sidebarActiveBg: '#cffafe',

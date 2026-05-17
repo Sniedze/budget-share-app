@@ -2,7 +2,7 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth';
 import { GET_GROUPS } from '../groups/graphql';
-import type { GetGroupsQueryResult } from '../groups/types';
+import type { GetGroupsQueryResult } from '../../graphql/operationTypes';
 import { formatAppCurrency, formatCurrency } from '../../format/currency';
 import type { RecordSettlementPaymentMutation } from '../../graphql/generated/graphql';
 import { mergeHouseholdSettlementInCache } from './settlementCacheUpdates';
@@ -24,7 +24,7 @@ import {
   resolveViewerMemberName,
   settlementDueStatus,
 } from './settlementSelectors';
-import type { GetHouseholdSettlementsResponse, SettlementTransfer } from './types';
+import type { GetHouseholdSettlementsResponse, SettlementTransfer } from '../../graphql/operationTypes';
 
 export type SettlementDetailsTab = 'pending' | 'history' | 'monthly';
 

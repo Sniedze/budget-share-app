@@ -1,4 +1,4 @@
-import type { SettlementPayment, SettlementTransfer } from './types';
+import type { SettlementPayment, SettlementTransfer } from '../../graphql/operationTypes';
 
 const EPSILON = 0.01;
 

@@ -1,5 +1,6 @@
 import { MutedText, Table, TableWrapper, Tbody, Td, Th, Thead, Tr } from '../../../components/ui';
 import { formatCurrency } from '../../../format/currency';
+import { colors } from '../../../styles/tokens';
 import type { RecentTransactionRow } from '../budgetPageTypes';
 import { Pill } from '../budgetPageStyles';
 
@@ -43,7 +44,7 @@ export const BudgetRecentTransactionsTable = ({ rows }: BudgetRecentTransactions
                     <Pill>{expense.category}</Pill>
                   </Td>
                   <Td style={{ textAlign: 'right' }}>{formatCurrency(expense.amount, expense.currency)}</Td>
-                  <Td style={{ textAlign: 'right', color: isIn ? '#16a34a' : '#dc2626' }}>
+                  <Td style={{ textAlign: 'right', color: isIn ? colors.amountPositive : colors.amountNegative }}>
                     {isIn ? '+' : '-'}
                     {formatCurrency(expense.amount, expense.currency)}
                   </Td>
@@ -51,7 +52,7 @@ export const BudgetRecentTransactionsTable = ({ rows }: BudgetRecentTransactions
                     style={{
                       textAlign: 'right',
                       fontWeight: 600,
-                      color: remaining >= 0 ? '#16a34a' : '#dc2626',
+                      color: remaining >= 0 ? colors.amountPositive : colors.amountNegative,
                     }}
                   >
                     {formatCurrency(remaining, expense.currency)}

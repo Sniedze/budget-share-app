@@ -258,7 +258,8 @@ export const CategoryFooter = styled.div`
 
 export const TrendTag = styled.span<{ $trend: 'up' | 'down' | 'stable' }>`
   font-weight: 600;
-  color: ${({ $trend }) => ($trend === 'up' ? '#dc2626' : $trend === 'down' ? '#16a34a' : colors.textMuted)};
+  color: ${({ $trend }) =>
+    $trend === 'up' ? colors.amountNegative : $trend === 'down' ? colors.amountPositive : colors.textMuted};
 `;
 
 export const CategoryBar = styled.div<{ $pct: number; $color: string; $over: boolean }>`
@@ -306,7 +307,8 @@ export const MiniTrend = styled.span<{ $trend: 'up' | 'down' | 'stable' }>`
   gap: 4px;
   font-size: 12px;
   font-weight: 600;
-  color: ${({ $trend }) => ($trend === 'up' ? '#dc2626' : $trend === 'down' ? '#16a34a' : colors.textMuted)};
+  color: ${({ $trend }) =>
+    $trend === 'up' ? colors.amountNegative : $trend === 'down' ? colors.amountPositive : colors.textMuted};
 `;
 
 export const ModalBackdrop = styled.div`

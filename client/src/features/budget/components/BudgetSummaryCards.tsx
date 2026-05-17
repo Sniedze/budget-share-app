@@ -1,4 +1,5 @@
 import { formatAppCurrency } from '../../../format/currency';
+import { colors } from '../../../styles/tokens';
 import type { FormatBudgetAmount } from '../budgetPageTypes';
 import { ytdRangeLabel } from '../selectors';
 import { SummaryCard, SummaryGrid, SummaryHint, SummaryLabel, SummaryValue } from '../budgetPageStyles';
@@ -43,7 +44,7 @@ export const BudgetSummaryCards = ({
       </SummaryCard>
       <SummaryCard>
         <SummaryLabel>YTD income</SummaryLabel>
-        <SummaryValue style={{ color: '#16a34a' }}>+{formatAmount(ytdIncCombined)}</SummaryValue>
+        <SummaryValue style={{ color: colors.amountPositive }}>+{formatAmount(ytdIncCombined)}</SummaryValue>
         <SummaryHint>
           {ytdRangeLabel(now)} · imported {formatAmount(ytdIncomingActual)} + estimate{' '}
           {formatAmount(ytdIncEstimate)}
@@ -51,7 +52,7 @@ export const BudgetSummaryCards = ({
       </SummaryCard>
       <SummaryCard>
         <SummaryLabel>YTD expenses</SummaryLabel>
-        <SummaryValue style={{ color: '#dc2626' }}>-{formatAmount(ytdExp)}</SummaryValue>
+        <SummaryValue style={{ color: colors.amountNegative }}>-{formatAmount(ytdExp)}</SummaryValue>
         <SummaryHint>{ytdRangeLabel(now)}</SummaryHint>
       </SummaryCard>
     </SummaryGrid>

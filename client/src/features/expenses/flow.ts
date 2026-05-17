@@ -1,4 +1,4 @@
-import type { Expense } from './types';
+import type { Expense } from '../../graphql/operationTypes';
 
 export type ExpenseFlow = 'Outgoing' | 'Incoming';
 

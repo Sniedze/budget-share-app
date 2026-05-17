@@ -1,4 +1,4 @@
-import type { Expense } from '../expenses/types';
+import type { Expense } from '../../graphql/operationTypes';
 import { APP_CURRENCY_CODE } from '../../format/currency';
 import { toBudgetTopLevelCategory } from '../expenses/categories';
 

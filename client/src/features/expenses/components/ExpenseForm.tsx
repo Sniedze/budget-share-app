@@ -10,10 +10,7 @@ import {
   Input,
   MutedText,
 } from '../../../components/ui';
-import type {
-  SplitAllocationInput,
-  SplitType,
-} from '../types';
+import type { SplitAllocationInput, SplitType } from '../../../graphql/operationTypes';
 import { APP_CURRENCY_CODE, formatAppCurrency } from '../../../format/currency';
 import { colors, spacing } from '../../../styles/tokens';
 

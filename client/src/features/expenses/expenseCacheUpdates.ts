@@ -1,6 +1,6 @@
 import type { ApolloCache } from '@apollo/client';
 import { GET_EXPENSES } from './graphql';
-import type { Expense, GetExpensesResponse } from './types';
+import type { Expense, GetExpensesResponse } from '../../graphql/operationTypes';
 
 export const mergeImportedExpensesIntoCache = (cache: ApolloCache, expenses: Expense[]): void => {
   if (expenses.length === 0) {

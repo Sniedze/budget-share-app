@@ -1,5 +1,5 @@
 import { isOutgoingExpense } from '../flow';
-import type { Expense, SplitAllocationInput, SplitType } from '../types';
+import type { Expense, SplitAllocationInput, SplitType } from '../../../graphql/operationTypes';
 
 export type MerchantSuggestion = {
   merchant: string;

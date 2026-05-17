@@ -44,6 +44,10 @@ import {
 } from './memberIdentity.js';
 import { buildOptimizedTransfers } from './settlementTransfers.js';
 import { parseSettlementPeriod, settlementPeriodRange } from './settlementPeriod.js';
+import {
+  parseExpenseSettlementAmounts,
+  parseTemplateSplitRatios,
+} from './splitDetailsParse.js';
 
 type GroupRow = {
   id: number;
@@ -240,7 +244,7 @@ const listTemplateSplitDetailsByGroupAndCategory = async (
     if (!categoryKey) {
       continue;
     }
-    map.set(`${row.groupId}:${categoryKey}`, parseTemplateSplitDetails(row.splitDetails));
+    map.set(`${row.groupId}:${categoryKey}`, parseTemplateSplitRatios(row.splitDetails));
   }
 
   return map;
@@ -271,38 +275,6 @@ const normalizeTemplateSplitDetails = (
   }));
 };
 
-const parseTemplateSplitDetails = (
-  value: SplitTemplateRow['splitDetails'],
-): Array<{ participant: string; ratio: number }> => {
-  let parsed: unknown = null;
-  if (Array.isArray(value)) {
-    parsed = value;
-  } else if (typeof value === 'string') {
-    try {
-      parsed = JSON.parse(value) as unknown;
-    } catch {
-      return [];
-    }
-  }
-  if (!Array.isArray(parsed)) {
-    return [];
-  }
-  return parsed
-    .map((item) => {
-      if (typeof item !== 'object' || item === null) {
-        return null;
-      }
-      const participant =
-        'participant' in item && typeof item.participant === 'string' ? item.participant.trim() : '';
-      const ratio = 'ratio' in item ? Number(item.ratio) : Number.NaN;
-      if (!participant || !Number.isFinite(ratio)) {
-        return null;
-      }
-      return { participant, ratio };
-    })
-    .filter((item): item is { participant: string; ratio: number } => item !== null);
-};
-
 const toSafeGraphqlFloat = (value: number): number => {
   const rounded = roundCents(value);
   return Number.isFinite(rounded) ? rounded : 0;
@@ -320,61 +292,6 @@ const toSettlementDateString = (value: Date | string | null | undefined): string
 const buildBulkInsertPlaceholders = (rows: number, width: number): string =>
   Array.from({ length: rows }, () => `(${Array.from({ length: width }, () => '?').join(', ')})`).join(', ');
 
-const normalizeSplitDetailsInput = (value: unknown): string | null => {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return JSON.stringify(value);
-  }
-  return null;
-};
-
-const parseExpenseSplitDetails = (
-  value: unknown,
-  expenseAmount?: number,
-): Array<{ participant: string; amount: number }> => {
-  const normalizedValue = normalizeSplitDetailsInput(value);
-  if (!normalizedValue) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(normalizedValue) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed
-      .map((item) => {
-        if (typeof item !== 'object' || item === null) {
-          return null;
-        }
-        const participant =
-          'participant' in item && typeof item.participant === 'string' ? item.participant.trim() : '';
-        const explicitAmount = 'amount' in item ? Number(item.amount) : Number.NaN;
-        const ratio = 'ratio' in item ? Number(item.ratio) : Number.NaN;
-        let amount = explicitAmount;
-        if (
-          !Number.isFinite(amount) &&
-          Number.isFinite(ratio) &&
-          expenseAmount !== undefined &&
-          Number.isFinite(expenseAmount)
-        ) {
-          amount = roundCents((expenseAmount * ratio) / 100);
-        }
-        if (!participant || !Number.isFinite(amount)) {
-          return null;
-        }
-        return { participant, amount: roundCents(amount) };
-      })
-      .filter((item): item is { participant: string; amount: number } => item !== null);
-  } catch {
-    return [];
-  }
-};
-
 const resolveExpenseSettlementShares = (
   expense: SettlementExpenseRow,
   members: GroupMember[],
@@ -385,7 +302,7 @@ const resolveExpenseSettlementShares = (
     return [];
   }
 
-  const splitDetails = parseExpenseSplitDetails(expense.splitDetails as unknown, amount);
+  const splitDetails = parseExpenseSettlementAmounts(expense.splitDetails as unknown, amount);
   const expenseGroupKey = readExpenseGroupLabel(expense).toLowerCase();
   const templateSplit = templateSplitByKey.get(`${expense.groupId}:${expenseGroupKey}`) ?? [];
 
@@ -590,7 +507,7 @@ export const listGroups = async (viewer: GroupViewer): Promise<Group[]> => {
     const groupMembers = membersByGroupId.get(row.groupId) ?? [];
     const viewerMember = findViewerGroupMember(groupMembers, viewer);
     const amount = Number(row.amount);
-    const splitDetails = parseExpenseSplitDetails(
+    const splitDetails = parseExpenseSettlementAmounts(
       typeof row.splitDetails === 'string' ? row.splitDetails : null,
       amount,
     );
@@ -1118,7 +1035,7 @@ export const listSplitTemplates = async (groupId: string, viewer: GroupViewer): 
     groupId: String(row.groupId),
     category: row.category,
     templateName: row.templateName,
-    splitDetails: parseTemplateSplitDetails(row.splitDetails),
+    splitDetails: parseTemplateSplitRatios(row.splitDetails),
   }));
 };
 
@@ -1161,7 +1078,7 @@ export const upsertSplitTemplate = async (
     [numericGroupId, category],
   );
   const previousParticipants = new Set(
-    parseTemplateSplitDetails(existingTemplateRows[0]?.splitDetails).map((entry) =>
+    parseTemplateSplitRatios(existingTemplateRows[0]?.splitDetails).map((entry) =>
       entry.participant.trim().toLowerCase(),
     ),
   );

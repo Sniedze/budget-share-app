@@ -1,5 +1,5 @@
 import type { GraphQLFormattedError } from 'graphql';
-import { logServerError } from '../logger.js';
+import { logGraphqlResolverError } from '../logger.js';
 import { getCurrentRequestId } from '../middleware/requestContext.js';
 import { ErrorCode, type ErrorCodeValue } from './appError.js';
 
@@ -26,14 +26,14 @@ export const formatGraphqlError = (
   const code = readErrorCode(formattedError);
   const isClientSafe = code !== undefined && CLIENT_SAFE_CODES.has(code as ErrorCodeValue);
 
+  logGraphqlResolverError({
+    requestId,
+    message: formattedError.message,
+    code,
+    path: formattedError.path ?? undefined,
+  });
+
   if (!isClientSafe) {
-    logServerError({
-      requestId,
-      method: 'POST',
-      path: '/graphql',
-      statusCode: 500,
-      message: formattedError.message,
-    });
     const baseMessage = isDevelopment ? formattedError.message : 'Internal server error.';
     return {
       message: `${baseMessage} (request id: ${requestId})`,

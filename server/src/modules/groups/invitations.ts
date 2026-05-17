@@ -1,6 +1,7 @@
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { db } from '../../db/mysql.js';
 import { toIsoString } from '../../lib/dates.js';
+import { stripParticipantFromTemplateSplitJson } from './splitDetailsParse.js';
 import { appError, ErrorCode } from '../../graphql/appError.js';
 import { logAuthzDenied } from '../../logger.js';
 import { updateInvitationEmailDeliveryStatus } from '../email/invitationEmailStatus.js';
@@ -212,32 +213,18 @@ const removeMemberFromHousehold = async (groupId: number, email: string, memberN
     [groupId],
   );
 
-  const normalizedName = memberName.trim().toLowerCase();
   for (const row of templateRows) {
-    let splitDetails: Array<{ participant: string; ratio: number }> = [];
-    try {
-      const parsed = JSON.parse(typeof row.splitDetails === 'string' ? row.splitDetails : '[]');
-      if (Array.isArray(parsed)) {
-        splitDetails = parsed
-          .filter(
-            (entry): entry is { participant: string; ratio: number } =>
-              typeof entry === 'object' &&
-              entry !== null &&
-              typeof entry.participant === 'string' &&
-              typeof entry.ratio === 'number',
-          )
-          .filter((entry) => entry.participant.trim().toLowerCase() !== normalizedName);
-      }
-    } catch {
-      splitDetails = [];
-    }
+    const splitDetailsJson = stripParticipantFromTemplateSplitJson(
+      typeof row.splitDetails === 'string' ? row.splitDetails : '[]',
+      memberName,
+    );
     await db.execute(
       `
         UPDATE group_split_templates
         SET split_details = ?
         WHERE id = ?
       `,
-      [JSON.stringify(splitDetails), row.id],
+      [splitDetailsJson, row.id],
     );
   }
 };
@@ -408,24 +395,10 @@ export const declineExpenseGroupParticipation = async (
     throw appError(ErrorCode.NOT_FOUND, 'Expense group not found.');
   }
 
-  const normalizedName = member.name.trim().toLowerCase();
-  let splitDetails: Array<{ participant: string; ratio: number }> = [];
-  try {
-    const parsed = JSON.parse(typeof template.splitDetails === 'string' ? template.splitDetails : '[]');
-    if (Array.isArray(parsed)) {
-      splitDetails = parsed
-        .filter(
-          (entry): entry is { participant: string; ratio: number } =>
-            typeof entry === 'object' &&
-            entry !== null &&
-            typeof entry.participant === 'string' &&
-            typeof entry.ratio === 'number',
-        )
-        .filter((entry) => entry.participant.trim().toLowerCase() !== normalizedName);
-    }
-  } catch {
-    splitDetails = [];
-  }
+  const splitDetailsJson = stripParticipantFromTemplateSplitJson(
+    typeof template.splitDetails === 'string' ? template.splitDetails : '[]',
+    member.name,
+  );
 
   const [updateResult] = await db.execute<ResultSetHeader>(
     `
@@ -433,7 +406,7 @@ export const declineExpenseGroupParticipation = async (
       SET split_details = ?
       WHERE id = ?
     `,
-    [JSON.stringify(splitDetails), template.id],
+    [splitDetailsJson, template.id],
   );
 
   return updateResult.affectedRows > 0;

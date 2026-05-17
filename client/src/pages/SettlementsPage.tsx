@@ -25,7 +25,7 @@ import {
 } from '../components/ui';
 import { useSettlementsPageState } from '../features/settlements/useSettlementsPageState';
 import type { SettlementPeriodValue } from '../features/settlements/settlementPeriod';
-import type { SettlementTransfer } from '../features/settlements/types';
+import type { SettlementTransfer } from '../graphql/operationTypes';
 import {
   ActionCell,
   Avatar,

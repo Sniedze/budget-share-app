@@ -641,21 +641,22 @@ export const updateExpense = async (
     },
   });
 
-  return {
-    id: String(row.id),
-    title: row.title,
-    amount: Number(row.amount),
-    currency: rowCurrencyFromRow(row),
-    createdAt: toIsoString(row.created_at),
-    transactionDate: toIsoString(row.transaction_date),
-    category: row.category,
-    expenseGroup: row.expense_group ?? undefined,
-    split: normalizeSplit(row.split_type),
-    splitDetails: parseSplitDetails(row.split_details),
-    groupId: row.group_id === null ? undefined : String(row.group_id),
-    createdByUserId: row.created_by_user_id === null ? undefined : String(row.created_by_user_id),
-    paidByUserId: row.paid_by_user_id === null ? undefined : String(row.paid_by_user_id),
-    isPrivate: rowIsPrivate(row),
-    flow: normalizeExpenseFlow(row.expense_flow),
-  };
+  return mapExpenseRow(row, {
+    id: String(existing.id),
+    title: existing.title,
+    amount: Number(existing.amount),
+    currency: rowCurrencyFromRow(existing),
+    createdAt: toIsoString(existing.created_at),
+    transactionDate: toIsoString(existing.transaction_date),
+    category: existing.category,
+    expenseGroup: existing.expense_group ?? undefined,
+    split: normalizeSplit(existing.split_type),
+    splitDetails: parseSplitDetails(existing.split_details),
+    groupId: existing.group_id === null ? undefined : String(existing.group_id),
+    createdByUserId:
+      existing.created_by_user_id === null ? undefined : String(existing.created_by_user_id),
+    paidByUserId: existing.paid_by_user_id === null ? undefined : String(existing.paid_by_user_id),
+    isPrivate: rowIsPrivate(existing),
+    flow: normalizeExpenseFlow(existing.expense_flow),
+  });
 };

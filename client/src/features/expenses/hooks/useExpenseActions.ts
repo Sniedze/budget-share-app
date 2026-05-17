@@ -3,7 +3,12 @@ import type { DocumentNode } from 'graphql';
 import { refetchGroups } from '../../groups/groupCacheUpdates';
 import { addExpenseToCache, removeExpenseFromCache, updateExpenseInCache } from '../expenseCacheUpdates';
 import { GET_EXPENSES, ADD_EXPENSE, DELETE_EXPENSE, UPDATE_EXPENSE } from '../graphql';
-import type { AddExpenseInput, Expense, GetExpensesResponse, UpdateExpenseInput } from '../types';
+import type {
+  AddExpenseInput,
+  Expense,
+  GetExpensesResponse,
+  UpdateExpenseInput,
+} from '../../../graphql/operationTypes';
 import type { AddExpenseMutation, UpdateExpenseMutation } from '../../../graphql/generated/graphql';
 
 type UseExpenseActionsOptions = {
