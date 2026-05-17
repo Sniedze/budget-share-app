@@ -11,7 +11,7 @@ import {
 import { CHANGE_PASSWORD, LOGIN, LOGOUT, LOGOUT_ALL_DEVICES, ME, REGISTER } from './graphql';
 import { hasSessionHintCookie } from './sessionHint';
 import { clearStoredTokens } from './storage';
-import type { AuthMutationData, AuthUser } from './types';
+import type { AuthMutationData, AuthUser } from '../../graphql/operationTypes';
 
 export type AuthStateContextValue = {
   user: AuthUser | null;

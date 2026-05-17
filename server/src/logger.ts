@@ -1,8 +1,32 @@
-type LogLevel = 'info' | 'warn' | 'error';
+import { ErrorCode } from './graphql/appError.js';
+
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 type LogFields = Record<string, unknown>;
 
+const LEVEL_RANK: Record<LogLevel, number> = {
+  debug: 10,
+  info: 20,
+  warn: 30,
+  error: 40,
+};
+
+const parseMinLogLevel = (): LogLevel => {
+  const raw = process.env.LOG_LEVEL?.trim().toLowerCase();
+  if (raw === 'debug' || raw === 'info' || raw === 'warn' || raw === 'error') {
+    return raw;
+  }
+  return 'info';
+};
+
+const minLogLevel = parseMinLogLevel();
+
+const shouldLog = (level: LogLevel): boolean => LEVEL_RANK[level] >= LEVEL_RANK[minLogLevel];
+
 const write = (level: LogLevel, event: string, fields: LogFields): void => {
+  if (!shouldLog(level)) {
+    return;
+  }
   const payload = {
     level,
     event,
@@ -37,8 +61,29 @@ export const logServerError = (fields: {
   path: string;
   statusCode: number;
   message: string;
+  code?: string;
 }): void => {
   write('error', 'http_error', fields);
+};
+
+export const logGraphqlResolverError = (fields: {
+  requestId: string;
+  message: string;
+  code?: string;
+  path?: ReadonlyArray<string | number>;
+}): void => {
+  if (fields.code === ErrorCode.UNAUTHENTICATED) {
+    return;
+  }
+  const isClientError =
+    fields.code !== undefined &&
+    fields.code !== ErrorCode.INTERNAL_SERVER_ERROR &&
+    fields.code !== 'INTERNAL_SERVER_ERROR';
+  write(isClientError ? 'warn' : 'error', 'graphql_resolver_error', {
+    method: 'POST',
+    path: '/graphql',
+    ...fields,
+  });
 };
 
 export const logAuthzDenied = (reason: string, fields: LogFields = {}): void => {

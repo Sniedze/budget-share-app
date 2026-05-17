@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 import { formatAppCurrency } from '../../../format/currency';
+import { colors } from '../../../styles/tokens';
 import type { ForecastChartRow } from '../selectors';
 import { Callout, ChartCard, ChartFrame, OverviewTitle, PillTab, PillTabs, SectionHead } from '../budgetPageStyles';
 
@@ -53,7 +54,7 @@ export const BudgetForecastCharts = ({
           <ChartFrame>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartRowsMonthly}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <CartesianGrid strokeDasharray="3 3" stroke={colors.chartGrid} />
                 <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip formatter={(value) => (value == null ? '—' : formatAmount(Number(value)))} />
@@ -62,8 +63,8 @@ export const BudgetForecastCharts = ({
                   type="monotone"
                   dataKey="budget"
                   name="Budget"
-                  stroke="#22d3ee"
-                  fill="#cffafe"
+                  stroke={colors.chartStrokeLight}
+                  fill={colors.chartFillLight}
                   fillOpacity={0.5}
                   strokeWidth={2}
                 />
@@ -71,8 +72,8 @@ export const BudgetForecastCharts = ({
                   type="monotone"
                   dataKey="actual"
                   name="Actual"
-                  stroke="#0891b2"
-                  fill="#a5f3fc"
+                  stroke={colors.chartStroke}
+                  fill={colors.chartFill}
                   fillOpacity={0.35}
                   strokeWidth={2}
                   connectNulls
@@ -81,8 +82,8 @@ export const BudgetForecastCharts = ({
                   type="monotone"
                   dataKey="forecast"
                   name="Forecast"
-                  stroke="#f97316"
-                  fill="#ffedd5"
+                  stroke={colors.chartAccent}
+                  fill={colors.chartAccentFill}
                   fillOpacity={0.3}
                   strokeWidth={2}
                   connectNulls
@@ -104,7 +105,7 @@ export const BudgetForecastCharts = ({
           <ChartFrame>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={yearTotals}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <CartesianGrid strokeDasharray="3 3" stroke={colors.chartGrid} />
                 <XAxis dataKey="year" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip formatter={(value) => formatAmount(Number(value ?? 0))} />
@@ -113,8 +114,8 @@ export const BudgetForecastCharts = ({
                   type="monotone"
                   dataKey="spent"
                   name="Total spent"
-                  stroke="#0891b2"
-                  fill="#cffafe"
+                  stroke={colors.chartStroke}
+                  fill={colors.chartFill}
                   fillOpacity={0.45}
                   strokeWidth={2}
                 />
@@ -122,8 +123,8 @@ export const BudgetForecastCharts = ({
                   type="monotone"
                   dataKey="budget"
                   name="Annual budget (12× current month)"
-                  stroke="#94a3b8"
-                  fill="#e2e8f0"
+                  stroke={colors.chartMutedStroke}
+                  fill={colors.chartMutedFill}
                   fillOpacity={0.25}
                   strokeWidth={2}
                 />

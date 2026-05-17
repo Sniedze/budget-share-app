@@ -1,6 +1,5 @@
 import { formatAppCurrency } from '../../../format/currency';
-import type { GroupMember } from '../../groups/types';
-import type { Expense } from '../types';
+import type { Expense, GroupMember } from '../../../graphql/operationTypes';
 import {
   type ExpenseViewerContext,
   getExpenseAttributableAmount,

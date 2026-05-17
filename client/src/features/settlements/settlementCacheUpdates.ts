@@ -1,6 +1,6 @@
 import type { ApolloCache } from '@apollo/client';
 import { GET_HOUSEHOLD_SETTLEMENTS } from './graphql';
-import type { GetHouseholdSettlementsResponse, HouseholdSettlement } from './types';
+import type { GetHouseholdSettlementsResponse, HouseholdSettlement } from '../../graphql/operationTypes';
 import type { SettlementPeriodValue } from './settlementPeriod';
 
 export const mergeHouseholdSettlementInCache = (

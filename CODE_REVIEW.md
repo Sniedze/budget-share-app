@@ -65,9 +65,9 @@ This is genuinely good shipping. With the security posture and observability in 
 | 1.4 | Hardcoded DB creds in `docker-compose.yml` | **✓ Resolved** — required-env interpolation `${VAR:?required}`, `.env.example` present |
 | 1.5 | Hardcoded GraphQL URL | **✓ Resolved** — `import.meta.env.VITE_GRAPHQL_URL` read with localhost fallback for dev (`apolloClient.ts:3-4`) |
 | 1.6 | `Authorization` parsing via `split(' ')` | **✓ Resolved** — `context.ts` uses `^Bearer\s+(\S+)$` regex; cookies preferred, bearer fallback. |
-| 1.7 | Substring-coupled auth-error detection | **◐ Partially resolved** — `apolloClient.ts` uses `extensions.code` (`UNAUTHENTICATED`). Import duplicate detection still accepts legacy `Duplicate transaction:` prefix when `errorCode` is absent. |
+| 1.7 | Substring-coupled auth-error detection | **✓ Resolved** — client uses `extensions.code` for auth and import duplicates (`errorCode` / `DUPLICATE_TRANSACTION`); no message-prefix coupling. |
 | 1.8 | Server throws plain `Error` everywhere; no `extensions.code` | **✓ Resolved** — services use `appError`; boot-time config may still throw plain `Error`. |
-| 1.9 | No central logger | **◐ Partially resolved** — `server/src/logger.ts` exists, emits structured JSON, logs request completion + authz denials + 5xx via `errorHandler`. Still uses `console.log/error/warn` underneath rather than pino/winston, has no log-level filtering via env, and doesn't log GraphQL resolver errors (only HTTP-level errors and select authz denials). |
+| 1.9 | No central logger | **✓ Resolved** — structured JSON logger with `LOG_LEVEL` env; `logGraphqlResolverError` in `formatGraphqlError` (skips `UNAUTHENTICATED`); HTTP errors via `errorHandler`. |
 | 1.16 | No `helmet` / CSP / HSTS | **✓ Resolved** — `helmet()` in `createApp.ts` (CSP disabled for GraphQL playground compatibility in dev). |
 | 1.17 | No body-size limit | **✓ Resolved** — `express.json({ limit: process.env.JSON_BODY_LIMIT ?? '512kb' })` (`createApp.ts:58-59`) |
 
@@ -101,9 +101,11 @@ This is genuinely good shipping. With the security posture and observability in 
 | 3.7 | `Promise.all(INSERT)` for members/invitations | **✓ Resolved** — `groups/service.ts:539-580, 700-748` now uses `buildBulkInsertPlaceholders` for a single multi-row insert. |
 | 3.9 | Recharts in main bundle | **✓ Resolved** — `vite.config.ts manualChunks` splits recharts into its own chunk; commit `cbf83fa` defers recharts on the home page. |
 
-### Duplications (10 high) — mostly still present
+### Duplications (10 high) — partially reduced
 
-`roundCents` (3 places), `toIsoString` (2 places), three split-detail parsers, repeated user/expense SELECT projections, expense row→API mapping repeated 5×, group member-validation block repeated, invitation sync block repeated, hex colors outside tokens, two parallel `storage.ts` modules — all still present. The new `db/queryHelpers.ts` (`queryOne`, `queryMany`) is the right shape and reduces some boilerplate but the column-list strings and the row-mapping functions weren't extracted. The GraphQL field-list duplications in `client/src/features/expenses/graphql.ts` and `features/groups/graphql.ts` are also unchanged.
+**Done:** `roundCents` / `toIsoString` centralized in `server/src/lib/`; expense rows via `mapExpenseRow` + `EXPENSE_SELECT_COLUMNS`; group template/expense split JSON parsing in `groups/splitDetailsParse.ts` (invitations reuse); budget amount/chart colors use `styles/tokens`; GraphQL field fragments (`GROUP_FIELDS`, settlement fragment).
+
+**Still present:** repeated column-list strings in SQL, some invitation/member-validation blocks, import-only client types in `features/import/types.ts`, parallel import storage helpers.
 
 ### Other (5 high) — all resolved
 
@@ -120,7 +122,7 @@ This is genuinely good shipping. With the security posture and observability in 
 | # | Finding | Status |
 |---|---|---|
 | 6.1 | No validation library | **✓ Resolved** — Zod schemas in `expenses/validation.ts` and `groups/validation.ts`, wired in GraphQL resolvers. Auth remains hand-rolled validators. |
-| 6.2 | `refetchQueries` is the old way | **◐ Partially resolved** — expense + group cache updates; resend patches invitations (#57); `recordSettlementPayment` merges `householdSettlement` into cache; template/expense-group mutations return `Group` and merge cache. Optional: migrate remaining hand-written `features/*/types.ts` to codegen-only. |
+| 6.2 | `refetchQueries` is the old way | **✓ Resolved** — Apollo cache updates for expenses, groups, settlements; GraphQL operation types consolidated in `client/src/graphql/operationTypes.ts` (per-feature `types.ts` removed except import-local UI types). |
 | 6.3 | No `<ErrorBoundary>` | **✓ Resolved** — `main.tsx` wraps the app. |
 | 6.4 | `AuthContext` is one big context | **✓ Resolved** — split `AuthStateContext` / `AuthActionsContext`. |
 
@@ -277,9 +279,9 @@ If a library attaches a malicious `statusCode = "1000"` string, `Number("1000") 
 
 The previous top-10 list is mostly done. Here's what's left, ordered by impact ÷ effort.
 
-**Done recently (optional batch):** FX `fxRate` + budget indicative totals (1.13), HIBP password check (1.14), settlement payment cache merge + `RecordSettlementPaymentPayload`, group mutations return `Group` with Apollo cache merge.
+**Done recently:** optional batch (FX, HIBP, settlement/group cache); remaining cleanup — GraphQL error codes (1.7), resolver logging + `LOG_LEVEL` (1.9), `operationTypes.ts` (6.2), split-details DRY, budget semantic colors, prod compose env docs.
 
-**Still open (lower priority):** codegen-only types (drop `features/*/types.ts`), duplication cleanup (§4), stretch items from earlier passes.
+**Still open (lower priority):** SQL column-list extraction, full import/storage dedup, optional pino/winston swap.
 
 **Done earlier:** email/user identity (#50, #56), budget per-currency (#54), `mapExpenseRow` + `GROUP_FIELDS` (#55), Dependabot (#53), common-password + cache-first `me` (#51), per-currency settlements (#49), group cache (#52, #57), audit `actor_user_id` NOT NULL, Vite `@/` alias (6.7).
 

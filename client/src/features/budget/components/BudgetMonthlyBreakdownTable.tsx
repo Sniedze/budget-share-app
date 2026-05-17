@@ -1,6 +1,7 @@
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { MutedText, Table, TableWrapper, Tbody, Td, Th, Thead, Tr } from '../../../components/ui';
 import { formatAppCurrency } from '../../../format/currency';
+import { colors } from '../../../styles/tokens';
 import type { MonthlyBreakdownRow, MonthlyBreakdownTotals } from '../budgetPageTypes';
 import { StatusPill } from '../budgetPageStyles';
 
@@ -42,7 +43,7 @@ export const BudgetMonthlyBreakdownTable = ({
                   </MutedText>
                 ) : null}
               </Td>
-              <Td style={{ textAlign: 'right', color: '#16a34a', fontWeight: 600 }}>
+              <Td style={{ textAlign: 'right', color: colors.amountPositive, fontWeight: 600 }}>
                 +{formatAmount(row.income)}
               </Td>
               <Td style={{ textAlign: 'right' }}>
@@ -60,7 +61,7 @@ export const BudgetMonthlyBreakdownTable = ({
                       justifyContent: 'flex-end',
                       gap: 4,
                       fontWeight: 600,
-                      color: row.variance >= 0 ? '#16a34a' : '#dc2626',
+                      color: row.variance >= 0 ? colors.amountPositive : colors.amountNegative,
                     }}
                   >
                     {row.variance >= 0 ? <ArrowDownRight size={16} aria-hidden /> : <ArrowUpRight size={16} aria-hidden />}
@@ -81,9 +82,9 @@ export const BudgetMonthlyBreakdownTable = ({
             </Tr>
           ))}
           {totals ? (
-            <Tr style={{ fontWeight: 700, background: '#f8fafc' }}>
+            <Tr style={{ fontWeight: 700, background: colors.tableHeaderBg }}>
               <Td>Total (actual)</Td>
-              <Td style={{ textAlign: 'right', color: '#16a34a' }}>
+              <Td style={{ textAlign: 'right', color: colors.amountPositive }}>
                 +{formatAmount(totals.income)}
               </Td>
               <Td style={{ textAlign: 'right' }}>{formatAmount(totals.expenses)}</Td>

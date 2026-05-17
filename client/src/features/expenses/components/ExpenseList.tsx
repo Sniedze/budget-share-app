@@ -1,4 +1,4 @@
-import type { Expense } from '../types';
+import type { Expense } from '../../../graphql/operationTypes';
 import styled from 'styled-components';
 import { Button, MutedText } from '../../../components/ui';
 import { formatCurrency } from '../../../format/currency';

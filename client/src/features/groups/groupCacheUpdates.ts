@@ -1,6 +1,6 @@
 import type { ApolloCache, ApolloClient } from '@apollo/client';
 import { GET_GROUPS } from './graphql';
-import type { GetGroupsQueryResult, GroupPendingInvitation, GroupSummary } from './types';
+import type { GetGroupsQueryResult, GroupPendingInvitation, GroupSummary } from '../../graphql/operationTypes';
 
 export const mergeGroupIntoCache = (cache: ApolloCache, group: GroupSummary | null | undefined): void => {
   if (!group) {

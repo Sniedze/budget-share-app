@@ -1,5 +1,6 @@
 import { MutedText } from '../../../components/ui';
 import { formatAppCurrency } from '../../../format/currency';
+import { colors } from '../../../styles/tokens';
 import { spacing } from '../../../styles/tokens';
 import type { CategoryBudgetDisplayRow } from '../budgetPageTypes';
 import {
@@ -50,11 +51,11 @@ export const BudgetCategoryList = ({
                 {row.cap > 0 ? (
                   <>
                     {row.remaining >= 0 ? (
-                      <span style={{ color: '#16a34a', fontWeight: 600 }}>
+                      <span style={{ color: colors.amountPositive, fontWeight: 600 }}>
                         {formatAmount(row.remaining)} left
                       </span>
                     ) : (
-                      <span style={{ color: '#dc2626', fontWeight: 600 }}>
+                      <span style={{ color: colors.amountNegative, fontWeight: 600 }}>
                         +{formatAmount(Math.abs(row.remaining))} over
                       </span>
                     )}
