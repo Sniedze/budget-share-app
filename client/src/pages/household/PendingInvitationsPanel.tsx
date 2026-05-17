@@ -2,7 +2,8 @@ import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
 import styled from 'styled-components';
 import { Badge, Button, MutedText } from '../../components/ui';
-import { GET_GROUPS, RESEND_GROUP_INVITATION } from '../../features/groups/graphql';
+import { patchGroupPendingInvitation } from '../../features/groups/groupCacheUpdates';
+import { RESEND_GROUP_INVITATION } from '../../features/groups/graphql';
 import {
   canResendInvitationEmail,
   invitationEmailStatusLabel,
@@ -59,7 +60,13 @@ export const PendingInvitationsPanel = ({
   const [resendError, setResendError] = useState<string | null>(null);
   const [resendingEmail, setResendingEmail] = useState<string | null>(null);
   const [resendInvitation] = useMutation<ResendGroupInvitationMutation>(RESEND_GROUP_INVITATION, {
-    refetchQueries: [{ query: GET_GROUPS }],
+    update(cache, { data }) {
+      const invitation = data?.resendGroupInvitation;
+      if (!invitation) {
+        return;
+      }
+      patchGroupPendingInvitation(cache, groupId, invitation);
+    },
   });
 
   if (invitations.length === 0) {
