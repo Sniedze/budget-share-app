@@ -1,10 +1,5 @@
 import { isDuplicateTransactionGraphqlError, type GraphqlErrorShape } from '../../lib/graphqlErrorCodes';
 
-/**
- * Legacy prefix when server does not return `extensions.code` (keep for older deployments).
- */
-export const BACKEND_DUPLICATE_EXPENSE_PREFIX = 'Duplicate transaction:';
-
 export const getMutationErrorMessage = (error: unknown): string => {
   if (error instanceof Error) {
     const err = error as Error & {
@@ -27,13 +22,7 @@ export const getMutationErrorMessage = (error: unknown): string => {
 export const isDuplicateImportResult = (result: {
   errorCode?: string | null;
   errorMessage?: string | null;
-}): boolean => {
-  if (result.errorCode === 'DUPLICATE_TRANSACTION') {
-    return true;
-  }
-  const message = result.errorMessage?.trim() ?? '';
-  return message.startsWith(BACKEND_DUPLICATE_EXPENSE_PREFIX);
-};
+}): boolean => result.errorCode === 'DUPLICATE_TRANSACTION';
 
 export const isBackendDuplicateExpenseError = (error: unknown): boolean => {
   if (error instanceof Error) {
@@ -43,6 +32,5 @@ export const isBackendDuplicateExpenseError = (error: unknown): boolean => {
       return true;
     }
   }
-  const message = getMutationErrorMessage(error);
-  return message.trim().startsWith(BACKEND_DUPLICATE_EXPENSE_PREFIX);
+  return false;
 };

@@ -2,7 +2,7 @@ import type { ResultSetHeader } from 'mysql2';
 import { db } from '../../db/mysql.js';
 
 type LogAuditEventInput = {
-  actorUserId?: string;
+  actorUserId: string;
   actorEmail: string;
   action: string;
   entityType: string;
@@ -56,7 +56,7 @@ export const logAuditEvent = async (input: LogAuditEventInput): Promise<void> =>
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
-      input.actorUserId ? Number(input.actorUserId) : null,
+      Number(input.actorUserId),
       input.actorEmail.trim().toLowerCase(),
       input.action,
       input.entityType,

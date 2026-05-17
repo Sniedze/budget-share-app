@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { LOGIN, LOGOUT, ME, REGISTER } from './graphql';
+import { LOGIN, LOGOUT, LOGOUT_ALL_DEVICES, ME, REGISTER } from './graphql';
 import { hasSessionHintCookie } from './sessionHint';
 import { clearStoredTokens } from './storage';
 import type { AuthUser } from './types';
@@ -24,6 +24,7 @@ export type AuthActionsContextValue = {
   login: (email: string, password: string, remember?: boolean) => Promise<void>;
   register: (fullName: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  logoutAllDevices: () => Promise<void>;
 };
 
 export type AuthContextValue = AuthStateContextValue & AuthActionsContextValue;
@@ -76,6 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
     errorPolicy: 'all',
   });
   const [logoutMutation] = useMutation(LOGOUT, { errorPolicy: 'all' });
+  const [logoutAllDevicesMutation] = useMutation(LOGOUT_ALL_DEVICES, { errorPolicy: 'all' });
 
   const login = useCallback(
     async (email: string, password: string, remember = true): Promise<void> => {
@@ -103,17 +105,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
     [registerMutation],
   );
 
+  const clearAuthState = useCallback(async (): Promise<void> => {
+    clearStoredTokens();
+    setUser(null);
+    await client.resetStore();
+  }, [client]);
+
   const logout = useCallback(async (): Promise<void> => {
     try {
       await logoutMutation();
     } catch {
       // Still clear local state if the network fails
     } finally {
-      clearStoredTokens();
-      setUser(null);
-      await client.resetStore();
+      await clearAuthState();
     }
-  }, [client, logoutMutation]);
+  }, [clearAuthState, logoutMutation]);
+
+  const logoutAllDevices = useCallback(async (): Promise<void> => {
+    try {
+      await logoutAllDevicesMutation();
+    } catch {
+      // Still clear local state if the network fails
+    } finally {
+      await clearAuthState();
+    }
+  }, [clearAuthState, logoutAllDevicesMutation]);
 
   const isInitializing = sessionHintPresent && meLoading && user === null && !meError;
 
@@ -132,8 +148,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
       login,
       register,
       logout,
+      logoutAllDevices,
     }),
-    [login, register, logout],
+    [login, logout, logoutAllDevices, register],
   );
 
   return (

@@ -278,11 +278,16 @@ If a library attaches a malicious `statusCode = "1000"` string, `Number("1000") 
 The previous top-10 list is mostly done. Here's what's left, ordered by impact ÷ effort.
 
 1. **Email-as-identity → user IDs** (1.11) — `group_members.user_id` as auth key. Large migration.
-2. **Per-device logout** (1.B) — refresh session rows vs revoke-all `refresh_token_version`.
-3. **Dedup hash on edit** (1.12) — **✓ Done** — reuse hash when date/amount/title/flow unchanged.
-4. **Adopt GraphQL codegen for all client operations** (6.2) — expand beyond generated schema types.
-5. **Audit log `actor_user_id`** (1.18) — nullable email or require user id on write.
-6. **Remove legacy duplicate-transaction message prefix** (1.7) — client-only cleanup once all envs use `errorCode`.
+2. **Adopt GraphQL codegen for all client operations** (6.2) — expand beyond generated schema types.
+3. **Currency beyond DKK** (1.13) — product decision + schema/API work.
+4. **Email invitation resend flow** (A.2) — delivery status exists; add resend if needed.
+5. **Duplication cleanup** — shared `roundCents`, expense projections, invitation email templates (A.3).
+6. **Stronger password policy** (1.14) — complexity / breached-password check; call `revokeRefreshTokens` on password change.
+7. **Dedup hash on edit** (1.12) — **✓ Done**
+8. **Per-device logout** (1.B) — **✓ Done** — `user_refresh_sessions` + `logout` revokes current device only (integration test).
+9. **Logout all devices** — **✓ Done** — `logoutAllDevices` mutation + UserMenu action.
+10. **Audit `actor_user_id`** (1.18) — **✓ Done** — required on `logAuditEvent` input.
+11. **Duplicate error codes** (1.7) — **✓ Done** — client uses `errorCode` only for import duplicates.
 7. **Currency beyond DKK** (1.13) — product decision + schema/API work.
 8. **Email invitation delivery status UI** (A.2) — **◐ Done server-side** (`email_delivery_status`); extend resend flow if needed.
 9. **Duplication cleanup** — shared `roundCents`, expense projections, invitation email templates (A.3).

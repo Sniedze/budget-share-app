@@ -42,3 +42,9 @@ export const LOGOUT = gql`
     logout
   }
 `;
+
+export const LOGOUT_ALL_DEVICES = gql`
+  mutation LogoutAllDevices {
+    logoutAllDevices
+  }
+`;

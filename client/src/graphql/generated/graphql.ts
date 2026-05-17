@@ -258,6 +258,7 @@ export type Mutation = {
   importExpenses: ImportExpensesPayload;
   login: AuthPayload;
   logout: Scalars['Boolean']['output'];
+  logoutAllDevices: Scalars['Boolean']['output'];
   recordSettlementPayment: SettlementPayment;
   refreshSession: AuthPayload;
   register: AuthPayload;
@@ -564,6 +565,11 @@ export type LogoutMutationVariables = Exact<{ [key: string]: never; }>;
 
 
 export type LogoutMutation = { __typename?: 'Mutation', logout: boolean };
+
+export type LogoutAllDevicesMutationVariables = Exact<{ [key: string]: never; }>;
+
+
+export type LogoutAllDevicesMutation = { __typename?: 'Mutation', logoutAllDevices: boolean };
 
 export type ExpenseFieldsFragment = { __typename?: 'Expense', id: string, title: string, amount: number, currency: string, createdAt: string, transactionDate: string, category: string, expenseGroup: string | null, split: SplitType, groupId: string | null, createdByUserId: string | null, paidByUserId: string | null, isPrivate: boolean, flow: ExpenseFlow, splitDetails: Array<{ __typename?: 'SplitAllocation', participant: string, ratio: number, amount: number }> };
 
