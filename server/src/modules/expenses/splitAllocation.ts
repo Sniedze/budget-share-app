@@ -1,7 +1,6 @@
 import type { CreateExpenseInput, SplitAllocation } from './types.js';
 import { appError, ErrorCode } from '../../graphql/appError.js';
-
-const roundToCents = (value: number): number => Math.round(value * 100) / 100;
+import { roundCents } from '../../lib/money.js';
 
 /** Allocates expense amount across participants; residual cents go to the last row. */
 export const toStoredSplitDetails = (
@@ -32,12 +31,12 @@ export const toStoredSplitDetails = (
   return normalized.map((entry, index) => {
     const isLast = index === normalized.length - 1;
     const rawAmount = (amount * entry.ratio) / 100;
-    const shareAmount = isLast ? roundToCents(amount - allocated) : roundToCents(rawAmount);
-    allocated = roundToCents(allocated + shareAmount);
+    const shareAmount = isLast ? roundCents(amount - allocated) : roundCents(rawAmount);
+    allocated = roundCents(allocated + shareAmount);
 
     return {
       participant: entry.participant,
-      ratio: roundToCents(entry.ratio),
+      ratio: roundCents(entry.ratio),
       amount: shareAmount,
     };
   });

@@ -20,6 +20,8 @@ import type {
 import { appError, ErrorCode } from '../../graphql/appError.js';
 import { logAuditEvent } from '../audit/service.js';
 import { logAuthzDenied } from '../../logger.js';
+import { toIsoString } from '../../lib/dates.js';
+import { roundCents } from '../../lib/money.js';
 import { stripControlCharacters } from '../../lib/sanitize.js';
 import { queueExpenseGroupAddedEmails, queueHouseholdMemberInviteEmails } from '../email/sendMemberNotifications.js';
 import {
@@ -116,10 +118,6 @@ type SettlementPaymentRow = {
   note: string | null;
   settledAt: Date | string;
 } & RowDataPacket;
-
-const toIsoString = (value: Date | string): string => {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-};
 
 const toNumericRatio = (value: number | string): number => {
   const numeric = Number(value);
@@ -284,7 +282,6 @@ const parseTemplateSplitDetails = (
     .filter((item): item is { participant: string; ratio: number } => item !== null);
 };
 
-const roundCents = (value: number): number => Math.round(value * 100) / 100;
 const toSafeGraphqlFloat = (value: number): number => {
   const rounded = roundCents(value);
   return Number.isFinite(rounded) ? rounded : 0;

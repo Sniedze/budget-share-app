@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { appError, ErrorCode } from '../../graphql/appError.js';
+import { roundCents } from '../../lib/money.js';
 
 /** Lowercase, trim, collapse internal whitespace (bank / merchant text). */
 export const normalizeTransactionDescriptionForDedup = (title: string): string => {
@@ -28,8 +29,6 @@ export const transactionDateKeyForDedup = (transactionDate: string): string => {
  * Dedup fingerprints treat `flow` as immutable: if flow semantics ever change, migrate existing
  * `transaction_dedup_hash` values; otherwise false positives/negatives can occur.
  */
-const roundToCents = (value: number): number => Math.round(value * 100) / 100;
-
 /** True when date, amount, normalized title, and flow are unchanged — keep existing dedup hash on edit. */
 export const transactionDedupFieldsUnchanged = (params: {
   existingTransactionDate: string;
@@ -43,8 +42,8 @@ export const transactionDedupFieldsUnchanged = (params: {
 }): boolean => {
   const existingDateKey = transactionDateKeyForDedup(params.existingTransactionDate);
   const nextDateKey = transactionDateKeyForDedup(params.nextTransactionDate);
-  const existingAmountCents = roundToCents(Number(params.existingAmount));
-  const nextAmountCents = roundToCents(params.nextAmount);
+  const existingAmountCents = roundCents(Number(params.existingAmount));
+  const nextAmountCents = roundCents(params.nextAmount);
   const existingTitleKey = normalizeTransactionDescriptionForDedup(params.existingTitle);
   const nextTitleKey = normalizeTransactionDescriptionForDedup(params.nextTitle);
   return (
@@ -62,7 +61,7 @@ export const computeTransactionDedupHash = (
   flow: 'Outgoing' | 'Incoming' = 'Outgoing',
 ): string => {
   const dateKey = transactionDateKeyForDedup(transactionDate);
-  const amountKey = roundToCents(amount).toFixed(2);
+  const amountKey = roundCents(amount).toFixed(2);
   const desc = normalizeTransactionDescriptionForDedup(title);
   let payload = `${dateKey}|${amountKey}|${desc}`;
   if (flow === 'Incoming') {

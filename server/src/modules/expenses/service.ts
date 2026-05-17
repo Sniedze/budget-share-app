@@ -11,6 +11,7 @@ import type {
 } from './types.js';
 import { AppError } from '../../graphql/appError.js';
 import { db } from '../../db/mysql.js';
+import { toIsoString } from '../../lib/dates.js';
 import { logAuditEvent } from '../audit/service.js';
 import { appError, ErrorCode } from '../../graphql/appError.js';
 import { logAuthzDenied } from '../../logger.js';
@@ -55,10 +56,6 @@ type TemplateRow = {
 const DEFAULT_CATEGORY = 'General';
 const DEFAULT_SPLIT = 'Personal';
 const ALLOWED_SPLITS = new Set(['Personal', 'Shared', 'Custom']);
-
-const toIsoString = (value: Date | string): string => {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-};
 
 const normalizeCategory = (category: string): string => {
   const trimmed = category.trim();
