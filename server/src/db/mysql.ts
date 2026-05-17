@@ -142,6 +142,19 @@ export const ensureSchema = async (): Promise<void> => {
     `);
 
   await db.execute(`
+    CREATE TABLE IF NOT EXISTS user_settings (
+    user_id INT NOT NULL,
+    setting_key VARCHAR(191) NOT NULL,
+    setting_value JSON NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, setting_key),
+    CONSTRAINT fk_user_settings_user
+      FOREIGN KEY (user_id) REFERENCES users(id)
+      ON DELETE CASCADE
+  )
+    `);
+
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS audit_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     actor_user_id INT NULL,

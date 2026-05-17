@@ -39,6 +39,18 @@ import {
   parseUpsertSplitTemplateInput,
 } from '../modules/groups/validation.js';
 import type { LoginInput, RegisterInput } from '../modules/auth/types.js';
+import {
+  getUserWorkspaceSettings,
+  saveUserWorkspaceSettings,
+} from '../modules/userSettings/service.js';
+import {
+  fromGraphqlSaveInput,
+  toGraphqlUserWorkspaceSettings,
+} from '../modules/userSettings/graphqlMappers.js';
+import {
+  parseSaveUserWorkspaceSettingsInput,
+  parseYearMonth,
+} from '../modules/userSettings/validation.js';
 
 export const resolvers = {
   Query: {
@@ -71,6 +83,16 @@ export const resolvers = {
     ) => {
       const user = requireAuth(context);
       return listHouseholdSettlements(user.email, user.id, args.period);
+    },
+    userWorkspaceSettings: async (
+      _parent: unknown,
+      args: { yearMonth: string },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      const yearMonth = parseYearMonth(args.yearMonth);
+      const settings = await getUserWorkspaceSettings(Number(user.id), yearMonth);
+      return toGraphqlUserWorkspaceSettings(settings);
     },
   },
   Mutation: {
@@ -169,6 +191,16 @@ export const resolvers = {
     ) => {
       const user = requireAuth(context);
       return deleteExpenseGroup(args.groupId, args.category, user.email);
+    },
+    saveUserWorkspaceSettings: async (
+      _parent: unknown,
+      args: { input: unknown },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      const parsed = parseSaveUserWorkspaceSettingsInput(fromGraphqlSaveInput(args.input as never));
+      const saved = await saveUserWorkspaceSettings(Number(user.id), parsed);
+      return toGraphqlUserWorkspaceSettings(saved);
     },
   },
 };

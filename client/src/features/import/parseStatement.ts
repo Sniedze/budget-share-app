@@ -25,7 +25,6 @@ import {
 import { pickDateColumnFromData } from './dateParse';
 import { computeAmountColumnAssumeAllOutgoing } from './amountParse';
 import { buildImportedRows } from './buildImportedRows';
-import { loadSavedMappings, saveMappingForSignature } from './importStorage';
 import type { MerchantHistoryEntry } from './importRowReview';
 import type {
   ImportColumnMappingIndices,
@@ -114,6 +113,8 @@ export type ParseStatementContext = {
   merchantHistory: Map<string, MerchantHistoryEntry>;
   existingExpenseSignatures: Set<string>;
   finalizeRows: (rows: ImportedRow[]) => ImportedRow[];
+  savedColumnMappings: Record<string, SavedColumnMapping>;
+  saveColumnMapping: (signature: string, mapping: SavedColumnMapping) => void;
 };
 
 export type BuildStatementGridResult = StatementGrid | ParseStatementError;
@@ -231,6 +232,7 @@ const filterValidRows = (rows: ImportedRow[]): ImportedRow[] =>
   rows.filter((row) => (row.title.trim() || row.description.trim()) && Number(row.amount) > 0);
 
 const persistMappingIfNeeded = (
+  ctx: ParseStatementContext,
   userScope: string,
   grid: StatementGrid,
   mapping: SavedColumnMapping,
@@ -255,8 +257,8 @@ const persistMappingIfNeeded = (
       descriptionHeaderKey: normalizeHeaderKey(grid.originalHeader[resolvedDescriptionIdx] ?? ''),
     };
   }
-  saveMappingForSignature(grid.headerSignature, mappingToPersist);
-  saveMappingForSignature(grid.fileSignature, mappingToPersist);
+  ctx.saveColumnMapping(grid.headerSignature, mappingToPersist);
+  ctx.saveColumnMapping(grid.fileSignature, mappingToPersist);
   return mappingToPersist;
 };
 
@@ -264,7 +266,7 @@ export const parseStatementFromGrid = (
   grid: StatementGrid,
   ctx: ParseStatementContext,
 ): ParseStatementResult => {
-  const savedMappings = loadSavedMappings();
+  const savedMappings = ctx.savedColumnMappings;
   const mappingLookupOrder = [
     grid.headerSignature,
     grid.fileSignature,
@@ -284,7 +286,7 @@ export const parseStatementFromGrid = (
 
   if (isRememberedMappingValid && rememberedMapping) {
     if (ctx.userScope !== 'anonymous' && !savedMappings[grid.headerSignature]) {
-      saveMappingForSignature(grid.headerSignature, rememberedMapping);
+      ctx.saveColumnMapping(grid.headerSignature, rememberedMapping);
     }
     const parsedRows = rowsFromMapping(grid, rememberedMapping, ctx);
     const validRows = filterValidRows(parsedRows);
@@ -300,6 +302,7 @@ export const parseStatementFromGrid = (
         rememberedMapping.descriptionIndex,
       );
       const mappingForRemap = persistMappingIfNeeded(
+        ctx,
         ctx.userScope,
         grid,
         rememberedMapping,
@@ -409,8 +412,8 @@ export const parseStatementFromGrid = (
           }
         : baseMapping;
     if (ctx.userScope !== 'anonymous') {
-      saveMappingForSignature(grid.headerSignature, mappingToSave);
-      saveMappingForSignature(grid.fileSignature, mappingToSave);
+      ctx.saveColumnMapping(grid.headerSignature, mappingToSave);
+      ctx.saveColumnMapping(grid.fileSignature, mappingToSave);
     }
     persistMapping = {
       signatures: [grid.headerSignature, grid.fileSignature],
@@ -496,10 +499,10 @@ export const parseManualMapping = (
   }
   if (signatures.length > 0) {
     signatures.forEach((signature) => {
-      saveMappingForSignature(signature, manualMappingPayload);
+      ctx.saveColumnMapping(signature, manualMappingPayload);
     });
   } else {
-    saveMappingForSignature(`anonymous:manual:${Date.now()}`, manualMappingPayload);
+    ctx.saveColumnMapping(`anonymous:manual:${Date.now()}`, manualMappingPayload);
   }
 
   const appliedIndices: ImportColumnMappingIndices = {
