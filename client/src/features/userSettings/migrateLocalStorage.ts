@@ -1,11 +1,14 @@
 import { loadAssumptions, loadMonthBudgets, type BudgetAssumptions, type MonthCategoryBudgets } from '../budget/storage';
+import { loadCustomImportCategories, loadMerchantRules, loadSavedMappings } from '../import/importStorage';
+import type { ImportMerchantRule, SavedColumnMapping } from '../import/types';
 import {
+  budgetAssumptionsKey,
+  budgetMonthBudgetsKey,
   IMPORT_COLUMN_MAPPING_STORAGE_KEY,
   IMPORT_CUSTOM_CATEGORIES_STORAGE_KEY,
   IMPORT_MERCHANT_RULES_STORAGE_KEY,
-} from '../import/constants';
-import { loadMerchantRules, loadSavedMappings } from '../import/importStorage';
-import type { ImportMerchantRule, SavedColumnMapping } from '../import/types';
+} from './workspaceStorageKeys';
+import { removeFromStorage } from '../../lib/localStorageJson';
 import type { SaveUserWorkspaceSettingsInput } from './saveInput';
 
 export type LocalWorkspaceSnapshot = {
@@ -21,20 +24,7 @@ export const readLocalWorkspaceSnapshot = (userId: string, yearMonth: string): L
   monthCategoryBudgets: loadMonthBudgets(userId, yearMonth),
   importMerchantRules: loadMerchantRules(),
   importColumnMappings: loadSavedMappings(),
-  importCustomCategories: (() => {
-    try {
-      const raw = localStorage.getItem(IMPORT_CUSTOM_CATEGORIES_STORAGE_KEY);
-      if (!raw) {
-        return [];
-      }
-      const parsed = JSON.parse(raw) as unknown;
-      return Array.isArray(parsed)
-        ? parsed.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)
-        : [];
-    } catch {
-      return [];
-    }
-  })(),
+  importCustomCategories: loadCustomImportCategories(),
 });
 
 export const buildMigrateLocalWorkspaceInput = (
@@ -52,15 +42,11 @@ export const buildMigrateLocalWorkspaceInput = (
 });
 
 export const clearLocalWorkspaceStorage = (userId: string, yearMonth: string): void => {
-  try {
-    localStorage.removeItem(`budgetShare.assumptions.v1.${userId}`);
-    localStorage.removeItem(`budgetShare.monthBudgets.v1.${userId}.${yearMonth}`);
-    localStorage.removeItem(IMPORT_MERCHANT_RULES_STORAGE_KEY);
-    localStorage.removeItem(IMPORT_COLUMN_MAPPING_STORAGE_KEY);
-    localStorage.removeItem(IMPORT_CUSTOM_CATEGORIES_STORAGE_KEY);
-  } catch {
-    // Ignore quota / privacy errors.
-  }
+  removeFromStorage(budgetAssumptionsKey(userId));
+  removeFromStorage(budgetMonthBudgetsKey(userId, yearMonth));
+  removeFromStorage(IMPORT_MERCHANT_RULES_STORAGE_KEY);
+  removeFromStorage(IMPORT_COLUMN_MAPPING_STORAGE_KEY);
+  removeFromStorage(IMPORT_CUSTOM_CATEGORIES_STORAGE_KEY);
 };
 
 export const isWorkspaceSettingsEmpty = (settings: {

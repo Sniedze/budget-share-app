@@ -1,3 +1,4 @@
+import { readJsonFromStorage, writeJsonToStorage } from '../../lib/localStorageJson';
 import {
   IMPORT_COLUMN_MAPPING_STORAGE_KEY,
   IMPORT_CUSTOM_CATEGORIES_STORAGE_KEY,
@@ -5,82 +6,52 @@ import {
 } from './constants';
 import type { ImportMerchantRule, SavedColumnMapping } from './types';
 
-export const loadSavedMappings = (): Record<string, SavedColumnMapping> => {
-  try {
-    const raw = localStorage.getItem(IMPORT_COLUMN_MAPPING_STORAGE_KEY);
-    if (!raw) {
-      return {};
-    }
-    return JSON.parse(raw) as Record<string, SavedColumnMapping>;
-  } catch {
-    return {};
+const isImportMerchantRule = (item: unknown): item is ImportMerchantRule => {
+  if (typeof item !== 'object' || item === null) {
+    return false;
   }
+  const candidate = item as Partial<ImportMerchantRule>;
+  return (
+    (candidate.flow === 'out' || candidate.flow === 'in') &&
+    (candidate.matchType === 'exact' || candidate.matchType === 'contains') &&
+    typeof candidate.pattern === 'string' &&
+    candidate.pattern.trim().length > 0 &&
+    typeof candidate.category === 'string' &&
+    candidate.category.trim().length > 0
+  );
 };
 
+export const loadSavedMappings = (): Record<string, SavedColumnMapping> =>
+  readJsonFromStorage<Record<string, SavedColumnMapping>>(IMPORT_COLUMN_MAPPING_STORAGE_KEY, {});
+
 export const saveMappingForSignature = (signature: string, mapping: SavedColumnMapping): void => {
-  try {
-    const previous = loadSavedMappings();
-    const next = {
-      ...previous,
-      [signature]: mapping,
-    };
-    localStorage.setItem(IMPORT_COLUMN_MAPPING_STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // Ignore storage issues to keep import flow functional.
-  }
+  const previous = loadSavedMappings();
+  writeJsonToStorage(IMPORT_COLUMN_MAPPING_STORAGE_KEY, {
+    ...previous,
+    [signature]: mapping,
+  });
 };
 
 export const loadCustomImportCategories = (): string[] => {
-  try {
-    const raw = localStorage.getItem(IMPORT_CUSTOM_CATEGORIES_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed
-      .map((item) => (typeof item === 'string' ? item.trim() : ''))
-      .filter(Boolean);
-  } catch {
+  const parsed = readJsonFromStorage<unknown>(IMPORT_CUSTOM_CATEGORIES_STORAGE_KEY, []);
+  if (!Array.isArray(parsed)) {
     return [];
   }
+  return parsed.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean);
+};
+
+export const saveCustomImportCategories = (categories: string[]): void => {
+  writeJsonToStorage(IMPORT_CUSTOM_CATEGORIES_STORAGE_KEY, categories);
 };
 
 export const loadMerchantRules = (): ImportMerchantRule[] => {
-  try {
-    const raw = localStorage.getItem(IMPORT_MERCHANT_RULES_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.filter((item): item is ImportMerchantRule => {
-      if (typeof item !== 'object' || item === null) {
-        return false;
-      }
-      const candidate = item as Partial<ImportMerchantRule>;
-      return (
-        (candidate.flow === 'out' || candidate.flow === 'in') &&
-        (candidate.matchType === 'exact' || candidate.matchType === 'contains') &&
-        typeof candidate.pattern === 'string' &&
-        candidate.pattern.trim().length > 0 &&
-        typeof candidate.category === 'string' &&
-        candidate.category.trim().length > 0
-      );
-    });
-  } catch {
+  const parsed = readJsonFromStorage<unknown>(IMPORT_MERCHANT_RULES_STORAGE_KEY, []);
+  if (!Array.isArray(parsed)) {
     return [];
   }
+  return parsed.filter(isImportMerchantRule);
 };
 
 export const saveMerchantRules = (rules: ImportMerchantRule[]): void => {
-  try {
-    localStorage.setItem(IMPORT_MERCHANT_RULES_STORAGE_KEY, JSON.stringify(rules));
-  } catch {
-    // Keep import flow functional even if storage fails.
-  }
+  writeJsonToStorage(IMPORT_MERCHANT_RULES_STORAGE_KEY, rules);
 };

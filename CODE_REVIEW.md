@@ -105,7 +105,7 @@ This is genuinely good shipping. With the security posture and observability in 
 
 **Done:** `roundCents` / `toIsoString` centralized in `server/src/lib/`; expense rows via `mapExpenseRow` + `EXPENSE_SELECT_COLUMNS`; group template/expense split JSON parsing in `groups/splitDetailsParse.ts` (invitations reuse); budget amount/chart colors use `styles/tokens`; GraphQL field fragments (`GROUP_FIELDS`, settlement fragment).
 
-**Still present:** repeated column-list strings in SQL, some invitation/member-validation blocks, import-only client types in `features/import/types.ts`, parallel import storage helpers.
+**Still present:** some invitation/member-validation blocks, import-only client types in `features/import/types.ts` (UI/parsing shapes, not GraphQL).
 
 ### Other (5 high) — all resolved
 
@@ -281,7 +281,7 @@ The previous top-10 list is mostly done. Here's what's left, ordered by impact �
 
 **Done recently:** optional batch (FX, HIBP, settlement/group cache); remaining cleanup — GraphQL error codes (1.7), resolver logging + `LOG_LEVEL` (1.9), `operationTypes.ts` (6.2), split-details DRY, budget semantic colors, prod compose env docs.
 
-**Still open (lower priority):** SQL column-list extraction, full import/storage dedup, optional pino/winston swap.
+**Stretch (done):** `server/src/db/sqlColumns.ts` for shared SELECT lists; `client/src/lib/localStorageJson.ts` + `workspaceStorageKeys.ts` for import/budget/auth storage; **pino** replaces hand-rolled JSON logger (`LOG_LEVEL` unchanged).
 
 **Done earlier:** email/user identity (#50, #56), budget per-currency (#54), `mapExpenseRow` + `GROUP_FIELDS` (#55), Dependabot (#53), common-password + cache-first `me` (#51), per-currency settlements (#49), group cache (#52, #57), audit `actor_user_id` NOT NULL, Vite `@/` alias (6.7).
 

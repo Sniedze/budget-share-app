@@ -2,26 +2,10 @@ import type { RowDataPacket } from 'mysql2';
 import { DEFAULT_CURRENCY, normalizeExpenseCurrency } from '../../lib/currency.js';
 import { toIsoString } from '../../lib/dates.js';
 import type { Expense, ExpenseFlow, SplitType } from './types.js';
+import { EXPENSE_SELECT_COLUMNS } from '../../db/sqlColumns.js';
 import { parseSplitDetails } from './parseSplitDetails.js';
 
-export const EXPENSE_SELECT_COLUMNS = `
-  id,
-  title,
-  amount,
-  currency,
-  created_at,
-  transaction_date,
-  category,
-  expense_group,
-  split_type,
-  split_details,
-  group_id,
-  created_by_user_id,
-  paid_by_user_id,
-  transaction_dedup_hash,
-  is_private,
-  expense_flow
-`.trim();
+export { EXPENSE_SELECT_COLUMNS };
 
 export type ExpenseRow = {
   id: number;
