@@ -28,6 +28,7 @@ import {
   legacyPrivateExpenseHiddenFromOthers,
   loadExpenseViewerProfile,
   viewerParticipatesInCustomSplit,
+  expenseGroupTemplateLookupKey,
   viewerParticipatesInExpenseGroup,
   type ExpenseViewerProfile,
 } from '../groups/expenseVisibility.js';
@@ -333,8 +334,10 @@ export const listExpenses = async (userId: string, userEmail: string): Promise<E
       if (legacyPrivateExpenseHiddenFromOthers(rowIsPrivate(row), row.created_by_user_id, userId)) {
         continue;
       }
-      const expenseGroupKey = (row.expense_group ?? row.category).trim().toLowerCase();
-      const templateSplit = templateSplitByKey.get(`${row.group_id}:${expenseGroupKey}`) ?? [];
+      const templateSplit =
+        templateSplitByKey.get(
+          expenseGroupTemplateLookupKey(row.group_id, row.expense_group, row.category),
+        ) ?? [];
       if (
         !viewerParticipatesInExpenseGroup(
           viewerNameByGroupId.get(row.group_id) ?? null,

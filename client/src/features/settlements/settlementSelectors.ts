@@ -106,6 +106,25 @@ export const buildMemberBalanceRows = (
     .sort((left, right) => Math.abs(right.netRelativeToViewer) - Math.abs(left.netRelativeToViewer));
 };
 
+const normalizeMemberKey = (name: string): string => name.trim().toLowerCase();
+
+const transferMatchesPayment = (
+  transfer: SettlementTransfer,
+  payment: SettlementPayment,
+): boolean =>
+  normalizeMemberKey(transfer.fromMember) === normalizeMemberKey(payment.fromMember) &&
+  normalizeMemberKey(transfer.toMember) === normalizeMemberKey(payment.toMember) &&
+  Math.abs(transfer.amount - payment.amount) < 0.02;
+
+/** Hide pending rows already recorded as payments in the active scope. */
+export const filterTransfersSettledByPayments = (
+  transfers: SettlementTransfer[],
+  payments: SettlementPayment[],
+): SettlementTransfer[] =>
+  transfers.filter(
+    (transfer) => !payments.some((payment) => transferMatchesPayment(transfer, payment)),
+  );
+
 export const filterPaymentsInPeriod = (
   payments: SettlementPayment[],
   startIso: string,

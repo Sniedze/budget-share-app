@@ -18,9 +18,10 @@ import {
   buildMemberBalanceRows,
   buildSettlementReminderMailto,
   buildSettlementSummary,
+  filterPaymentsInPeriod,
+  filterTransfersSettledByPayments,
   groupPaymentsByMonth,
   isSettlementOverdue,
-  filterPaymentsInPeriod,
   resolveViewerMemberName,
   settlementDueStatus,
 } from './settlementSelectors';
@@ -50,17 +51,17 @@ export const useSettlementsPageState = () => {
   const [recordPayment, { loading: isSaving }] = useMutation<RecordSettlementPaymentMutation>(
     RECORD_SETTLEMENT_PAYMENT,
     {
-    update(cache, { data }) {
-      const settlement = data?.recordSettlementPayment?.householdSettlement;
-      if (settlement) {
-        mergeHouseholdSettlementInCache(cache, settlementPeriod, settlement);
-      }
+      update(cache, { data }) {
+        const settlement = data?.recordSettlementPayment?.householdSettlement;
+        if (settlement) {
+          mergeHouseholdSettlementInCache(cache, settlementPeriod, settlement);
+        }
+      },
     },
-  });
+  );
 
   const households = useMemo(() => data?.householdSettlements ?? [], [data?.householdSettlements]);
   const [activeGroupId, setActiveGroupId] = useState('');
-  const [scope, setScope] = useState('__household__');
   const [detailsTab, setDetailsTab] = useState<SettlementDetailsTab>('pending');
   const [fromMember, setFromMember] = useState('');
   const [toMember, setToMember] = useState('');
@@ -97,7 +98,7 @@ export const useSettlementsPageState = () => {
     }
     const scopes = activeHousehold.currencyScopes ?? [];
     setSettlementCurrency((current) => {
-      if (current && scopes.some((scope) => scope.currency === current)) {
+      if (current && scopes.some((entry) => entry.currency === current)) {
         return current;
       }
       return scopes[0]?.currency ?? null;
@@ -109,43 +110,30 @@ export const useSettlementsPageState = () => {
       return null;
     }
     return (
-      activeHousehold.currencyScopes.find((scope) => scope.currency === settlementCurrency) ??
+      activeHousehold.currencyScopes.find((entry) => entry.currency === settlementCurrency) ??
       activeHousehold.currencyScopes[0]
     );
   }, [activeHousehold, settlementCurrency]);
 
   const settlementBalancesSource = activeCurrencyScope ?? activeHousehold;
 
-  useEffect(() => {
-    if (!settlementBalancesSource || scope === '__household__') {
-      return;
-    }
-    const hasGroup = settlementBalancesSource.expenseGroups.some(
-      (group) => group.expenseGroup === scope,
-    );
-    if (!hasGroup) {
-      setScope('__household__');
-    }
-  }, [settlementBalancesSource, scope]);
+  const balances = useMemo(() => settlementBalancesSource?.balances ?? [], [settlementBalancesSource?.balances]);
 
-  const activeScopeGroup = useMemo(
-    () => settlementBalancesSource?.expenseGroups.find((item) => item.expenseGroup === scope),
-    [settlementBalancesSource?.expenseGroups, scope],
+  const payments = useMemo(() => activeHousehold?.payments ?? [], [activeHousehold?.payments]);
+
+  const rawTransfers = useMemo(
+    () => settlementBalancesSource?.transfers ?? [],
+    [settlementBalancesSource?.transfers],
   );
 
-  const balances = useMemo(
-    () => (activeScopeGroup ? activeScopeGroup.balances : settlementBalancesSource?.balances ?? []),
-    [activeScopeGroup, settlementBalancesSource],
-  );
   const transfers = useMemo(
-    () => (activeScopeGroup ? activeScopeGroup.transfers : settlementBalancesSource?.transfers ?? []),
-    [activeScopeGroup, settlementBalancesSource],
+    () => filterTransfersSettledByPayments(rawTransfers, payments),
+    [payments, rawTransfers],
   );
-  const payments = useMemo(() => activeHousehold?.payments ?? [], [activeHousehold]);
 
   const mixedCurrencyWarning = Boolean(activeHousehold?.mixedCurrencyWarning);
   const settlementCurrencyCodes = useMemo(
-    () => activeHousehold?.currencyScopes?.map((scope) => scope.currency) ?? [],
+    () => activeHousehold?.currencyScopes?.map((entry) => entry.currency) ?? [],
     [activeHousehold?.currencyScopes],
   );
   const formatSettlementAmount = (value: number): string =>
@@ -217,7 +205,7 @@ export const useSettlementsPageState = () => {
       return 'Recording payments for personal custom splits is not supported yet.';
     }
     const confirmed = window.confirm(
-      `Mark ${formatSettlementAmount(transfer.amount)} as paid from ${transfer.fromMember} to ${transfer.toMember}?\n\nThis records a settlement payment for ${activeHousehold.groupName}.`,
+      `Mark ${formatSettlementAmount(transfer.amount)} as paid from ${transfer.fromMember} to ${transfer.toMember}?\n\nThis records a settlement for ${activeHousehold.groupName} (${periodLabel}).`,
     );
     if (!confirmed) {
       return null;
@@ -227,7 +215,7 @@ export const useSettlementsPageState = () => {
         variables: {
           input: {
             groupId: activeHousehold.groupId,
-            expenseGroup: scope === '__household__' ? null : scope,
+            expenseGroup: null,
             fromMember: transfer.fromMember,
             toMember: transfer.toMember,
             amount: transfer.amount,
@@ -267,7 +255,7 @@ export const useSettlementsPageState = () => {
         variables: {
           input: {
             groupId: activeHousehold.groupId,
-            expenseGroup: scope === '__household__' ? null : scope,
+            expenseGroup: null,
             fromMember,
             toMember,
             amount: parsedAmount,
@@ -298,11 +286,8 @@ export const useSettlementsPageState = () => {
     setSettlementCurrency,
     settlementCurrencyCodes,
     formatSettlementAmount,
-    scopeExpenseGroups: settlementBalancesSource?.expenseGroups ?? [],
     activeGroupId,
     setActiveGroupId,
-    scope,
-    setScope,
     detailsTab,
     setDetailsTab,
     balances,
