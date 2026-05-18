@@ -91,9 +91,10 @@ export const PrivacyPolicyPage = (): JSX.Element => {
 
         <SectionTitle>Your choices</SectionTitle>
         <Paragraph>
-          You can update your profile and change your password in Account settings. To request export or
-          deletion of your account, contact the operator of this installation (the person or team who runs
-          the server).
+          In Account settings you can update your profile, change your password, download a JSON export of
+          your data, or permanently delete your account (password and confirmation required). Deletion
+          removes your account and personal expenses; shared household expenses remain for other members
+          but are no longer linked to your user id.
         </Paragraph>
 
         <Button as={Link} to="/login" $variant="secondary" style={{ marginTop: spacing.lg }}>

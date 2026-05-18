@@ -24,6 +24,7 @@ import {
   upsertSplitTemplate,
 } from '../modules/groups/service.js';
 import { getFxRate } from '../lib/fxRates.js';
+import { deleteAccount, exportMyData } from '../modules/auth/accountData.js';
 import {
   cancelPendingEmailChangeForUser,
   changePassword,
@@ -54,6 +55,7 @@ import {
 } from '../modules/groups/validation.js';
 import type {
   ChangePasswordInput,
+  DeleteAccountInput,
   LoginInput,
   RegisterInput,
   UpdateProfileInput,
@@ -115,6 +117,10 @@ export const resolvers = {
     },
     fxRate: async (_parent: unknown, args: { from: string; to: string }) => {
       return getFxRate(args.from, args.to);
+    },
+    exportMyData: async (_parent: unknown, _args: unknown, context: GraphqlContext) => {
+      const user = requireAuth(context);
+      return exportMyData(user.id, user.email);
     },
   },
   Mutation: {
@@ -189,6 +195,18 @@ export const resolvers = {
       const payload = await changePassword(user.id, args.input);
       setSessionCookies(context.res, payload.accessToken, payload.refreshToken, { remember: true });
       return { user: payload.user };
+    },
+    deleteAccount: async (
+      _parent: unknown,
+      args: { input: DeleteAccountInput },
+      context: GraphqlContext,
+    ) => {
+      const user = requireAuth(context);
+      const refreshToken = getRefreshTokenFromCookies(context.req);
+      await deleteAccount(user.id, args.input);
+      await logoutSession(refreshToken);
+      clearSessionCookies(context.res);
+      return true;
     },
     updateProfile: async (
       _parent: unknown,

@@ -223,6 +223,17 @@ export const typeDefs = `#graphql
     newPassword: String!
   }
 
+  input DeleteAccountInput {
+    password: String!
+    confirmation: String!
+  }
+
+  type UserDataExport {
+    exportedAt: String!
+    format: String!
+    data: String!
+  }
+
   input UpdateProfileInput {
     fullName: String!
     email: String!
@@ -425,6 +436,7 @@ export const typeDefs = `#graphql
     userWorkspaceSettings(yearMonth: String!): UserWorkspaceSettings!
     """Multiplier to convert one unit of \`from\` into \`to\` (e.g. EUR→DKK)."""
     fxRate(from: String!, to: String!): Float!
+    exportMyData: UserDataExport!
   }
 
   type Mutation {
@@ -440,6 +452,7 @@ export const typeDefs = `#graphql
     logout: Boolean!
     logoutAllDevices: Boolean!
     changePassword(input: ChangePasswordInput!): AuthPayload!
+    deleteAccount(input: DeleteAccountInput!): Boolean!
     updateProfile(input: UpdateProfileInput!): User!
     confirmEmailChange(token: String!): User!
     cancelPendingEmailChange: User!
