@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { LogIn, UserPlus } from 'lucide-react';
 import { SectionSubtitle, SectionTitle } from './Text';
 import { AuthCard, AuthEyebrow, AuthHeader, AuthPage, AuthTabButton, AuthTabs } from './AuthLayout';
+import { AuthLegalFooter } from './AuthLegalFooter';
 
 type AuthPageShellProps = {
   subtitle: string;
@@ -42,6 +43,7 @@ export const AuthPageShell = ({ subtitle, activeTab, children }: AuthPageShellPr
         </AuthTabs>
 
         {children}
+        <AuthLegalFooter />
       </AuthCard>
     </AuthPage>
   );

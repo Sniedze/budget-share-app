@@ -13,6 +13,9 @@ import { assignRequestContext } from './middleware/requestContext.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { createCorsOptions } from './config/corsOptions.js';
 import { formatGraphqlError } from './graphql/formatGraphqlError.js';
+import { validateProductionEnv } from './config/validateProductionEnv.js';
+
+const isProduction = (process.env.NODE_ENV ?? 'development') === 'production';
 
 /** Default high enough for nested queries (e.g. settlements) with Apollo Client `__typename` fields. */
 const DEFAULT_MAX_RECURSIVE_SELECTIONS = 100;
@@ -41,10 +44,14 @@ export type HttpServerBundle = {
  * Builds Express + Apollo GraphQL stack and ensures DB schema. Does not call `listen`.
  */
 export const createHttpApp = async (): Promise<HttpServerBundle> => {
+  validateProductionEnv();
+
   const app = express();
   const apollo = new ApolloServer<GraphqlContext>({
     typeDefs,
     resolvers,
+    introspection: !isProduction,
+    includeStacktraceInErrorResponses: !isProduction,
     maxRecursiveSelections: parseMaxRecursiveSelections(),
     formatError(formattedError) {
       return formatGraphqlError(formattedError);
