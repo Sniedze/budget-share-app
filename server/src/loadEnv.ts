@@ -22,27 +22,40 @@ const parseEnvLine = (line: string): { key: string; value: string } | null => {
   return { key, value };
 };
 
-/** Loads repo-root `.env` before DB config is read (ESM imports run before other modules). */
-export const loadRepoRootEnv = (): string | null => {
-  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-  const envPath = resolve(repoRoot, '.env');
+const applyEnvFile = (envPath: string, options: { override: boolean }): boolean => {
   if (!existsSync(envPath)) {
-    return null;
+    return false;
   }
-
   const content = readFileSync(envPath, 'utf8');
   for (const line of content.split(/\r?\n/)) {
     const parsed = parseEnvLine(line);
-    if (!parsed || process.env[parsed.key] !== undefined) {
+    if (!parsed) {
+      continue;
+    }
+    if (!options.override && process.env[parsed.key] !== undefined) {
       continue;
     }
     process.env[parsed.key] = parsed.value;
   }
-
-  return envPath;
+  return true;
 };
 
-const loadedEnvPath = loadRepoRootEnv();
-if (loadedEnvPath && (process.env.NODE_ENV ?? 'development') === 'development') {
-  console.log(`Loaded environment from ${loadedEnvPath}`);
+/** Loads repo-root `.env` and optional `.env.local` before DB config is read. */
+export const loadRepoRootEnv = (): string[] => {
+  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+  const loaded: string[] = [];
+  const envPath = resolve(repoRoot, '.env');
+  const localPath = resolve(repoRoot, '.env.local');
+  if (applyEnvFile(envPath, { override: false })) {
+    loaded.push(envPath);
+  }
+  if (applyEnvFile(localPath, { override: true })) {
+    loaded.push(localPath);
+  }
+  return loaded;
+};
+
+const loadedEnvPaths = loadRepoRootEnv();
+if (loadedEnvPaths.length > 0 && (process.env.NODE_ENV ?? 'development') === 'development') {
+  console.log(`Loaded environment from ${loadedEnvPaths.join(', ')}`);
 }
