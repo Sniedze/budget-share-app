@@ -43,6 +43,7 @@ import {
   normalizeMemberEmail,
   parseViewerUserId,
 } from './memberIdentity.js';
+import { resolveSettlementMemberName } from './settlementMemberResolution.js';
 import { buildOptimizedTransfers } from './settlementTransfers.js';
 import {
   GROUP_CORE_COLUMNS,
@@ -56,6 +57,7 @@ import {
   loadExpenseViewerProfile,
   PERSONAL_CUSTOM_SETTLEMENT_GROUP_ID,
   viewerParticipatesInCustomSplit,
+  expenseGroupTemplateLookupKey,
   viewerParticipatesInExpenseGroup,
 } from './expenseVisibility.js';
 import {
@@ -146,6 +148,7 @@ type SettlementExpenseRow = {
   splitDetails: string | null;
   isPrivate: number;
   createdByUserId: number | null;
+  paidByUserId: number | null;
   paidByName: string | null;
 } & RowDataPacket;
 
@@ -344,17 +347,26 @@ const buildSettlementForScope = (
   templateSplitByKey: Map<string, Array<{ participant: string; ratio: number }>>,
 ): { balances: SettlementBalance[]; transfers: SettlementTransfer[]; totalExpenses: number } => {
   const balanceMap = new Map<string, number>();
-  const memberByNormalizedName = new Map(
-    members.map((member) => [member.name.trim().toLowerCase(), member]),
-  );
   members.forEach((member) => {
     balanceMap.set(member.name, 0);
   });
   let totalExpenses = 0;
 
-  const resolveBalanceMemberName = (memberName: string): string | undefined => {
-    const member = memberByNormalizedName.get(memberName.trim().toLowerCase());
-    return member?.name;
+  const resolveBalanceMemberName = (memberName: string): string | undefined =>
+    resolveSettlementMemberName(memberName, members);
+
+  const resolvePayerMemberName = (expense: SettlementExpenseRow): string | undefined => {
+    if (expense.paidByUserId !== null && expense.paidByUserId !== undefined) {
+      const payerId = String(expense.paidByUserId);
+      const memberByUserId = members.find((member) => member.userId === payerId);
+      if (memberByUserId) {
+        return memberByUserId.name;
+      }
+    }
+    if (expense.paidByName) {
+      return resolveBalanceMemberName(expense.paidByName);
+    }
+    return undefined;
   };
 
   expenses.forEach((expense) => {
@@ -373,12 +385,10 @@ const buildSettlementForScope = (
       balanceMap.set(balanceMemberName, roundCents(previous - share.amount));
     });
 
-    if (expense.paidByName) {
-      const payerName = resolveBalanceMemberName(expense.paidByName);
-      if (payerName) {
-        const previous = balanceMap.get(payerName) ?? 0;
-        balanceMap.set(payerName, roundCents(previous + amount));
-      }
+    const payerName = resolvePayerMemberName(expense);
+    if (payerName) {
+      const previous = balanceMap.get(payerName) ?? 0;
+      balanceMap.set(payerName, roundCents(previous + amount));
     }
   });
 
@@ -510,8 +520,10 @@ export const listGroups = async (viewer: GroupViewer): Promise<Group[]> => {
       continue;
     }
     const amount = Number(row.amount);
-    const expenseGroupKey = (row.expenseGroup ?? row.category).trim().toLowerCase();
-    const templateSplit = templateSplitByKey.get(`${row.groupId}:${expenseGroupKey}`) ?? [];
+    const templateSplit =
+      templateSplitByKey.get(
+        expenseGroupTemplateLookupKey(row.groupId, row.expenseGroup, row.category),
+      ) ?? [];
     if (
       !viewerParticipatesInExpenseGroup(
         viewerMember.name,
@@ -1304,7 +1316,7 @@ const buildCurrencySettlementScope = (
     buildSettlementForScope(
       members,
       groupExpenses,
-      groupPayments.filter((payment) => !payment.expenseGroup),
+      groupPayments,
       templateSplitByKey,
     ),
   );
@@ -1519,8 +1531,10 @@ const listHouseholdSettlementsImpl = async (
     if (!viewerMember) {
       continue;
     }
-    const expenseGroupKey = (row.expenseGroup ?? row.category ?? 'General').trim().toLowerCase();
-    const templateSplit = templateSplitByKey.get(`${row.groupId}:${expenseGroupKey}`) ?? [];
+    const templateSplit =
+      templateSplitByKey.get(
+        expenseGroupTemplateLookupKey(row.groupId, row.expenseGroup, row.category),
+      ) ?? [];
     if (
       !viewerParticipatesInExpenseGroup(
         viewerMember.name,
@@ -1611,12 +1625,33 @@ export const recordSettlementPayment = async (
   }
   await assertActiveGroupMembership(groupId, viewer, 'recordSettlementPayment');
 
-  const fromMember = input.fromMember.trim();
-  const toMember = input.toMember.trim();
+  const fromMemberRaw = input.fromMember.trim();
+  const toMemberRaw = input.toMember.trim();
   const amount = Number(input.amount);
   const settledAt = input.settledAt.trim();
-  if (!fromMember || !toMember || fromMember.toLowerCase() === toMember.toLowerCase()) {
+  if (!fromMemberRaw || !toMemberRaw || fromMemberRaw.toLowerCase() === toMemberRaw.toLowerCase()) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Provide valid payer and recipient members.');
+  }
+
+  const accessibleGroups = await loadAccessibleGroupsWithMembers(viewer);
+  const groupMembers = accessibleGroups.find((group) => group.id === groupId)?.members ?? [];
+  const fromMember = resolveSettlementMemberName(fromMemberRaw, groupMembers);
+  const toMember = resolveSettlementMemberName(toMemberRaw, groupMembers);
+  if (!fromMember || !toMember) {
+    throw appError(
+      ErrorCode.BAD_USER_INPUT,
+      'Payer and recipient must match household member names.',
+    );
+  }
+
+  let expenseGroup = input.expenseGroup?.trim() || null;
+  if (expenseGroup) {
+    const labels = await listExpenseGroupLabelsByGroupId([groupId]);
+    const known = labels.get(groupId) ?? [];
+    const match = known.find((label) => label.trim().toLowerCase() === expenseGroup!.toLowerCase());
+    if (match) {
+      expenseGroup = match;
+    }
   }
   if (!Number.isFinite(amount) || amount <= 0) {
     throw appError(ErrorCode.BAD_USER_INPUT, 'Settlement amount must be greater than 0.');
@@ -1634,7 +1669,7 @@ export const recordSettlementPayment = async (
     `,
     [
       groupId,
-      input.expenseGroup?.trim() || null,
+      expenseGroup,
       fromMember,
       toMember,
       roundCents(amount),

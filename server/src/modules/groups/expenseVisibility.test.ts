@@ -34,6 +34,29 @@ describe('viewerParticipatesInExpenseGroup', () => {
       false,
     );
   });
+
+  it('returns true for Shared expenses with no template (all members)', () => {
+    assert.equal(
+      viewerParticipatesInExpenseGroup('Alex', 'Shared', null, [], 100),
+      true,
+    );
+  });
+
+  it('returns true when viewer is in split_details without a template', () => {
+    assert.equal(
+      viewerParticipatesInExpenseGroup(
+        'Alex',
+        'Shared',
+        JSON.stringify([
+          { participant: 'Alex', ratio: 50, amount: 50 },
+          { participant: 'Sam', ratio: 50, amount: 50 },
+        ]),
+        [],
+        100,
+      ),
+      true,
+    );
+  });
 });
 
 describe('viewerParticipatesInCustomSplit', () => {

@@ -87,11 +87,8 @@ export const SettlementsPage = (): JSX.Element => {
     setSettlementCurrency,
     settlementCurrencyCodes,
     formatSettlementAmount,
-    scopeExpenseGroups,
     activeGroupId,
     setActiveGroupId,
-    scope,
-    setScope,
     detailsTab,
     setDetailsTab,
     balances,
@@ -149,7 +146,9 @@ export const SettlementsPage = (): JSX.Element => {
         <HeaderRow>
           <HeaderText>
             <SectionTitle>Settlements</SectionTitle>
-            <SectionSubtitle>Track and settle shared expenses with household members</SectionSubtitle>
+            <SectionSubtitle>
+              Net balances between you and household members for the selected period
+            </SectionSubtitle>
           </HeaderText>
           <UserMenu />
         </HeaderRow>
@@ -222,19 +221,6 @@ export const SettlementsPage = (): JSX.Element => {
                     {settlementCurrencyCodes.map((code) => (
                       <option key={code} value={code}>
                         {code}
-                      </option>
-                    ))}
-                  </ToolbarSelect>
-                </ToolbarField>
-              ) : null}
-              {scopeExpenseGroups.length > 0 ? (
-                <ToolbarField>
-                  Scope
-                  <ToolbarSelect value={scope} onChange={(event) => setScope(event.currentTarget.value)}>
-                    <option value="__household__">Total household</option>
-                    {scopeExpenseGroups.map((group) => (
-                      <option key={`${activeHousehold.groupId}-${group.expenseGroup}`} value={group.expenseGroup}>
-                        {group.expenseGroup}
                       </option>
                     ))}
                   </ToolbarSelect>
@@ -320,7 +306,7 @@ export const SettlementsPage = (): JSX.Element => {
             </SummaryGrid>
 
             <Panel>
-              <PanelTitle>Current Balances</PanelTitle>
+              <PanelTitle>Balances · {periodLabel}</PanelTitle>
               {memberRows.length === 0 ? (
                 <EmptyBalances>No outstanding balances between members for this scope.</EmptyBalances>
               ) : (
@@ -433,7 +419,7 @@ export const SettlementsPage = (): JSX.Element => {
                       {transfers.length === 0 ? (
                         <Tr>
                           <Td colSpan={isPersonalCustomSettlementActive ? 6 : 7}>
-                            No pending transfers. This scope is settled.
+                            No pending transfers for this period.
                           </Td>
                         </Tr>
                       ) : null}
@@ -464,7 +450,7 @@ export const SettlementsPage = (): JSX.Element => {
                           <Td>{payment.fromMember}</Td>
                           <Td>{payment.toMember}</Td>
                           <Td>{formatSettlementAmount(payment.amount)}</Td>
-                          <Td>{payment.expenseGroup ?? 'Total household'}</Td>
+                          <Td>{periodLabel}</Td>
                           <Td>{payment.settledAt}</Td>
                           <Td>
                             <StatusPill $variant="paid">Paid</StatusPill>
@@ -499,7 +485,6 @@ export const SettlementsPage = (): JSX.Element => {
                                 <Th>From</Th>
                                 <Th>To</Th>
                                 <Th>Amount</Th>
-                                <Th>Scope</Th>
                                 <Th>Date</Th>
                               </Tr>
                             </Thead>
@@ -509,7 +494,6 @@ export const SettlementsPage = (): JSX.Element => {
                                   <Td>{payment.fromMember}</Td>
                                   <Td>{payment.toMember}</Td>
                                   <Td>{formatSettlementAmount(payment.amount)}</Td>
-                                  <Td>{payment.expenseGroup ?? 'Total household'}</Td>
                                   <Td>{payment.settledAt}</Td>
                                 </Tr>
                               ))}

@@ -50,6 +50,7 @@ export const SETTLEMENT_EXPENSE_COLUMNS = `
   e.split_details AS splitDetails,
   COALESCE(e.is_private, 0) AS isPrivate,
   e.created_by_user_id AS createdByUserId,
+  e.paid_by_user_id AS paidByUserId,
   payer.full_name AS paidByName
 `.trim();
 

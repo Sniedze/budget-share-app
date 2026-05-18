@@ -18,6 +18,16 @@ export type ExpenseViewerProfile = {
 
 const normalizeParticipantKey = (name: string): string => name.trim().toLowerCase();
 
+/** Key for group_split_templates lookups — must match settlement share resolution. */
+export const expenseGroupTemplateLookupKey = (
+  groupId: number,
+  expenseGroup: string | null | undefined,
+  category: string | null | undefined,
+): string => {
+  const label = (expenseGroup ?? category ?? 'General').trim() || 'General';
+  return `${groupId}:${label.toLowerCase()}`;
+};
+
 const participantMatchesViewerProfile = (
   participant: string,
   viewer: ExpenseViewerProfile,
@@ -80,7 +90,16 @@ export const viewerParticipatesInExpenseGroup = (
     );
   }
 
-  return false;
+  const splitDetails = parseExpenseSettlementAmounts(
+    typeof splitDetailsJson === 'string' ? splitDetailsJson : null,
+    amount,
+  );
+  if (splitDetails.length > 0) {
+    return splitDetails.some((share) => normalizeParticipantKey(share.participant) === normalizedViewer);
+  }
+
+  // Shared household expense with no template: all members participate (matches settlement math).
+  return true;
 };
 
 export const loadExpenseViewerProfile = async (

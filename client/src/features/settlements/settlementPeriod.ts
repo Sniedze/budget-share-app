@@ -9,8 +9,8 @@ export type SettlementPeriodRange = {
 
 export const SETTLEMENT_PERIOD_OPTIONS: Array<{ value: SettlementPeriodValue; label: string }> = [
   { value: 'CurrentMonth', label: 'This month' },
-  { value: 'Last6Months', label: 'Last 6 months' },
-  { value: 'Last12Months', label: 'Last 12 months' },
+  { value: 'Last6Months', label: 'Last 6 months (½ year)' },
+  { value: 'Last12Months', label: 'Last 12 months (1 year)' },
 ];
 
 const toIsoDate = (date: Date): string => {
