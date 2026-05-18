@@ -38,7 +38,7 @@ import {
   loadViewerGroupMemberName,
   type GroupViewer,
 } from '../groups/memberIdentity.js';
-import { listTemplateSplitDetailsByGroupAndCategory } from '../groups/service.js';
+import { listTemplateSplitDetailsByGroupAndCategory } from '../groups/groupSplitTemplates.js';
 import { buildListExpensesSql } from './listExpensesQuery.js';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
