@@ -18,7 +18,10 @@ export const getAllowedOrigins = (): string[] => {
   if (isDevelopment) {
     return [...new Set([...DEFAULT_DEV_ORIGINS, ...configured])];
   }
-  return configured.length > 0 ? configured : DEFAULT_DEV_ORIGINS;
+  if (configured.length === 0) {
+    throw new Error('ALLOWED_ORIGINS must be set when NODE_ENV is production.');
+  }
+  return configured;
 };
 
 /**

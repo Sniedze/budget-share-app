@@ -17,7 +17,9 @@ import {
   UserMenu,
 } from '../components/ui';
 import { ChangePasswordModal } from '../features/auth/ChangePasswordModal';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../features/auth';
+import { PRIVACY_POLICY_PATH } from '../routes';
 import {
   getDefaultProfileTimezone,
   getProfileTimezoneOptions,
@@ -627,6 +629,10 @@ export const AccountSettingsPage = (): JSX.Element => {
               Notification preferences are saved on this device only.
             </MutedText>
           </SettingsCard>
+
+          <MutedText style={{ fontSize: '0.8125rem' }}>
+            <Link to={PRIVACY_POLICY_PATH}>Privacy Policy</Link>
+          </MutedText>
         </PageStack>
       </PageSurface>
     </AppLayout>

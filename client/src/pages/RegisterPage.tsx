@@ -1,7 +1,7 @@
 import { FormEvent, useId, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth';
-import { PERSONAL_FINANCES_PATH } from '../routes';
+import { PERSONAL_FINANCES_PATH, PRIVACY_POLICY_PATH } from '../routes';
 import { isPasswordStrong, passwordPolicyHint } from '../features/auth/passwordPolicy';
 import {
   AuthActions,
@@ -102,6 +102,10 @@ export const RegisterPage = (): JSX.Element => {
             required
           />
           {error ? <ErrorText>{error}</ErrorText> : null}
+          <MutedText style={{ fontSize: '0.8125rem' }}>
+            By creating an account you acknowledge our{' '}
+            <Link to={PRIVACY_POLICY_PATH}>Privacy Policy</Link>.
+          </MutedText>
           <AuthActions>
             <Button
               type="submit"
