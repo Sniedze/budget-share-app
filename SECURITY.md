@@ -30,7 +30,8 @@
 - **CSRF:** Cookie-authenticated GraphQL **mutations** require an allowed `Origin` header (or `Referer` origin fallback). Requests with session cookies from non-allowlisted origins are rejected with HTTP 403.
 - **Request size:** JSON bodies are capped via `JSON_BODY_LIMIT` (default `512kb`) to limit oversized GraphQL payloads.
 - **Query abuse guard:** Apollo `maxRecursiveSelections` is enabled via `GRAPHQL_MAX_RECURSIVE_SELECTIONS` (default `100`; set `false` to disable) to curb abusive GraphQL operations.
-- **Rate limiting:** GraphQL uses a 15-minute window with separate caps for auth operations (`GRAPHQL_RATE_LIMIT_AUTH`, default `100`) and general operations (`GRAPHQL_RATE_LIMIT_GENERAL`, default `800`). Login/register limits are keyed by **normalized email** when present (fallback to client IP).
+- **Rate limiting:** GraphQL uses a 15-minute window with separate caps for login/register (`GRAPHQL_RATE_LIMIT_AUTH`, default `100`, keyed by email when present), change-password and refresh-session (`GRAPHQL_RATE_LIMIT_SESSION`, default `60`, per IP), and general operations (`GRAPHQL_RATE_LIMIT_GENERAL`, default `800`).
+- **Expense listing:** The `expenses` query loads only rows the viewer may access (personal, household membership, or named custom-split participant) instead of scanning the full table.
 
 ## Household invitation email
 

@@ -39,6 +39,7 @@ import {
   type GroupViewer,
 } from '../groups/memberIdentity.js';
 import { listTemplateSplitDetailsByGroupAndCategory } from '../groups/service.js';
+import { buildListExpensesSql } from './listExpensesQuery.js';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 const rowIsPrivate = (row: { is_private?: number | boolean | null }): boolean => {
@@ -317,16 +318,11 @@ export const listExpenses = async (userId: string, userEmail: string): Promise<E
   for (const groupId of memberGroupIds) {
     viewerNameByGroupId.set(groupId, await loadViewerGroupMemberName(groupId, viewer));
   }
-  const [rows] = await db.query<ExpenseRow[]>(
-    `SELECT ${EXPENSE_SELECT_COLUMNS} FROM expenses ORDER BY transaction_date DESC, id DESC`,
-  );
+  const { sql, params } = buildListExpensesSql(userId, viewerProfile, memberGroupIds);
+  const [rows] = await db.query<ExpenseRow[]>(sql, params);
 
   const visible: Expense[] = [];
   for (const row of rows) {
-    // Hide legacy rows until ownership/group assignment exists.
-    if (row.created_by_user_id === null && row.group_id === null) {
-      continue;
-    }
     if (!canAccessExpense(row, viewerProfile, memberGroupIds)) {
       continue;
     }
