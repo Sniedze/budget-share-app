@@ -1,4 +1,5 @@
-import { Bell, Lock, Pencil, Shield, UserRound } from 'lucide-react';
+import { useLazyQuery } from '@apollo/client/react';
+import { Bell, Database, Lock, Pencil, Shield, UserRound } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Sidebar } from '../components/sections/Sidebar';
@@ -17,6 +18,9 @@ import {
   UserMenu,
 } from '../components/ui';
 import { ChangePasswordModal } from '../features/auth/ChangePasswordModal';
+import { DeleteAccountModal } from '../features/auth/DeleteAccountModal';
+import { EXPORT_MY_DATA } from '../features/auth/accountDataGraphql';
+import { downloadUserDataExport } from '../features/auth/downloadUserDataExport';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../features/auth';
 import { PRIVACY_POLICY_PATH } from '../routes';
@@ -270,6 +274,11 @@ export const AccountSettingsPage = (): JSX.Element => {
   const { user, updateProfile, cancelPendingEmailChange, resendEmailChangeConfirmation, isAuthenticating } =
     useAuth();
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [dataActionError, setDataActionError] = useState<string | null>(null);
+  const [exportMyData, { loading: exportLoading }] = useLazyQuery<{
+    exportMyData: { exportedAt: string; format: string; data: string };
+  }>(EXPORT_MY_DATA, { fetchPolicy: 'network-only' });
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [expenseAlerts, setExpenseAlerts] = useState(true);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -395,6 +404,8 @@ export const AccountSettingsPage = (): JSX.Element => {
         </HeaderRow>
 
         {showChangePassword ? <ChangePasswordModal onClose={() => setShowChangePassword(false)} /> : null}
+        {showDeleteAccount ? <DeleteAccountModal onClose={() => setShowDeleteAccount(false)} /> : null}
+      {showDeleteAccount ? <DeleteAccountModal onClose={() => setShowDeleteAccount(false)} /> : null}
 
         <PageStack>
           <SettingsCard as="form" onSubmit={(event) => void handleProfileSubmit(event)}>
@@ -580,6 +591,74 @@ export const AccountSettingsPage = (): JSX.Element => {
                 Change Password
               </OutlineButton>
             </SecurityRow>
+          </SettingsCard>
+
+          <SettingsCard>
+            <CardHeaderRow style={{ marginBottom: spacing.md }}>
+              <CardHeading>
+                <CardIcon aria-hidden>
+                  <Database size={20} />
+                </CardIcon>
+                <HeadingText>
+                  <CardTitle>Your data</CardTitle>
+                  <CardDescription>Export or permanently delete your account and personal data</CardDescription>
+                </HeadingText>
+              </CardHeading>
+            </CardHeaderRow>
+
+            <SecurityRow>
+              <SecurityCopy>
+                <HeadingText>
+                  <CardTitle style={{ fontSize: '1rem' }}>Download a copy</CardTitle>
+                  <CardDescription>
+                    JSON export of your profile, expenses, households, invitations, budgets, and settlements
+                  </CardDescription>
+                </HeadingText>
+              </SecurityCopy>
+              <OutlineButton
+                type="button"
+                $size="sm"
+                disabled={exportLoading || isAuthenticating}
+                onClick={async () => {
+                  setDataActionError(null);
+                  try {
+                    const result = await exportMyData();
+                    const payload = result.data?.exportMyData;
+                    if (!payload?.data) {
+                      throw new Error(result.error?.message ?? 'Export failed.');
+                    }
+                    downloadUserDataExport(payload.exportedAt, payload.data);
+                  } catch (exportError) {
+                    setDataActionError(
+                      exportError instanceof Error ? exportError.message : 'Export failed.',
+                    );
+                  }
+                }}
+              >
+                {exportLoading ? 'Preparing…' : 'Export data'}
+              </OutlineButton>
+            </SecurityRow>
+
+            <SecurityRow style={{ borderTop: `1px solid ${colors.border}`, paddingTop: spacing.md }}>
+              <SecurityCopy>
+                <HeadingText>
+                  <CardTitle style={{ fontSize: '1rem', color: colors.danger }}>Delete account</CardTitle>
+                  <CardDescription>
+                    Permanently remove your account. This cannot be undone.
+                  </CardDescription>
+                </HeadingText>
+              </SecurityCopy>
+              <OutlineButton
+                type="button"
+                $size="sm"
+                disabled={isAuthenticating}
+                onClick={() => setShowDeleteAccount(true)}
+                style={{ color: colors.danger, borderColor: colors.danger }}
+              >
+                Delete account
+              </OutlineButton>
+            </SecurityRow>
+            {dataActionError ? <ErrorText>{dataActionError}</ErrorText> : null}
           </SettingsCard>
 
           <SettingsCard>

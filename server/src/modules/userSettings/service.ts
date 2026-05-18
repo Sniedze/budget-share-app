@@ -100,6 +100,18 @@ const readImportCustomCategories = async (userId: number): Promise<string[]> => 
   return parsed.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean);
 };
 
+export const listAllUserSettings = async (userId: number): Promise<Record<string, unknown>> => {
+  const [rows] = await db.query<SettingRow[]>(
+    'SELECT setting_key, setting_value FROM user_settings WHERE user_id = ? ORDER BY setting_key ASC',
+    [userId],
+  );
+  const settings: Record<string, unknown> = {};
+  for (const row of rows) {
+    settings[row.setting_key] = parseJson(row.setting_value, null);
+  }
+  return settings;
+};
+
 export const getUserWorkspaceSettings = async (
   userId: number,
   yearMonth: string,

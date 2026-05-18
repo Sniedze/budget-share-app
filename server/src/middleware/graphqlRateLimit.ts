@@ -48,8 +48,25 @@ const isStrictAuthGraphqlOperation = (req: Request): boolean =>
   matchesGraphqlOperation(req, ['Login', 'Register']);
 
 /** Password change and token refresh — tighter per-IP cap than general API traffic. */
-const isSessionSensitiveGraphqlOperation = (req: Request): boolean =>
-  matchesGraphqlOperation(req, ['ChangePassword', 'RefreshSession']);
+const isSessionSensitiveGraphqlOperation = (req: Request): boolean => {
+  if (matchesGraphqlOperation(req, ['ChangePassword', 'RefreshSession', 'DeleteAccount'])) {
+    return true;
+  }
+  if (req.method === 'OPTIONS') {
+    return false;
+  }
+  const body = req.body as { operationName?: string; query?: string } | undefined;
+  if (!body) {
+    return false;
+  }
+  if (typeof body.operationName === 'string' && body.operationName.trim().toLowerCase() === 'exportmydata') {
+    return true;
+  }
+  if (typeof body.query === 'string' && /\bquery\b/i.test(body.query) && /\bexportMyData\b/i.test(body.query)) {
+    return true;
+  }
+  return false;
+};
 
 const normalizeRateLimitEmail = (raw: unknown): string | null => {
   if (typeof raw !== 'string') {

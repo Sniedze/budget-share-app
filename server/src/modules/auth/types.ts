@@ -26,6 +26,17 @@ export type ChangePasswordInput = {
   newPassword: string;
 };
 
+export type DeleteAccountInput = {
+  password: string;
+  confirmation: string;
+};
+
+export type UserDataExport = {
+  exportedAt: string;
+  format: string;
+  data: string;
+};
+
 export type UpdateProfileInput = {
   fullName: string;
   email: string;

@@ -32,6 +32,7 @@
 - **Query abuse guard:** Apollo `maxRecursiveSelections` is enabled via `GRAPHQL_MAX_RECURSIVE_SELECTIONS` (default `100`; set `false` to disable) to curb abusive GraphQL operations.
 - **Rate limiting:** GraphQL uses a 15-minute window with separate caps for login/register (`GRAPHQL_RATE_LIMIT_AUTH`, default `100`, keyed by email when present), change-password and refresh-session (`GRAPHQL_RATE_LIMIT_SESSION`, default `60`, per IP), and general operations (`GRAPHQL_RATE_LIMIT_GENERAL`, default `800`).
 - **Expense listing:** The `expenses` query loads only rows the viewer may access (personal, household membership, or named custom-split participant) instead of scanning the full table.
+- **Account data rights:** Authenticated users can call `exportMyData` (JSON bundle) and `deleteAccount` (password + typed confirmation) from Account settings. Both use the session-sensitive rate limit bucket.
 
 ## Household invitation email
 

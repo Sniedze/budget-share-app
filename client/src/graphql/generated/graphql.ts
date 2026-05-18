@@ -66,6 +66,11 @@ export type CurrencySettlementScope = {
   transfers: Array<SettlementTransfer>;
 };
 
+export type DeleteAccountInput = {
+  confirmation: Scalars['String']['input'];
+  password: Scalars['String']['input'];
+};
+
 export type DeleteExpenseInput = {
   id: Scalars['ID']['input'];
 };
@@ -275,6 +280,7 @@ export type Mutation = {
   createGroup: Group;
   declineExpenseGroupParticipation: Group;
   declineGroupInvitation: GroupInvitation;
+  deleteAccount: Scalars['Boolean']['output'];
   deleteExpense: Scalars['Boolean']['output'];
   deleteExpenseGroup: Group;
   importExpenses: ImportExpensesPayload;
@@ -327,6 +333,11 @@ export type MutationDeclineExpenseGroupParticipationArgs = {
 
 export type MutationDeclineGroupInvitationArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteAccountArgs = {
+  input: DeleteAccountInput;
 };
 
 
@@ -400,6 +411,7 @@ export type MutationUpsertGroupSplitTemplateArgs = {
 export type Query = {
   __typename?: 'Query';
   expenses: Array<Expense>;
+  exportMyData: UserDataExport;
   /** Multiplier to convert one unit of \`from\` into \`to\` (e.g. EUR→DKK). */
   fxRate: Scalars['Float']['output'];
   groupSplitTemplates: Array<SplitTemplate>;
@@ -606,6 +618,13 @@ export type User = {
   timezone: Scalars['String']['output'];
 };
 
+export type UserDataExport = {
+  __typename?: 'UserDataExport';
+  data: Scalars['String']['output'];
+  exportedAt: Scalars['String']['output'];
+  format: Scalars['String']['output'];
+};
+
 export type UserWorkspaceSettings = {
   __typename?: 'UserWorkspaceSettings';
   budgetAssumptions: BudgetAssumptions;
@@ -614,6 +633,18 @@ export type UserWorkspaceSettings = {
   importMerchantRules: Array<ImportMerchantRuleSetting>;
   monthCategoryBudgets: Array<MonthCategoryBudgetEntry>;
 };
+
+export type ExportMyDataQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type ExportMyDataQuery = { __typename?: 'Query', exportMyData: { __typename?: 'UserDataExport', exportedAt: string, format: string, data: string } };
+
+export type DeleteAccountMutationVariables = Exact<{
+  input: DeleteAccountInput;
+}>;
+
+
+export type DeleteAccountMutation = { __typename?: 'Mutation', deleteAccount: boolean };
 
 export type MeQueryVariables = Exact<{ [key: string]: never; }>;
 
