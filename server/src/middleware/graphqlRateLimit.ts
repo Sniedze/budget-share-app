@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import { rateLimit } from 'express-rate-limit';
+import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const DEFAULT_AUTH_RATE_LIMIT = 100;
@@ -105,16 +105,18 @@ export const extractLoginRegisterEmail = (req: Request): string | null => {
 };
 
 const rateLimitKey = (req: Request): string => {
+  const ip = req.ip ?? 'unknown';
   if (isStrictAuthGraphqlOperation(req)) {
     const email = extractLoginRegisterEmail(req);
     if (email) {
       return `auth-email:${email}`;
     }
+    return `auth-ip:${ipKeyGenerator(ip)}`;
   }
   if (isSessionSensitiveGraphqlOperation(req)) {
-    return `session-auth:${req.ip ?? 'unknown'}`;
+    return `session-auth:${ipKeyGenerator(ip)}`;
   }
-  return req.ip ?? 'unknown';
+  return ipKeyGenerator(ip);
 };
 
 /** Exported for unit tests. */
