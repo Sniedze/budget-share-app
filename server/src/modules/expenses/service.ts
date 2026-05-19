@@ -11,7 +11,7 @@ import type {
 } from './types.js';
 import { AppError } from '../../graphql/appError.js';
 import { db } from '../../db/mysql.js';
-import { DEFAULT_CURRENCY, normalizeExpenseCurrency } from '../../lib/currency.js';
+import { normalizeExpenseCurrency } from '../../lib/currency.js';
 import { toIsoString } from '../../lib/dates.js';
 import { logAuditEvent } from '../audit/service.js';
 import { appError, ErrorCode } from '../../graphql/appError.js';

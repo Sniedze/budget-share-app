@@ -12,12 +12,9 @@ import type {
   UpdateGroupInput,
   UpsertSplitTemplateInput,
 } from './types.js';
-import { normalizeExpenseCurrency } from '../../lib/currency.js';
 import { appError, ErrorCode } from '../../graphql/appError.js';
 import { logAuditEvent } from '../audit/service.js';
-import { logAuthzDenied } from '../../logger.js';
 import { toIsoString } from '../../lib/dates.js';
-import { roundCents } from '../../lib/money.js';
 import { stripControlCharacters } from '../../lib/sanitize.js';
 import { queueExpenseGroupAddedEmails, queueHouseholdMemberInviteEmails } from '../email/sendMemberNotifications.js';
 import {
@@ -29,8 +26,6 @@ import {
 import {
   type GroupViewer,
   findViewerGroupMember,
-  groupMemberMatchesViewerClause,
-  groupMemberMatchesViewerParams,
   loadUserIdsByEmails,
   normalizeMemberEmail,
   parseViewerUserId,
@@ -166,7 +161,6 @@ export const getGroupForViewer = async (viewer: GroupViewer, groupId: string): P
 };
 
 export const listGroups = async (viewer: GroupViewer): Promise<Group[]> => {
-  const viewerUserId = viewer.userId;
   const accessibleGroups = await loadAccessibleGroupsWithMembers(viewer);
   if (accessibleGroups.length === 0) {
     return [];
