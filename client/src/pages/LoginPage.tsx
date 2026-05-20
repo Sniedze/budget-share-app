@@ -22,13 +22,19 @@ export const LoginPage = (): JSX.Element => {
   const [error, setError] = useState<string | null>(null);
   const emailId = useId();
   const passwordId = useId();
-  const isFormComplete = email.trim().length > 0 && password.length > 0;
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    const form = event.currentTarget;
+    if (!form.reportValidity()) {
+      return;
+    }
+    const fd = new FormData(form);
+    const emailValue = String(fd.get('email') ?? '').trim();
+    const passwordValue = String(fd.get('password') ?? '');
     try {
-      await login(email.trim(), password, rememberMe);
+      await login(emailValue, passwordValue, rememberMe);
       navigate(PERSONAL_FINANCES_PATH, { replace: true });
     } catch (authError) {
       const message = authError instanceof Error ? authError.message : 'Login failed.';
@@ -48,10 +54,13 @@ export const LoginPage = (): JSX.Element => {
           </FieldLabel>
           <Input
             id={emailId}
+            name="email"
             type="email"
+            autoComplete="email"
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            onInput={(e) => setEmail(e.currentTarget.value)}
             required
           />
           <FieldLabel htmlFor={passwordId}>
@@ -59,10 +68,13 @@ export const LoginPage = (): JSX.Element => {
           </FieldLabel>
           <Input
             id={passwordId}
+            name="password"
             type="password"
+            autoComplete="current-password"
             placeholder="********"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onInput={(e) => setPassword(e.currentTarget.value)}
             required
           />
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#4b5563' }}>
@@ -80,7 +92,7 @@ export const LoginPage = (): JSX.Element => {
               $variant="accent"
               $weight="semibold"
               $size="lg"
-              disabled={isAuthenticating || !isFormComplete}
+              disabled={isAuthenticating}
               style={{ width: '100%' }}
             >
               {isAuthenticating ? 'Signing in...' : 'Sign In'}

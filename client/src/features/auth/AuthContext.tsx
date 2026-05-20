@@ -56,6 +56,18 @@ const getUserFromAuthMutation = (data: AuthMutationData): AuthUser | null => {
   return data.login?.user ?? data.register?.user ?? data.changePassword?.user ?? null;
 };
 
+/** With `errorPolicy: 'all'`, GraphQL errors are often in `errors`, not `error`. */
+const messageFromMutationResult = (result: {
+  errors?: ReadonlyArray<{ message?: string }> | undefined;
+  error?: Error | undefined;
+}): string | undefined => {
+  const graphql = result.errors?.find((e) => e.message && e.message.trim().length > 0)?.message?.trim();
+  if (graphql) {
+    return graphql;
+  }
+  return result.error?.message;
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element => {
   const client = useApolloClient();
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -108,7 +120,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
       });
       const nextUser = result.data ? getUserFromAuthMutation(result.data) : null;
       if (!nextUser) {
-        throw new Error(result.error?.message ?? 'Login failed.');
+        throw new Error(messageFromMutationResult(result) ?? 'Login failed.');
       }
       setUser(nextUser);
     },
@@ -120,7 +132,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
       const result = await registerMutation({ variables: { input: { fullName, email, password } } });
       const nextUser = result.data ? getUserFromAuthMutation(result.data) : null;
       if (!nextUser) {
-        throw new Error(result.error?.message ?? 'Registration failed.');
+        throw new Error(messageFromMutationResult(result) ?? 'Registration failed.');
       }
       setUser(nextUser);
     },
@@ -160,7 +172,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
       });
       const nextUser = result.data ? getUserFromAuthMutation(result.data) : null;
       if (!nextUser) {
-        throw new Error(result.error?.message ?? 'Password change failed.');
+        throw new Error(messageFromMutationResult(result) ?? 'Password change failed.');
       }
       setUser(nextUser);
     },
@@ -182,7 +194,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
       });
       const nextUser = result.data?.updateProfile ?? null;
       if (!nextUser) {
-        throw new Error(result.error?.message ?? 'Profile update failed.');
+        throw new Error(messageFromMutationResult(result) ?? 'Profile update failed.');
       }
       setUser(nextUser);
       return nextUser;
@@ -195,7 +207,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
       const result = await confirmEmailChangeMutation({ variables: { token } });
       const nextUser = result.data?.confirmEmailChange ?? null;
       if (!nextUser) {
-        throw new Error(result.error?.message ?? 'Email confirmation failed.');
+        throw new Error(messageFromMutationResult(result) ?? 'Email confirmation failed.');
       }
       await clearAuthState();
       return nextUser;
@@ -207,7 +219,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
     const result = await cancelPendingEmailChangeMutation();
     const nextUser = result.data?.cancelPendingEmailChange ?? null;
     if (!nextUser) {
-      throw new Error(result.error?.message ?? 'Could not cancel pending email change.');
+      throw new Error(messageFromMutationResult(result) ?? 'Could not cancel pending email change.');
     }
     setUser(nextUser);
   }, [cancelPendingEmailChangeMutation]);
@@ -216,7 +228,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
     const result = await resendEmailChangeMutation();
     const nextUser = result.data?.resendEmailChangeConfirmation ?? null;
     if (!nextUser) {
-      throw new Error(result.error?.message ?? 'Could not resend confirmation email.');
+      throw new Error(messageFromMutationResult(result) ?? 'Could not resend confirmation email.');
     }
     setUser(nextUser);
   }, [resendEmailChangeMutation]);
