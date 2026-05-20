@@ -3,14 +3,21 @@ import { isUnauthenticatedGraphqlError, type GraphqlErrorShape } from './graphql
 
 const DEFAULT_GRAPHQL_URL = 'http://localhost:4000/graphql';
 
-/** In dev, prefer the local API unless explicitly configured. Production Docker uses `/graphql` via .env. */
+/**
+ * In dev, default to same-origin `/graphql` so Vite proxies to the API. Cookies then match the SPA origin
+ * (http://localhost:5173), which avoids session issues when the browser host differs from the API URL
+ * (e.g. localhost vs 127.0.0.1). Set `VITE_GRAPHQL_URL=https://...` when you need a direct absolute URL.
+ */
 const resolveGraphqlUrl = (): string => {
   const configured = import.meta.env.VITE_GRAPHQL_URL?.trim();
   if (import.meta.env.DEV) {
     if (configured && configured.startsWith('http')) {
       return configured;
     }
-    return DEFAULT_GRAPHQL_URL;
+    if (configured && configured.startsWith('/')) {
+      return configured;
+    }
+    return '/graphql';
   }
   return configured || DEFAULT_GRAPHQL_URL;
 };
@@ -19,7 +26,11 @@ const GRAPHQL_URL = resolveGraphqlUrl();
 
 const toFetchErrorMessage = (error: unknown): string => {
   if (error instanceof TypeError && error.message === 'Failed to fetch') {
-    return `Cannot reach the API at ${GRAPHQL_URL}. Start it with: npm run server`;
+    const hint =
+      GRAPHQL_URL.startsWith('/') && import.meta.env.DEV
+        ? ' Ensure the API is running on port 4000 (`npm run server` from repo root); Vite proxies this path.'
+        : '';
+    return `Cannot reach the API at ${GRAPHQL_URL}. Start it with: npm run server.${hint}`;
   }
   return error instanceof Error ? error.message : 'Request failed.';
 };
