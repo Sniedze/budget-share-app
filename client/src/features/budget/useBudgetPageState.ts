@@ -567,16 +567,7 @@ export const useBudgetPageState = () => {
     const incomeEstimate = Number(assumptions.monthlyIncomeEstimate) || 0;
     setDraftCategoryBudgets(buildBudgetSetupDraftLimits(categories, incomeEstimate, categoryBudgetLimits));
     setBudgetModalOpen(true);
-  }, [
-    assumptions,
-    categoryBudgetLimits,
-    budgetExpenses,
-    viewYear,
-    viewMonthIndex,
-    categories,
-    workspaceSettings?.budgetCustomCategories,
-    savedBudgetCategoryMappings,
-  ]);
+  }, [assumptions, categoryBudgetLimits, categories, workspaceSettings?.budgetCustomCategories]);
 
   useEffect(() => {
     if (!budgetModalOpen) {

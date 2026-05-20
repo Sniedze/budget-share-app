@@ -52,7 +52,7 @@ export const useUserWorkspaceSettings = (userId: string, yearMonth: string) => {
       const saved = result.data?.saveUserWorkspaceSettings;
       return saved ? mapWorkspaceSettingsFromApi(saved) : null;
     },
-    [saveMutation, userId],
+    [saveMutation, userId, yearMonth],
   );
 
   useEffect(() => {
