@@ -8,8 +8,19 @@ export type {
 export * from './budgetPageStyles';
 export { useBudgetPageState } from './useBudgetPageState';
 export {
+  BUCKET_LABELS,
+  build503020CategoryBudgets,
+  bucketTotals503020,
+  classifyBudget503020Bucket,
+  compute503020CategorySuggestions,
+  type Budget503020Bucket,
+  type Category503020Suggestion,
+  formatShareOfMonthlyBudget,
+} from './budget503020';
+export {
   BudgetCategoryList,
   BudgetDetailedViews,
+  BudgetFinancialShell,
   BudgetForecastCharts,
   BudgetMonthlyOverview,
   BudgetPageHeader,

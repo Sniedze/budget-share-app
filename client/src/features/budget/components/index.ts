@@ -1,3 +1,4 @@
+export { BudgetFinancialShell } from './BudgetFinancialShell';
 export { BudgetPageHeader } from './BudgetPageHeader';
 export { BudgetSummaryCards } from './BudgetSummaryCards';
 export { BudgetMonthlyOverview } from './BudgetMonthlyOverview';

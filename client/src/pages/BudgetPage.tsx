@@ -1,15 +1,7 @@
 import { Sidebar } from '../components/sections/Sidebar';
 import { AppLayout, MutedText, PageSurface } from '../components/ui';
 import { spacing } from '../styles/tokens';
-import {
-  BudgetCategoryList,
-  BudgetDetailedViews,
-  BudgetForecastCharts,
-  BudgetMonthlyOverview,
-  BudgetPageHeader,
-  BudgetSettingsModal,
-  BudgetSummaryCards,
-} from '../features/budget/components';
+import { BudgetFinancialShell } from '../features/budget/components';
 import { useBudgetPageState } from '../features/budget';
 
 export const BudgetPage = (): JSX.Element => {
@@ -19,8 +11,6 @@ export const BudgetPage = (): JSX.Element => {
     <AppLayout>
       <Sidebar />
       <PageSurface>
-        <BudgetPageHeader onOpenBudgetModal={state.openBudgetModal} />
-
         {state.loading ? <MutedText>Loading…</MutedText> : null}
         {state.error ? <MutedText>Error: {state.error.message}</MutedText> : null}
 
@@ -38,62 +28,65 @@ export const BudgetPage = (): JSX.Element => {
           </MutedText>
         ) : null}
 
-        <BudgetSummaryCards
-          formatAmount={state.formatBudgetAmount}
-          balanceNow={state.balanceNow}
-          balanceDeltaYtd={state.balanceDeltaYtd}
-          projectedEnd={state.projectedEnd}
-          ytdIncCombined={state.ytdIncCombined}
-          ytdIncomingActual={state.ytdIncomingActual}
-          ytdIncEstimate={state.ytdIncEstimate}
-          ytdExp={state.ytdExp}
-          now={state.now}
-        />
-
-        <BudgetMonthlyOverview
-          formatAmount={state.formatBudgetAmount}
-          viewYear={state.viewYear}
-          viewMonthIndex={state.viewMonthIndex}
+        <BudgetFinancialShell
+          mainTab={state.mainTab}
+          setMainTab={state.setMainTab}
+          shiftViewMonth={state.shiftViewMonth}
           monthPickerValue={state.monthPickerValue}
           onMonthPickerChange={state.onMonthPickerChange}
-          totalBudgeted={state.totalBudgeted}
+          formatAmount={state.formatBudgetAmount}
+          budgetCurrency={state.budgetCurrency}
+          monthIncomeDisplay={state.monthIncomeDisplay}
           totalSpentMonth={state.totalSpentMonth}
-          remainingBudget={state.remainingBudget}
-          usagePct={state.usagePct}
-        />
-
-        <BudgetDetailedViews
-          formatAmount={state.formatBudgetAmount}
-          detailTab={state.detailTab}
-          setDetailTab={state.setDetailTab}
-          viewYear={state.viewYear}
+          totalBudgeted={state.totalBudgeted}
+          monthSaved={state.monthSaved}
+          savingsRatePct={state.savingsRatePct}
+          categoryRows={state.categoryRows}
           sortedRecentTx={state.sortedRecentTx}
-          monthlyBreakdown={state.monthlyBreakdownDetail}
-          categoryTrends={state.categoryTrendsTable}
-        />
-
-        <BudgetForecastCharts
-          formatAmount={state.formatBudgetAmount}
+          budgetInsights={state.budgetInsights}
+          txSearch={state.txSearch}
+          setTxSearch={state.setTxSearch}
+          txCategoryFilter={state.txCategoryFilter}
+          setTxCategoryFilter={state.setTxCategoryFilter}
+          filteredTransactions={state.filteredTransactions}
+          categories={state.categories}
+          budgetAssumptions={state.assumptions}
+          categoryBudgetLimits={state.categoryBudgetLimits}
+          draftAssumptions={state.draftAssumptions}
+          setDraftAssumptions={state.setDraftAssumptions}
+          draftCategoryBudgets={state.draftCategoryBudgets}
+          setDraftCategoryBudgets={state.setDraftCategoryBudgets}
+          onSaveBudgets={state.onSaveBudgets}
+          onResetBudgetSetup={state.onResetBudgetSetup}
+          savingBudget={state.savingBudget}
+          resettingBudget={state.resettingBudget}
+          budgetSaveFeedback={state.budgetSaveFeedback}
+          clearBudgetSaveFeedback={state.clearBudgetSaveFeedback}
+          annualBudgetTotal={state.annualBudgetTotal}
+          projectedEnd={state.projectedEnd}
+          balanceNow={state.balanceNow}
           chartTab={state.chartTab}
           setChartTab={state.setChartTab}
           chartRowsMonthly={state.chartRowsMonthly}
           yearTotals={state.yearTotals}
+          addBudgetCustomCategory={state.addBudgetCustomCategory}
+          expenseCategoriesForMapping={state.expenseCategoriesForMapping}
+          budgetLinesForMapping={state.budgetLinesForMapping}
+          setExpenseCategoryMapping={state.setExpenseCategoryMapping}
+          getExpenseCategoryMappingValue={state.getExpenseCategoryMappingValue}
+          resolveExpenseToBudgetCategory={state.resolveExpenseToBudgetCategory}
+          onSaveCategoryMappings={state.onSaveCategoryMappings}
+          savingCategoryMappings={state.savingCategoryMappings}
+          categoryMappingsDirty={state.categoryMappingsDirty}
+          categoryMappingsFeedback={state.categoryMappingsFeedback}
+          goals={state.goals}
+          persistGoals={state.persistGoals}
+          last6MonthsReport={state.last6MonthsReport}
+          reportsAvgMonthlySpend={state.reportsAvgMonthlySpend}
+          reportsAvgSavingsRate={state.reportsAvgSavingsRate}
+          reportsMostOverspent={state.reportsMostOverspent}
+          reportsTopCategories={state.reportsTopCategories}
         />
-
-        <BudgetCategoryList formatAmount={state.formatBudgetAmount} categoryRows={state.categoryRows} />
-
-        {state.budgetModalOpen ? (
-          <BudgetSettingsModal
-            monthKey={state.monthKey}
-            categories={state.categories}
-            draftAssumptions={state.draftAssumptions}
-            setDraftAssumptions={state.setDraftAssumptions}
-            draftCategoryBudgets={state.draftCategoryBudgets}
-            setDraftCategoryBudgets={state.setDraftCategoryBudgets}
-            onClose={() => state.setBudgetModalOpen(false)}
-            onSave={state.onSaveBudgets}
-          />
-        ) : null}
       </PageSurface>
     </AppLayout>
   );

@@ -2,6 +2,20 @@
 export const APP_CURRENCY_CODE = 'DKK';
 
 const formatterCache = new Map<string, Intl.NumberFormat>();
+const amountFormatterCache = new Map<string, Intl.NumberFormat>();
+
+const getAmountFormatter = (localeKey: string): Intl.NumberFormat => {
+  const cached = amountFormatterCache.get(localeKey);
+  if (cached) {
+    return cached;
+  }
+  const formatter = new Intl.NumberFormat(localeKey === 'da-DK' ? 'da-DK' : undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  amountFormatterCache.set(localeKey, formatter);
+  return formatter;
+};
 
 const getCurrencyFormatter = (currencyCode: string): Intl.NumberFormat => {
   const code = currencyCode.trim().toUpperCase() || APP_CURRENCY_CODE;
@@ -34,6 +48,13 @@ export const formatCurrency = (value: number, currencyCode: string = APP_CURRENC
 
 /** Format using the app default currency (DKK). */
 export const formatAppCurrency = (value: number): string => formatCurrency(value, APP_CURRENCY_CODE);
+
+/** Numeric amount only (no currency symbol), for table cells when the column header shows the currency. */
+export const formatCurrencyAmount = (value: number, currencyCode: string = APP_CURRENCY_CODE): string => {
+  const code = currencyCode.trim().toUpperCase() || APP_CURRENCY_CODE;
+  const localeKey = code === 'DKK' ? 'da-DK' : 'default';
+  return getAmountFormatter(localeKey).format(value);
+};
 
 /**
  * Normalize a bank statement currency cell to a 3-letter ISO-style code.

@@ -28,9 +28,13 @@ export type { MerchantSuggestion } from './selectors/merchantSuggestions';
 export {
   BUDGET_TOP_LEVEL_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES,
+  DEFAULT_EXPENSE_CATEGORY,
   DEFAULT_INCOME_CATEGORIES,
+  buildExpenseCategoryOptions,
+  expenseCategoryExtrasFromWorkspace,
   toBudgetTopLevelCategory,
 } from './categories';
+export type { ExpenseCategorySource } from './categories';
 export {
   incomingExpensesOnly,
   isOutgoingExpense,

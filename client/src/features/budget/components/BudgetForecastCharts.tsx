@@ -122,7 +122,7 @@ export const BudgetForecastCharts = ({
                 <Area
                   type="monotone"
                   dataKey="budget"
-                  name="Annual budget (12× current month)"
+                  name="Annual budget (12× monthly template)"
                   stroke={colors.chartMutedStroke}
                   fill={colors.chartMutedFill}
                   fillOpacity={0.25}
@@ -134,8 +134,8 @@ export const BudgetForecastCharts = ({
           <Callout>
             <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden />
             <div>
-              Annual budget line uses twelve times your <strong>currently selected month&apos;s</strong> total
-              category budget as a rough yardstick—not a full year of stored budgets per month.
+              Annual budget line is <strong>12× your saved monthly template</strong> (category limits from Budget
+              Setup). Spent is actual outgoing expenses per calendar year.
             </div>
           </Callout>
         </>
