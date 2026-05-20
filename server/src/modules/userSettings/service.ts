@@ -4,6 +4,7 @@ import { userSettingKeys } from './keys.js';
 import type {
   BudgetAssumptions,
   ImportMerchantRule,
+  BudgetCategoryMappings,
   MonthCategoryBudgets,
   SavedColumnMapping,
   SaveUserWorkspaceSettingsInput,
@@ -66,8 +67,7 @@ const readBudgetAssumptions = async (userId: number): Promise<BudgetAssumptions>
   };
 };
 
-const readMonthCategoryBudgets = async (userId: number, yearMonth: string): Promise<MonthCategoryBudgets> => {
-  const raw = await readSetting(userId, userSettingKeys.monthBudgets(yearMonth));
+const parseCategoryBudgetRecord = (raw: unknown): MonthCategoryBudgets => {
   const parsed = parseJson<Record<string, unknown>>(raw, {});
   const out: MonthCategoryBudgets = {};
   for (const [category, value] of Object.entries(parsed)) {
@@ -77,6 +77,16 @@ const readMonthCategoryBudgets = async (userId: number, yearMonth: string): Prom
     }
   }
   return out;
+};
+
+const readMonthCategoryBudgets = async (userId: number, yearMonth: string): Promise<MonthCategoryBudgets> => {
+  const raw = await readSetting(userId, userSettingKeys.monthBudgets(yearMonth));
+  return parseCategoryBudgetRecord(raw);
+};
+
+const readCategoryBudgetDefaults = async (userId: number): Promise<MonthCategoryBudgets> => {
+  const raw = await readSetting(userId, userSettingKeys.categoryBudgetDefaults);
+  return parseCategoryBudgetRecord(raw);
 };
 
 const readImportMerchantRules = async (userId: number): Promise<ImportMerchantRule[]> => {
@@ -93,6 +103,27 @@ const readImportColumnMappings = async (userId: number): Promise<Record<string, 
 
 const readImportCustomCategories = async (userId: number): Promise<string[]> => {
   const raw = await readSetting(userId, userSettingKeys.importCustomCategories);
+  const parsed = parseJson<unknown>(raw, []);
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+  return parsed.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean);
+};
+
+const readBudgetCategoryMappings = async (userId: number): Promise<BudgetCategoryMappings> => {
+  const raw = await readSetting(userId, userSettingKeys.budgetCategoryMappings);
+  const parsed = parseJson<Record<string, unknown>>(raw, {});
+  const out: BudgetCategoryMappings = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof key === 'string' && typeof value === 'string' && key.trim() && value.trim()) {
+      out[key.trim()] = value.trim();
+    }
+  }
+  return out;
+};
+
+const readBudgetCustomCategories = async (userId: number): Promise<string[]> => {
+  const raw = await readSetting(userId, userSettingKeys.budgetCustomCategories);
   const parsed = parseJson<unknown>(raw, []);
   if (!Array.isArray(parsed)) {
     return [];
@@ -118,21 +149,35 @@ export const getUserWorkspaceSettings = async (
 ): Promise<UserWorkspaceSettings> => {
   const [
     budgetAssumptions,
-    monthCategoryBudgets,
+    categoryBudgetDefaultsRaw,
+    monthCategoryBudgetsForMonth,
+    budgetCustomCategories,
+    budgetCategoryMappings,
     importMerchantRules,
     importColumnMappings,
     importCustomCategories,
   ] = await Promise.all([
     readBudgetAssumptions(userId),
+    readCategoryBudgetDefaults(userId),
     readMonthCategoryBudgets(userId, yearMonth),
+    readBudgetCustomCategories(userId),
+    readBudgetCategoryMappings(userId),
     readImportMerchantRules(userId),
     readImportColumnMappings(userId),
     readImportCustomCategories(userId),
   ]);
 
+  const categoryBudgetDefaults =
+    Object.keys(categoryBudgetDefaultsRaw).length > 0
+      ? categoryBudgetDefaultsRaw
+      : monthCategoryBudgetsForMonth;
+
   return {
     budgetAssumptions,
-    monthCategoryBudgets,
+    categoryBudgetDefaults,
+    monthCategoryBudgets: categoryBudgetDefaults,
+    budgetCustomCategories,
+    budgetCategoryMappings,
     importMerchantRules,
     importColumnMappings,
     importCustomCategories,
@@ -148,6 +193,11 @@ export const saveUserWorkspaceSettings = async (
   if (input.budgetAssumptions) {
     writes.push(writeSetting(userId, userSettingKeys.budgetAssumptions, input.budgetAssumptions));
   }
+  if (input.categoryBudgetDefaults) {
+    writes.push(
+      writeSetting(userId, userSettingKeys.categoryBudgetDefaults, input.categoryBudgetDefaults),
+    );
+  }
   if (input.monthCategoryBudgets) {
     writes.push(
       writeSetting(
@@ -156,6 +206,17 @@ export const saveUserWorkspaceSettings = async (
         input.monthCategoryBudgets.budgets,
       ),
     );
+    if (!input.categoryBudgetDefaults) {
+      writes.push(
+        writeSetting(userId, userSettingKeys.categoryBudgetDefaults, input.monthCategoryBudgets.budgets),
+      );
+    }
+  }
+  if (input.budgetCustomCategories !== undefined) {
+    writes.push(writeSetting(userId, userSettingKeys.budgetCustomCategories, input.budgetCustomCategories));
+  }
+  if (input.budgetCategoryMappings !== undefined) {
+    writes.push(writeSetting(userId, userSettingKeys.budgetCategoryMappings, input.budgetCategoryMappings));
   }
   if (input.importMerchantRules) {
     writes.push(writeSetting(userId, userSettingKeys.importMerchantRules, input.importMerchantRules));

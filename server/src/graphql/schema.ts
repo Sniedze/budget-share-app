@@ -368,9 +368,17 @@ export const typeDefs = `#graphql
     descriptionHeaderKey: String
   }
 
+  type BudgetCategoryMappingEntry {
+    expenseCategory: String!
+    budgetCategory: String!
+  }
+
   type UserWorkspaceSettings {
     budgetAssumptions: BudgetAssumptions!
+    categoryBudgetDefaults: [MonthCategoryBudgetEntry!]!
     monthCategoryBudgets: [MonthCategoryBudgetEntry!]!
+    budgetCustomCategories: [String!]!
+    budgetCategoryMappings: [BudgetCategoryMappingEntry!]!
     importMerchantRules: [ImportMerchantRuleSetting!]!
     importColumnMappings: [SavedColumnMappingSetting!]!
     importCustomCategories: [String!]!
@@ -417,9 +425,17 @@ export const typeDefs = `#graphql
     descriptionHeaderKey: String
   }
 
+  input BudgetCategoryMappingEntryInput {
+    expenseCategory: String!
+    budgetCategory: String!
+  }
+
   input SaveUserWorkspaceSettingsInput {
     budgetAssumptions: BudgetAssumptionsInput
+    categoryBudgetDefaults: [MonthCategoryBudgetEntryInput!]
     monthCategoryBudgets: SaveMonthCategoryBudgetsInput
+    budgetCustomCategories: [String!]
+    budgetCategoryMappings: [BudgetCategoryMappingEntryInput!]
     importMerchantRules: [ImportMerchantRuleSettingInput!]
     importColumnMappings: [SavedColumnMappingSettingInput!]
     importCustomCategories: [String!]

@@ -5,6 +5,9 @@ export type BudgetAssumptions = {
 
 export type MonthCategoryBudgets = Record<string, number>;
 
+/** Keys are normalized expense category labels; values are budget line names. */
+export type BudgetCategoryMappings = Record<string, string>;
+
 export type ImportMerchantRule = {
   id: string;
   flow: 'out' | 'in';
@@ -32,7 +35,11 @@ export type SavedColumnMapping = {
 
 export type UserWorkspaceSettings = {
   budgetAssumptions: BudgetAssumptions;
+  /** Recurring monthly category limits applied to every month. */
+  categoryBudgetDefaults: MonthCategoryBudgets;
   monthCategoryBudgets: MonthCategoryBudgets;
+  budgetCustomCategories: string[];
+  budgetCategoryMappings: BudgetCategoryMappings;
   importMerchantRules: ImportMerchantRule[];
   importColumnMappings: Record<string, SavedColumnMapping>;
   importCustomCategories: string[];
@@ -40,7 +47,10 @@ export type UserWorkspaceSettings = {
 
 export type SaveUserWorkspaceSettingsInput = {
   budgetAssumptions?: BudgetAssumptions;
+  categoryBudgetDefaults?: MonthCategoryBudgets;
   monthCategoryBudgets?: { yearMonth: string; budgets: MonthCategoryBudgets };
+  budgetCustomCategories?: string[];
+  budgetCategoryMappings?: BudgetCategoryMappings;
   importMerchantRules?: ImportMerchantRule[];
   importColumnMappings?: Record<string, SavedColumnMapping>;
   importCustomCategories?: string[];

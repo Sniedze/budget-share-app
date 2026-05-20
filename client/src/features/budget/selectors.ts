@@ -1,6 +1,6 @@
 import type { Expense } from '../../graphql/operationTypes';
 import { APP_CURRENCY_CODE } from '../../format/currency';
-import { toBudgetTopLevelCategory } from '../expenses/categories';
+import { resolveBudgetCategory, type BudgetCategoryMappings } from './budgetCategoryMappings';
 
 const isIncomingExpense = (e: Expense): boolean => e.flow === 'Incoming';
 
@@ -139,13 +139,16 @@ export const ytdIncomingThrough = (expenses: Expense[], now: Date): number => {
     .reduce((sum, e) => sum + e.amount, 0);
 };
 
-export const sumByCategory = (expenses: Expense[]): Map<string, number> => {
+export const sumByCategory = (
+  expenses: Expense[],
+  mappings: BudgetCategoryMappings = {},
+): Map<string, number> => {
   const map = new Map<string, number>();
   for (const e of expenses) {
     if (isIncomingExpense(e)) {
       continue;
     }
-    const c = toBudgetTopLevelCategory(e.category);
+    const c = resolveBudgetCategory(e.category, mappings);
     map.set(c, (map.get(c) ?? 0) + e.amount);
   }
   return map;
@@ -264,13 +267,17 @@ export const buildForecastChartRows = (
   });
 };
 
-export const collectCategories = (expenses: Expense[], defaults: string[]): string[] => {
+export const collectCategories = (
+  expenses: Expense[],
+  defaults: string[],
+  mappings: BudgetCategoryMappings = {},
+): string[] => {
   const set = new Set(defaults);
   for (const e of expenses) {
     if (isIncomingExpense(e)) {
       continue;
     }
-    const c = toBudgetTopLevelCategory(e.category);
+    const c = resolveBudgetCategory(e.category, mappings);
     if (c) {
       set.add(c);
     }

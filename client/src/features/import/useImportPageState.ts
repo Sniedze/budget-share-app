@@ -1,12 +1,12 @@
 import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
 import { ChangeEvent, DragEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  DEFAULT_EXPENSE_CATEGORIES,
   DEFAULT_INCOME_CATEGORIES,
   GET_EXPENSES,
+  buildExpenseCategoryOptions,
+  expenseCategoryExtrasFromWorkspace,
   IMPORT_EXPENSES,
   isDuplicateImportResult,
-  isOutgoingExpense,
   mergeImportedExpensesIntoCache,
   type AddExpenseInput,
   type Expense,
@@ -146,15 +146,17 @@ export const useImportPageState = () => {
   );
 
   const groups = useMemo(() => groupsData?.groups ?? [], [groupsData?.groups]);
-  const categoryOptions = useMemo(() => {
-    const existingOutgoingCategories = (expensesData?.expenses ?? [])
-      .filter(isOutgoingExpense)
-      .map((expense) => expense.category.trim())
-      .filter(Boolean);
-    return Array.from(
-      new Set([...DEFAULT_EXPENSE_CATEGORIES, ...existingOutgoingCategories, ...customCategories]),
-    ).sort((left, right) => left.localeCompare(right));
-  }, [customCategories, expensesData?.expenses]);
+  const categoryOptions = useMemo(
+    () =>
+      buildExpenseCategoryOptions(
+        expensesData?.expenses ?? [],
+        expenseCategoryExtrasFromWorkspace({
+          budgetCustomCategories: workspaceSettings?.budgetCustomCategories,
+          importCustomCategories: customCategories,
+        }),
+      ),
+    [customCategories, expensesData?.expenses, workspaceSettings?.budgetCustomCategories],
+  );
   const incomingCategoryOptions = useMemo(
     () => [...DEFAULT_INCOME_CATEGORIES].sort((left, right) => left.localeCompare(right)),
     [],

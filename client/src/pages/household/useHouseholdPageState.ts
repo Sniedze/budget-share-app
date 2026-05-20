@@ -3,12 +3,16 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../features/auth';
 import {
+  DEFAULT_EXPENSE_CATEGORY,
   GET_EXPENSES,
+  buildExpenseCategoryOptions,
   buildMerchantSuggestions,
+  expenseCategoryExtrasFromWorkspace,
   useExpenseActions,
   type GetExpensesResponse,
   type SplitAllocationInput,
 } from '../../features/expenses';
+import { useUserWorkspaceSettings } from '../../features/userSettings';
 import {
   CREATE_GROUP,
   DECLINE_EXPENSE_GROUP_PARTICIPATION,
@@ -44,17 +48,6 @@ const DEFAULT_MEMBERS: GroupMember[] = [
   { userId: null, name: '', email: '', ratio: 0 },
 ];
 
-const PREDEFINED_EXPENSE_CATEGORIES = [
-  'Groceries',
-  'Utilities',
-  'Rent',
-  'Entertainment',
-  'Internet',
-  'Transport',
-  'Household',
-  'Other',
-] as const;
-
 const PREDEFINED_EXPENSE_GROUPS = ['Groceries', 'Utilities', 'Rent', 'Entertainment', 'Internet', 'Transport'];
 
 const getInitialMembers = (): GroupMember[] => {
@@ -79,8 +72,14 @@ const withEvenRatios = (inputMembers: GroupMember[]): GroupMember[] => {
 /** Shows every household expense regardless of expense-group tab. */
 export const ALL_HOUSEHOLD_EXPENSE_GROUPS = '__all__';
 
+const currentYearMonthKey = (): string => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
 export const useHouseholdPageState = () => {
   const { user } = useAuth();
+  const { settings: workspaceSettings } = useUserWorkspaceSettings(user?.id ?? '', currentYearMonthKey());
   const { data, loading, error } = useQuery<GetGroupsQueryResult>(GET_GROUPS);
   const { data: expensesData } = useQuery<GetExpensesResponse>(GET_EXPENSES);
   const { addExpense, isMutating: isCreatingExpense } = useExpenseActions();
@@ -137,7 +136,7 @@ export const useHouseholdPageState = () => {
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [expenseGroup, setExpenseGroup] = useState('Groceries');
-  const [expenseCategory, setExpenseCategory] = useState('General');
+  const [expenseCategory, setExpenseCategory] = useState<string>(DEFAULT_EXPENSE_CATEGORY);
   const [expenseMembers, setExpenseMembers] = useState<Array<{ name: string; selected: boolean; ratio: number }>>([]);
   const [expenseError, setExpenseError] = useState<string | null>(null);
   const [templateCategory, setTemplateCategory] = useState(PREDEFINED_EXPENSE_GROUPS[0]);
@@ -182,8 +181,12 @@ export const useHouseholdPageState = () => {
     );
   }, [splitTemplates]);
   const sortedExpenseCategories = useMemo(
-    () => [...PREDEFINED_EXPENSE_CATEGORIES].sort((left, right) => left.localeCompare(right)),
-    [],
+    () =>
+      buildExpenseCategoryOptions(
+        expensesData?.expenses ?? [],
+        expenseCategoryExtrasFromWorkspace(workspaceSettings),
+      ),
+    [expensesData?.expenses, workspaceSettings],
   );
   const createTemplateCategoryOptions = useMemo(() => {
     const existing = new Set(splitTemplates.map((template) => template.category.trim().toLowerCase()));
@@ -383,7 +386,7 @@ export const useHouseholdPageState = () => {
     setExpenseAmount('');
     setExpenseDate(new Date().toISOString().slice(0, 10));
     setExpenseGroup(preferredExpenseGroup ?? expenseGroupOptions[0] ?? 'Groceries');
-    setExpenseCategory('General');
+    setExpenseCategory(DEFAULT_EXPENSE_CATEGORY);
     setExpenseError(null);
     setExpenseMembers(
       activeGroup.members.map((member) => ({

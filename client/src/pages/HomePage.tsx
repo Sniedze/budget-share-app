@@ -8,8 +8,10 @@ import { APP_CURRENCY_CODE } from '../format/currency';
 import { combineExpenseTitle, splitExpenseTitleForDisplay } from '../format/expenseTitle';
 import { useAuth } from '../features/auth';
 import {
-  DEFAULT_EXPENSE_CATEGORIES,
+  DEFAULT_EXPENSE_CATEGORY,
   GET_EXPENSES,
+  buildExpenseCategoryOptions,
+  expenseCategoryExtrasFromWorkspace,
   buildMerchantSuggestions,
   getMerchantSuggestionPatch,
   getBreakdownData,
@@ -24,13 +26,19 @@ import { buildMembersByGroupId } from '../features/expenses/selectors/expenseAtt
 import type { Expense, GetExpensesResponse, SplitAllocationInput, SplitType } from '../features/expenses';
 import { GET_GROUPS, GET_GROUP_SPLIT_TEMPLATES } from '../features/groups';
 import type { GetGroupSplitTemplatesQueryResult, GetGroupsQueryResult } from '../features/groups';
+import { useUserWorkspaceSettings } from '../features/userSettings';
 import { colors, radii, spacing } from '../styles/tokens';
+
+const currentYearMonthKey = (): string => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
 
 const ChartsSection = lazy(() =>
   import('../components/sections/ChartsSection').then((module) => ({ default: module.ChartsSection })),
 );
 
-const DEFAULT_CATEGORY = DEFAULT_EXPENSE_CATEGORIES[0];
+const DEFAULT_CATEGORY = DEFAULT_EXPENSE_CATEGORY;
 const DEFAULT_SPLIT: SplitType = 'Personal';
 const DEFAULT_CUSTOM_SPLIT_DETAILS: SplitAllocationInput[] = [
   { participant: 'You', ratio: 50 },
@@ -123,6 +131,7 @@ export const HomePage = (): JSX.Element => {
     variables: { groupId: formValues.groupId },
     skip: !formValues.groupId || formValues.split !== 'Shared',
   });
+  const { settings: workspaceSettings } = useUserWorkspaceSettings(user?.id ?? '', currentYearMonthKey());
 
   const resetForm = () => {
     setFormValues(getInitialFormValues());
@@ -175,8 +184,9 @@ export const HomePage = (): JSX.Element => {
     [attributedAnalyticsInput],
   );
   const sortedCategoryOptions = useMemo(
-    () => [...DEFAULT_EXPENSE_CATEGORIES].sort((left, right) => left.localeCompare(right)),
-    [],
+    () =>
+      buildExpenseCategoryOptions(expenses, expenseCategoryExtrasFromWorkspace(workspaceSettings)),
+    [expenses, workspaceSettings],
   );
   const merchantCategoryLookup = useMemo(() => {
     return buildMerchantSuggestions(expenses);

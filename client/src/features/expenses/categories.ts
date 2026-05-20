@@ -22,6 +22,40 @@ export const DEFAULT_EXPENSE_CATEGORIES = [
   'Other',
 ] as const;
 
+export const DEFAULT_EXPENSE_CATEGORY = DEFAULT_EXPENSE_CATEGORIES[0];
+
+/** Minimal expense shape for building category picklists. */
+export type ExpenseCategorySource = { flow?: string | null; category: string };
+
+/** Labels saved in workspace settings (custom budget lines, import customs). */
+export const expenseCategoryExtrasFromWorkspace = (settings: {
+  budgetCustomCategories?: string[];
+  importCustomCategories?: string[];
+} | null | undefined): string[] => {
+  if (!settings) {
+    return [];
+  }
+  return [...(settings.budgetCustomCategories ?? []), ...(settings.importCustomCategories ?? [])];
+};
+
+/** Default labels, saved customs, and any category used on outgoing expenses (shared across add-expense forms and budget mapping). */
+export const buildExpenseCategoryOptions = (
+  expenses: readonly ExpenseCategorySource[] = [],
+  extraLabels: readonly string[] = [],
+): string[] => {
+  const set = new Set<string>([...DEFAULT_EXPENSE_CATEGORIES, ...extraLabels]);
+  for (const expense of expenses) {
+    if (expense.flow === 'Incoming') {
+      continue;
+    }
+    const label = expense.category.trim();
+    if (label) {
+      set.add(label);
+    }
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+};
+
 export const DEFAULT_INCOME_CATEGORIES = [
   'Salary',
   'Pension',

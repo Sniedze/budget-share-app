@@ -14,6 +14,8 @@ import type { SaveUserWorkspaceSettingsInput } from './saveInput';
 export type LocalWorkspaceSnapshot = {
   budgetAssumptions: BudgetAssumptions;
   monthCategoryBudgets: MonthCategoryBudgets;
+  budgetCustomCategories: string[];
+  budgetCategoryMappings: Record<string, string>;
   importMerchantRules: ImportMerchantRule[];
   importColumnMappings: Record<string, SavedColumnMapping>;
   importCustomCategories: string[];
@@ -22,6 +24,8 @@ export type LocalWorkspaceSnapshot = {
 export const readLocalWorkspaceSnapshot = (userId: string, yearMonth: string): LocalWorkspaceSnapshot => ({
   budgetAssumptions: loadAssumptions(userId),
   monthCategoryBudgets: loadMonthBudgets(userId, yearMonth),
+  budgetCustomCategories: [],
+  budgetCategoryMappings: {},
   importMerchantRules: loadMerchantRules(),
   importColumnMappings: loadSavedMappings(),
   importCustomCategories: loadCustomImportCategories(),
@@ -36,6 +40,8 @@ export const buildMigrateLocalWorkspaceInput = (
     yearMonth,
     budgets: snapshot.monthCategoryBudgets,
   },
+  budgetCustomCategories: snapshot.budgetCustomCategories,
+  budgetCategoryMappings: snapshot.budgetCategoryMappings,
   importMerchantRules: snapshot.importMerchantRules,
   importColumnMappings: snapshot.importColumnMappings,
   importCustomCategories: snapshot.importCustomCategories,
@@ -52,6 +58,8 @@ export const clearLocalWorkspaceStorage = (userId: string, yearMonth: string): v
 export const isWorkspaceSettingsEmpty = (settings: {
   budgetAssumptions: BudgetAssumptions;
   monthCategoryBudgets: MonthCategoryBudgets;
+  budgetCustomCategories: string[];
+  budgetCategoryMappings: Record<string, string>;
   importMerchantRules: ImportMerchantRule[];
   importColumnMappings: Record<string, SavedColumnMapping>;
   importCustomCategories: string[];
@@ -62,6 +70,8 @@ export const isWorkspaceSettingsEmpty = (settings: {
   return (
     assumptionsDefault &&
     Object.keys(settings.monthCategoryBudgets).length === 0 &&
+    settings.budgetCustomCategories.length === 0 &&
+    Object.keys(settings.budgetCategoryMappings).length === 0 &&
     settings.importMerchantRules.length === 0 &&
     Object.keys(settings.importColumnMappings).length === 0 &&
     settings.importCustomCategories.length === 0
