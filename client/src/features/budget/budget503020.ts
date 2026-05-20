@@ -14,6 +14,28 @@ export const BUCKET_LABELS: Record<Budget503020Bucket, string> = {
   savings: 'Savings',
 };
 
+/** Table section order: needs and savings first, then wants. */
+export const BUCKET_DISPLAY_ORDER: readonly Budget503020Bucket[] = ['needs', 'savings', 'wants'];
+
+const BUCKET_ORDER_INDEX: Record<Budget503020Bucket, number> = {
+  needs: 0,
+  savings: 1,
+  wants: 2,
+};
+
+/** Shared bullet color for every category row in the same 50/30/20 group. */
+export const BUCKET_DOT_COLOR: Record<Budget503020Bucket, string> = {
+  needs: '#16a34a',
+  savings: '#0891b2',
+  wants: '#f97316',
+};
+
+export const BUCKET_INCOME_SHARE_LABEL: Record<Budget503020Bucket, string> = {
+  needs: '50%',
+  wants: '30%',
+  savings: '20%',
+};
+
 const normalizeKey = (value: string): string =>
   value
     .trim()
@@ -85,6 +107,69 @@ export const classifyBudget503020Bucket = (categoryName: string): Budget503020Bu
   }
 
   return inferBucketFromLabel(categoryName);
+};
+
+export const compareBy503020Bucket = (a: string, b: string): number => {
+  const diff =
+    BUCKET_ORDER_INDEX[classifyBudget503020Bucket(a)] - BUCKET_ORDER_INDEX[classifyBudget503020Bucket(b)];
+  return diff !== 0 ? diff : a.localeCompare(b);
+};
+
+export type BudgetCategoryGroupRow =
+  | { kind: 'header'; bucket: Budget503020Bucket }
+  | { kind: 'category'; name: string; bucket: Budget503020Bucket };
+
+export const buildBudgetCategoryGroupRows = (
+  categoryNames: readonly string[],
+): BudgetCategoryGroupRow[] => {
+  const rows: BudgetCategoryGroupRow[] = [];
+  for (const bucket of BUCKET_DISPLAY_ORDER) {
+    const names = categoryNames
+      .filter((name) => classifyBudget503020Bucket(name) === bucket)
+      .sort((a, b) => a.localeCompare(b));
+    if (names.length === 0) {
+      continue;
+    }
+    rows.push({ kind: 'header', bucket });
+    for (const name of names) {
+      rows.push({ kind: 'category', name, bucket });
+    }
+  }
+  return rows;
+};
+
+export type SavedBudgetGroupRow =
+  | { kind: 'header'; bucket: Budget503020Bucket }
+  | {
+      kind: 'category';
+      name: string;
+      bucket: Budget503020Bucket;
+      bucketLabel: string;
+      limit: number;
+    };
+
+export const buildSavedBudgetGroupRows = (
+  rows: ReadonlyArray<{
+    name: string;
+    limit: number;
+    bucket: Budget503020Bucket;
+    bucketLabel: string;
+  }>,
+): SavedBudgetGroupRow[] => {
+  const grouped: SavedBudgetGroupRow[] = [];
+  for (const bucket of BUCKET_DISPLAY_ORDER) {
+    const inBucket = rows
+      .filter((row) => row.bucket === bucket)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (inBucket.length === 0) {
+      continue;
+    }
+    grouped.push({ kind: 'header', bucket });
+    for (const row of inBucket) {
+      grouped.push({ kind: 'category', ...row });
+    }
+  }
+  return grouped;
 };
 
 const weightForCategory = (categoryName: string, bucket: Budget503020Bucket): number => {
