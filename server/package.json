@@ -7,7 +7,7 @@
   },
   "scripts": {
     "test": "node ./scripts/run-tests.mjs",
-    "dev": "NODE_ENV=development tsx watch --env-file-if-exists=../.env src/index.ts",
+    "dev": "NODE_ENV=development tsx watch src/index.ts",
     "create-demo-user": "tsx scripts/create-demo-user.ts",
     "seed-account": "tsx scripts/seed-account.ts",
     "reset-password": "tsx scripts/reset-password.ts",
