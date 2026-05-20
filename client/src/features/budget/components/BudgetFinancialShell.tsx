@@ -40,10 +40,15 @@ import type { BudgetInsight } from '../budgetInsights';
 import type { BudgetGoal } from '../goalsStorage';
 import { BudgetForecastCharts } from './BudgetForecastCharts';
 import {
+  BUCKET_DOT_COLOR,
+  BUCKET_INCOME_SHARE_LABEL,
   BUCKET_LABELS,
+  type Budget503020Bucket,
   bucketTotals503020,
   build503020CategoryBudgets,
+  buildBudgetCategoryGroupRows,
   buildBudgetSetupDraftLimits,
+  buildSavedBudgetGroupRows,
   classifyBudget503020Bucket,
   formatShareOfMonthlyBudget,
   isBudgetSetupConfigured,
@@ -385,6 +390,58 @@ const CatPill = styled.span`
   color: ${colors.textMuted};
 `;
 
+const CategoryDot = ({ bucket }: { bucket: Budget503020Bucket }): JSX.Element => (
+  <span
+    style={{
+      display: 'inline-block',
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+      background: BUCKET_DOT_COLOR[bucket],
+      marginRight: 8,
+      verticalAlign: 'middle',
+      flexShrink: 0,
+    }}
+    aria-hidden
+  />
+);
+
+const BucketGroupHeaderRow = ({
+  bucket,
+  colSpan,
+}: {
+  bucket: Budget503020Bucket;
+  colSpan: number;
+}): JSX.Element => (
+  <tr>
+    <Td
+      colSpan={colSpan}
+      style={{
+        background: colors.tableHeaderBg,
+        padding: `${spacing.md}px ${spacing.lg}px`,
+        borderTop: `2px solid ${BUCKET_DOT_COLOR[bucket]}`,
+        textAlign: 'center',
+      }}
+    >
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          fontWeight: 700,
+          fontSize: '0.8125rem',
+          letterSpacing: '0.02em',
+          color: BUCKET_DOT_COLOR[bucket],
+        }}
+      >
+        <CategoryDot bucket={bucket} />
+        {BUCKET_LABELS[bucket]} ({BUCKET_INCOME_SHARE_LABEL[bucket]} of income)
+      </span>
+    </Td>
+  </tr>
+);
+
 const GoalCard = styled(PanelCard)`
   margin-bottom: ${spacing.md};
 `;
@@ -612,6 +669,16 @@ export const BudgetFinancialShell = ({
       .filter((row) => row.limit > 0)
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [categories, categoryBudgetLimits]);
+
+  const budgetCategoryGroupRows = useMemo(
+    () => buildBudgetCategoryGroupRows(categories),
+    [categories],
+  );
+
+  const savedBudgetGroupRows = useMemo(
+    () => buildSavedBudgetGroupRows(savedBudgetRows),
+    [savedBudgetRows],
+  );
 
   const hasSavedBudgetSetup = isBudgetSetupConfigured(budgetAssumptions, categoryBudgetLimits);
 
@@ -1469,31 +1536,15 @@ export const BudgetFinancialShell = ({
                       </tr>
                     </thead>
                     <tbody>
-                      {savedBudgetRows.map((row, idx) => {
+                      {savedBudgetGroupRows.map((row) => {
+                        if (row.kind === 'header') {
+                          return <BucketGroupHeaderRow key={`saved-header-${row.bucket}`} bucket={row.bucket} colSpan={4} />;
+                        }
                         return (
                           <tr key={row.name}>
                             <Td>
-                              <span style={{ fontWeight: 600 }}>
-                                <span
-                                  style={{
-                                    display: 'inline-block',
-                                    width: 8,
-                                    height: 8,
-                                    borderRadius: 999,
-                                    background: [
-                                      '#22c55e',
-                                      '#0891b2',
-                                      '#f97316',
-                                      '#a855f7',
-                                      '#eab308',
-                                      '#ec4899',
-                                      '#06b6d4',
-                                      '#64748b',
-                                    ][idx % 8],
-                                    marginRight: 8,
-                                    verticalAlign: 'middle',
-                                  }}
-                                />
+                              <span style={{ fontWeight: 500, color: colors.textPrimary }}>
+                                <CategoryDot bucket={row.bucket} />
                                 {row.name}
                               </span>
                             </Td>
@@ -1644,32 +1695,19 @@ export const BudgetFinancialShell = ({
                         </tr>
                       </thead>
                       <tbody>
-                        {categories.map((cat, idx) => {
-                          const bucket = classifyBudget503020Bucket(cat);
+                        {budgetCategoryGroupRows.map((row) => {
+                          if (row.kind === 'header') {
+                            return (
+                              <BucketGroupHeaderRow key={`setup-header-${row.bucket}`} bucket={row.bucket} colSpan={3} />
+                            );
+                          }
+                          const cat = row.name;
+                          const bucket = row.bucket;
                           return (
                             <tr key={cat}>
                               <Td>
-                                <span style={{ fontWeight: 600 }}>
-                                  <span
-                                    style={{
-                                      display: 'inline-block',
-                                      width: 8,
-                                      height: 8,
-                                      borderRadius: 999,
-                                      background: [
-                                        '#22c55e',
-                                        '#0891b2',
-                                        '#f97316',
-                                        '#a855f7',
-                                        '#eab308',
-                                        '#ec4899',
-                                        '#06b6d4',
-                                        '#64748b',
-                                      ][idx % 8],
-                                      marginRight: 8,
-                                      verticalAlign: 'middle',
-                                    }}
-                                  />
+                                <span style={{ fontWeight: 500, color: colors.textPrimary }}>
+                                  <CategoryDot bucket={bucket} />
                                   {cat}
                                 </span>
                               </Td>
