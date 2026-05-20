@@ -367,9 +367,18 @@ enum SplitType {
     descriptionHeaderKey: String
   }
 
+  type BudgetCategoryMappingEntry {
+    expenseCategory: String!
+    budgetCategory: String!
+  }
+
   type UserWorkspaceSettings {
     budgetAssumptions: BudgetAssumptions!
+    """Recurring monthly category limits (same template every month)."""
+    categoryBudgetDefaults: [MonthCategoryBudgetEntry!]!
     monthCategoryBudgets: [MonthCategoryBudgetEntry!]!
+    budgetCustomCategories: [String!]!
+    budgetCategoryMappings: [BudgetCategoryMappingEntry!]!
     importMerchantRules: [ImportMerchantRuleSetting!]!
     importColumnMappings: [SavedColumnMappingSetting!]!
     importCustomCategories: [String!]!
@@ -416,9 +425,17 @@ enum SplitType {
     descriptionHeaderKey: String
   }
 
+  input BudgetCategoryMappingEntryInput {
+    expenseCategory: String!
+    budgetCategory: String!
+  }
+
   input SaveUserWorkspaceSettingsInput {
     budgetAssumptions: BudgetAssumptionsInput
+    categoryBudgetDefaults: [MonthCategoryBudgetEntryInput!]
     monthCategoryBudgets: SaveMonthCategoryBudgetsInput
+    budgetCustomCategories: [String!]
+    budgetCategoryMappings: [BudgetCategoryMappingEntryInput!]
     importMerchantRules: [ImportMerchantRuleSettingInput!]
     importColumnMappings: [SavedColumnMappingSettingInput!]
     importCustomCategories: [String!]

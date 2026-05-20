@@ -8,6 +8,11 @@ const budgetAssumptionsSchema = z.object({
 
 const monthCategoryBudgetsSchema = z.record(z.string().min(1).max(64), z.number().finite().nonnegative());
 
+const budgetCategoryMappingsSchema = z.record(z.string().min(1).max(64), z.string().min(1).max(64)).refine(
+  (value) => Object.keys(value).length <= 200,
+  { message: 'Too many category mappings.' },
+);
+
 const importMerchantRuleSchema = z.object({
   id: z.string().min(1).max(64),
   flow: z.enum(['out', 'in']),
@@ -36,6 +41,7 @@ const savedColumnMappingSchema = z.object({
 const saveUserWorkspaceSettingsSchema = z
   .object({
     budgetAssumptions: budgetAssumptionsSchema.optional(),
+    categoryBudgetDefaults: monthCategoryBudgetsSchema.optional(),
     monthCategoryBudgets: z
       .object({
         yearMonth: z.string().regex(/^\d{4}-\d{2}$/),
@@ -45,11 +51,16 @@ const saveUserWorkspaceSettingsSchema = z
     importMerchantRules: z.array(importMerchantRuleSchema).max(500).optional(),
     importColumnMappings: z.record(z.string().min(1).max(191), savedColumnMappingSchema).optional(),
     importCustomCategories: z.array(z.string().min(1).max(64)).max(200).optional(),
+    budgetCustomCategories: z.array(z.string().min(1).max(64)).max(100).optional(),
+    budgetCategoryMappings: budgetCategoryMappingsSchema.optional(),
   })
   .refine(
     (value) =>
       value.budgetAssumptions !== undefined ||
+      value.categoryBudgetDefaults !== undefined ||
       value.monthCategoryBudgets !== undefined ||
+      value.budgetCustomCategories !== undefined ||
+      value.budgetCategoryMappings !== undefined ||
       value.importMerchantRules !== undefined ||
       value.importColumnMappings !== undefined ||
       value.importCustomCategories !== undefined,

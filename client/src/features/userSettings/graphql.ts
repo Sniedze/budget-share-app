@@ -6,9 +6,18 @@ export const USER_WORKSPACE_SETTINGS_FIELDS = gql`
       startingBalance
       monthlyIncomeEstimate
     }
+    categoryBudgetDefaults {
+      category
+      amount
+    }
     monthCategoryBudgets {
       category
       amount
+    }
+    budgetCustomCategories
+    budgetCategoryMappings {
+      expenseCategory
+      budgetCategory
     }
     importMerchantRules {
       id

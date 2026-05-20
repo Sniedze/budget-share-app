@@ -46,6 +46,8 @@ export const useUserWorkspaceSettings = (userId: string, yearMonth: string) => {
       }
       const result = await saveMutation({
         variables: { input: toGraphqlSaveInput(patch) },
+        refetchQueries: [{ query: GET_USER_WORKSPACE_SETTINGS, variables: { yearMonth } }],
+        awaitRefetchQueries: true,
       });
       const saved = result.data?.saveUserWorkspaceSettings;
       return saved ? mapWorkspaceSettingsFromApi(saved) : null;

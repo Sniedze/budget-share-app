@@ -45,6 +45,17 @@ export type BudgetAssumptionsInput = {
   startingBalance: Scalars['Float']['input'];
 };
 
+export type BudgetCategoryMappingEntry = {
+  __typename?: 'BudgetCategoryMappingEntry';
+  budgetCategory: Scalars['String']['output'];
+  expenseCategory: Scalars['String']['output'];
+};
+
+export type BudgetCategoryMappingEntryInput = {
+  budgetCategory: Scalars['String']['input'];
+  expenseCategory: Scalars['String']['input'];
+};
+
 export type ChangePasswordInput = {
   currentPassword: Scalars['String']['input'];
   newPassword: Scalars['String']['input'];
@@ -477,6 +488,9 @@ export type SaveMonthCategoryBudgetsInput = {
 
 export type SaveUserWorkspaceSettingsInput = {
   budgetAssumptions?: InputMaybe<BudgetAssumptionsInput>;
+  budgetCategoryMappings?: InputMaybe<Array<BudgetCategoryMappingEntryInput>>;
+  budgetCustomCategories?: InputMaybe<Array<Scalars['String']['input']>>;
+  categoryBudgetDefaults?: InputMaybe<Array<MonthCategoryBudgetEntryInput>>;
   importColumnMappings?: InputMaybe<Array<SavedColumnMappingSettingInput>>;
   importCustomCategories?: InputMaybe<Array<Scalars['String']['input']>>;
   importMerchantRules?: InputMaybe<Array<ImportMerchantRuleSettingInput>>;
@@ -628,6 +642,10 @@ export type UserDataExport = {
 export type UserWorkspaceSettings = {
   __typename?: 'UserWorkspaceSettings';
   budgetAssumptions: BudgetAssumptions;
+  budgetCategoryMappings: Array<BudgetCategoryMappingEntry>;
+  budgetCustomCategories: Array<Scalars['String']['output']>;
+  /** Recurring monthly category limits (same template every month). */
+  categoryBudgetDefaults: Array<MonthCategoryBudgetEntry>;
   importColumnMappings: Array<SavedColumnMappingSetting>;
   importCustomCategories: Array<Scalars['String']['output']>;
   importMerchantRules: Array<ImportMerchantRuleSetting>;
@@ -844,18 +862,18 @@ export type RecordSettlementPaymentMutationVariables = Exact<{
 
 export type RecordSettlementPaymentMutation = { __typename?: 'Mutation', recordSettlementPayment: { __typename?: 'RecordSettlementPaymentPayload', payment: { __typename?: 'SettlementPayment', id: string, groupId: string, expenseGroup: string | null, fromMember: string, toMember: string, amount: number, note: string | null, settledAt: string }, householdSettlement: { __typename?: 'HouseholdSettlement', groupId: string, groupName: string, mixedCurrencyWarning: boolean, balances: Array<{ __typename?: 'SettlementBalance', memberName: string, amount: number }>, transfers: Array<{ __typename?: 'SettlementTransfer', fromMember: string, toMember: string, amount: number }>, expenseGroups: Array<{ __typename?: 'ExpenseGroupSettlement', expenseGroup: string, totalExpenses: number, balances: Array<{ __typename?: 'SettlementBalance', memberName: string, amount: number }>, transfers: Array<{ __typename?: 'SettlementTransfer', fromMember: string, toMember: string, amount: number }> }>, payments: Array<{ __typename?: 'SettlementPayment', id: string, groupId: string, expenseGroup: string | null, fromMember: string, toMember: string, amount: number, note: string | null, settledAt: string }>, currencyScopes: Array<{ __typename?: 'CurrencySettlementScope', currency: string, totalExpenses: number, balances: Array<{ __typename?: 'SettlementBalance', memberName: string, amount: number }>, transfers: Array<{ __typename?: 'SettlementTransfer', fromMember: string, toMember: string, amount: number }>, expenseGroups: Array<{ __typename?: 'ExpenseGroupSettlement', expenseGroup: string, totalExpenses: number, balances: Array<{ __typename?: 'SettlementBalance', memberName: string, amount: number }>, transfers: Array<{ __typename?: 'SettlementTransfer', fromMember: string, toMember: string, amount: number }> }> }> } } };
 
-export type UserWorkspaceSettingsFieldsFragment = { __typename?: 'UserWorkspaceSettings', importCustomCategories: Array<string>, budgetAssumptions: { __typename?: 'BudgetAssumptions', startingBalance: number, monthlyIncomeEstimate: number }, monthCategoryBudgets: Array<{ __typename?: 'MonthCategoryBudgetEntry', category: string, amount: number }>, importMerchantRules: Array<{ __typename?: 'ImportMerchantRuleSetting', id: string, flow: string, matchType: string, pattern: string, category: string, split: string | null, groupId: string | null, expenseGroup: string | null, updatedAt: string }>, importColumnMappings: Array<{ __typename?: 'SavedColumnMappingSetting', signature: string, dateIndex: number, merchantIndex: number, amountIndex: number, currencyIndex: number | null, descriptionIndex: number | null, dateHeaderKey: string | null, merchantHeaderKey: string | null, amountHeaderKey: string | null, currencyHeaderKey: string | null, descriptionHeaderKey: string | null }> };
+export type UserWorkspaceSettingsFieldsFragment = { __typename?: 'UserWorkspaceSettings', budgetCustomCategories: Array<string>, importCustomCategories: Array<string>, budgetAssumptions: { __typename?: 'BudgetAssumptions', startingBalance: number, monthlyIncomeEstimate: number }, categoryBudgetDefaults: Array<{ __typename?: 'MonthCategoryBudgetEntry', category: string, amount: number }>, monthCategoryBudgets: Array<{ __typename?: 'MonthCategoryBudgetEntry', category: string, amount: number }>, budgetCategoryMappings: Array<{ __typename?: 'BudgetCategoryMappingEntry', expenseCategory: string, budgetCategory: string }>, importMerchantRules: Array<{ __typename?: 'ImportMerchantRuleSetting', id: string, flow: string, matchType: string, pattern: string, category: string, split: string | null, groupId: string | null, expenseGroup: string | null, updatedAt: string }>, importColumnMappings: Array<{ __typename?: 'SavedColumnMappingSetting', signature: string, dateIndex: number, merchantIndex: number, amountIndex: number, currencyIndex: number | null, descriptionIndex: number | null, dateHeaderKey: string | null, merchantHeaderKey: string | null, amountHeaderKey: string | null, currencyHeaderKey: string | null, descriptionHeaderKey: string | null }> };
 
 export type GetUserWorkspaceSettingsQueryVariables = Exact<{
   yearMonth: Scalars['String']['input'];
 }>;
 
 
-export type GetUserWorkspaceSettingsQuery = { __typename?: 'Query', userWorkspaceSettings: { __typename?: 'UserWorkspaceSettings', importCustomCategories: Array<string>, budgetAssumptions: { __typename?: 'BudgetAssumptions', startingBalance: number, monthlyIncomeEstimate: number }, monthCategoryBudgets: Array<{ __typename?: 'MonthCategoryBudgetEntry', category: string, amount: number }>, importMerchantRules: Array<{ __typename?: 'ImportMerchantRuleSetting', id: string, flow: string, matchType: string, pattern: string, category: string, split: string | null, groupId: string | null, expenseGroup: string | null, updatedAt: string }>, importColumnMappings: Array<{ __typename?: 'SavedColumnMappingSetting', signature: string, dateIndex: number, merchantIndex: number, amountIndex: number, currencyIndex: number | null, descriptionIndex: number | null, dateHeaderKey: string | null, merchantHeaderKey: string | null, amountHeaderKey: string | null, currencyHeaderKey: string | null, descriptionHeaderKey: string | null }> } };
+export type GetUserWorkspaceSettingsQuery = { __typename?: 'Query', userWorkspaceSettings: { __typename?: 'UserWorkspaceSettings', budgetCustomCategories: Array<string>, importCustomCategories: Array<string>, budgetAssumptions: { __typename?: 'BudgetAssumptions', startingBalance: number, monthlyIncomeEstimate: number }, categoryBudgetDefaults: Array<{ __typename?: 'MonthCategoryBudgetEntry', category: string, amount: number }>, monthCategoryBudgets: Array<{ __typename?: 'MonthCategoryBudgetEntry', category: string, amount: number }>, budgetCategoryMappings: Array<{ __typename?: 'BudgetCategoryMappingEntry', expenseCategory: string, budgetCategory: string }>, importMerchantRules: Array<{ __typename?: 'ImportMerchantRuleSetting', id: string, flow: string, matchType: string, pattern: string, category: string, split: string | null, groupId: string | null, expenseGroup: string | null, updatedAt: string }>, importColumnMappings: Array<{ __typename?: 'SavedColumnMappingSetting', signature: string, dateIndex: number, merchantIndex: number, amountIndex: number, currencyIndex: number | null, descriptionIndex: number | null, dateHeaderKey: string | null, merchantHeaderKey: string | null, amountHeaderKey: string | null, currencyHeaderKey: string | null, descriptionHeaderKey: string | null }> } };
 
 export type SaveUserWorkspaceSettingsMutationVariables = Exact<{
   input: SaveUserWorkspaceSettingsInput;
 }>;
 
 
-export type SaveUserWorkspaceSettingsMutation = { __typename?: 'Mutation', saveUserWorkspaceSettings: { __typename?: 'UserWorkspaceSettings', importCustomCategories: Array<string>, budgetAssumptions: { __typename?: 'BudgetAssumptions', startingBalance: number, monthlyIncomeEstimate: number }, monthCategoryBudgets: Array<{ __typename?: 'MonthCategoryBudgetEntry', category: string, amount: number }>, importMerchantRules: Array<{ __typename?: 'ImportMerchantRuleSetting', id: string, flow: string, matchType: string, pattern: string, category: string, split: string | null, groupId: string | null, expenseGroup: string | null, updatedAt: string }>, importColumnMappings: Array<{ __typename?: 'SavedColumnMappingSetting', signature: string, dateIndex: number, merchantIndex: number, amountIndex: number, currencyIndex: number | null, descriptionIndex: number | null, dateHeaderKey: string | null, merchantHeaderKey: string | null, amountHeaderKey: string | null, currencyHeaderKey: string | null, descriptionHeaderKey: string | null }> } };
+export type SaveUserWorkspaceSettingsMutation = { __typename?: 'Mutation', saveUserWorkspaceSettings: { __typename?: 'UserWorkspaceSettings', budgetCustomCategories: Array<string>, importCustomCategories: Array<string>, budgetAssumptions: { __typename?: 'BudgetAssumptions', startingBalance: number, monthlyIncomeEstimate: number }, categoryBudgetDefaults: Array<{ __typename?: 'MonthCategoryBudgetEntry', category: string, amount: number }>, monthCategoryBudgets: Array<{ __typename?: 'MonthCategoryBudgetEntry', category: string, amount: number }>, budgetCategoryMappings: Array<{ __typename?: 'BudgetCategoryMappingEntry', expenseCategory: string, budgetCategory: string }>, importMerchantRules: Array<{ __typename?: 'ImportMerchantRuleSetting', id: string, flow: string, matchType: string, pattern: string, category: string, split: string | null, groupId: string | null, expenseGroup: string | null, updatedAt: string }>, importColumnMappings: Array<{ __typename?: 'SavedColumnMappingSetting', signature: string, dateIndex: number, merchantIndex: number, amountIndex: number, currencyIndex: number | null, descriptionIndex: number | null, dateHeaderKey: string | null, merchantHeaderKey: string | null, amountHeaderKey: string | null, currencyHeaderKey: string | null, descriptionHeaderKey: string | null }> } };
