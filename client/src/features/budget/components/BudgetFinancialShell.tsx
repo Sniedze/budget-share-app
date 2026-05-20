@@ -406,11 +406,41 @@ const CategoryDot = ({ bucket }: { bucket: Budget503020Bucket }): JSX.Element =>
   />
 );
 
-const bucketGroupHeaderStyle = {
-  background: colors.tableHeaderBg,
-  padding: `${spacing.sm}px ${spacing.md}px`,
-  borderTop: `2px solid ${colors.border}`,
-} as const;
+const BucketGroupHeaderRow = ({
+  bucket,
+  colSpan,
+}: {
+  bucket: Budget503020Bucket;
+  colSpan: number;
+}): JSX.Element => (
+  <tr>
+    <Td
+      colSpan={colSpan}
+      style={{
+        background: colors.tableHeaderBg,
+        padding: `${spacing.md}px ${spacing.lg}px`,
+        borderTop: `2px solid ${BUCKET_DOT_COLOR[bucket]}`,
+        textAlign: 'center',
+      }}
+    >
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          fontWeight: 700,
+          fontSize: '0.8125rem',
+          letterSpacing: '0.02em',
+          color: BUCKET_DOT_COLOR[bucket],
+        }}
+      >
+        <CategoryDot bucket={bucket} />
+        {BUCKET_LABELS[bucket]} ({BUCKET_INCOME_SHARE_LABEL[bucket]} of income)
+      </span>
+    </Td>
+  </tr>
+);
 
 const GoalCard = styled(PanelCard)`
   margin-bottom: ${spacing.md};
@@ -1508,29 +1538,12 @@ export const BudgetFinancialShell = ({
                     <tbody>
                       {savedBudgetGroupRows.map((row) => {
                         if (row.kind === 'header') {
-                          return (
-                            <tr key={`saved-header-${row.bucket}`}>
-                              <Td colSpan={4} style={bucketGroupHeaderStyle}>
-                                <span
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    fontWeight: 700,
-                                    fontSize: '0.8125rem',
-                                    color: colors.textPrimary,
-                                  }}
-                                >
-                                  <CategoryDot bucket={row.bucket} />
-                                  {BUCKET_LABELS[row.bucket]} ({BUCKET_INCOME_SHARE_LABEL[row.bucket]} of income)
-                                </span>
-                              </Td>
-                            </tr>
-                          );
+                          return <BucketGroupHeaderRow key={`saved-header-${row.bucket}`} bucket={row.bucket} colSpan={4} />;
                         }
                         return (
                           <tr key={row.name}>
                             <Td>
-                              <span style={{ fontWeight: 600 }}>
+                              <span style={{ fontWeight: 500, color: colors.textPrimary }}>
                                 <CategoryDot bucket={row.bucket} />
                                 {row.name}
                               </span>
@@ -1685,22 +1698,7 @@ export const BudgetFinancialShell = ({
                         {budgetCategoryGroupRows.map((row) => {
                           if (row.kind === 'header') {
                             return (
-                              <tr key={`setup-header-${row.bucket}`}>
-                                <Td colSpan={3} style={bucketGroupHeaderStyle}>
-                                  <span
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      fontWeight: 700,
-                                      fontSize: '0.8125rem',
-                                      color: colors.textPrimary,
-                                    }}
-                                  >
-                                    <CategoryDot bucket={row.bucket} />
-                                    {BUCKET_LABELS[row.bucket]} ({BUCKET_INCOME_SHARE_LABEL[row.bucket]} of income)
-                                  </span>
-                                </Td>
-                              </tr>
+                              <BucketGroupHeaderRow key={`setup-header-${row.bucket}`} bucket={row.bucket} colSpan={3} />
                             );
                           }
                           const cat = row.name;
@@ -1708,7 +1706,7 @@ export const BudgetFinancialShell = ({
                           return (
                             <tr key={cat}>
                               <Td>
-                                <span style={{ fontWeight: 600 }}>
+                                <span style={{ fontWeight: 500, color: colors.textPrimary }}>
                                   <CategoryDot bucket={bucket} />
                                   {cat}
                                 </span>
